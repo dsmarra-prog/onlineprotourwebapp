@@ -570,6 +570,47 @@ export function getRundenInfo(
   }
 }
 
+// ─── Phase 1: Match-Herausforderungen (Side Quests) ───────────────────────────
+
+const MATCH_CHALLENGES = [
+  { text: "Gewinne das Match", ziel_typ: "sieg", ziel_wert: 1, belohnung: 300 },
+  { text: "Wirf mindestens 1x die 180", ziel_typ: "180s", ziel_wert: 1, belohnung: 400 },
+  { text: "Wirf mindestens 2x die 180", ziel_typ: "180s", ziel_wert: 2, belohnung: 650 },
+  { text: "Wirf mindestens 3x die 180", ziel_typ: "180s", ziel_wert: 3, belohnung: 950 },
+  { text: "Erreiche einen Average über 55", ziel_typ: "avg", ziel_wert: 55, belohnung: 450 },
+  { text: "Erreiche einen Average über 65", ziel_typ: "avg", ziel_wert: 65, belohnung: 650 },
+  { text: "Erreiche einen Average über 75", ziel_typ: "avg", ziel_wert: 75, belohnung: 900 },
+  { text: "Erreiche einen Average über 85", ziel_typ: "avg", ziel_wert: 85, belohnung: 1200 },
+  { text: "Erreiche einen Average über 95", ziel_typ: "avg", ziel_wert: 95, belohnung: 1600 },
+  { text: "Erreiche ein High-Finish über 80", ziel_typ: "hf", ziel_wert: 80, belohnung: 500 },
+  { text: "Erreiche ein High-Finish über 100", ziel_typ: "hf", ziel_wert: 100, belohnung: 750 },
+  { text: "Erreiche ein High-Finish über 120", ziel_typ: "hf", ziel_wert: 120, belohnung: 1100 },
+  { text: "Erreiche ein High-Finish über 150", ziel_typ: "hf", ziel_wert: 150, belohnung: 1600 },
+  { text: "Doppelquote über 35%", ziel_typ: "co_pct", ziel_wert: 35, belohnung: 550 },
+  { text: "Doppelquote über 45%", ziel_typ: "co_pct", ziel_wert: 45, belohnung: 850 },
+  { text: "Doppelquote über 55%", ziel_typ: "co_pct", ziel_wert: 55, belohnung: 1200 },
+];
+
+function generateMatchHerausforderung(spieler_avg: number) {
+  const pool = MATCH_CHALLENGES.filter((c) => {
+    if (c.ziel_typ === "avg") return c.ziel_wert <= spieler_avg + 15;
+    return true;
+  });
+  return { ...pool[Math.floor(Math.random() * pool.length)] };
+}
+
+// ─── Phase 1: Momentum helpers ────────────────────────────────────────────────
+
+function getMomentumFaktor(serie: number): number {
+  if (serie >= 5) return 0.90;
+  if (serie >= 3) return 0.95;
+  if (serie <= -5) return 1.10;
+  if (serie <= -3) return 1.05;
+  return 1.0;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function generiereGegner(career: any) {
   const { hat_tourcard, aktuelles_turnier_index, aktuelle_runde, turnier_baum: existingBaum } = career;
   const botRangliste = career.bot_rangliste as any[];
@@ -844,10 +885,28 @@ export async function startMatch() {
     updates.turnier_runden_log = [];
   }
 
-  const { gegner_name, gegner_avg, turnier_baum } = generiereGegner({ ...career, ...updates });
+  const { gegner_name, gegner_avg: baseAvg, turnier_baum } = generiereGegner({ ...career, ...updates });
+
+  // Phase 1: Apply momentum modifier
+  const serie = career.aktuelle_serie ?? 0;
+  const momentumFaktor = getMomentumFaktor(serie);
+
+  // Phase 1: Apply Angstgegner modifier (+7% if player has lost 3+ times vs this opponent)
+  const h2hRecord = (career.h2h as any)[gegner_name] ?? { siege: 0, niederlagen: 0 };
+  const ist_angstgegner = h2hRecord.niederlagen >= 3 && h2hRecord.niederlagen > h2hRecord.siege;
+  const angstFaktor = ist_angstgegner ? 1.07 : 1.0;
+
   updates.gegner_name = gegner_name;
-  updates.gegner_avg = gegner_avg;
+  updates.gegner_avg = Math.round(baseAvg * momentumFaktor * angstFaktor * 10) / 10;
   updates.turnier_baum = turnier_baum;
+
+  // Phase 1: Log momentum messages
+  if (serie >= 3) msgs.push(`🔥 ${serie} Siege in Folge! Gegner respektiert dich (-${Math.round((1 - momentumFaktor) * 100)}% AVG).`);
+  else if (serie <= -3) msgs.push(`❄️ ${Math.abs(serie)} Niederlagen in Folge. Gegner greift selbstsicher an (+${Math.round((momentumFaktor - 1) * 100)}% AVG).`);
+  if (ist_angstgegner) msgs.push(`⚠️ Angstgegner: ${gegner_name} hat dich bereits ${h2hRecord.niederlagen}x besiegt!`);
+
+  // Phase 1: Generate per-match challenge
+  updates.match_herausforderung = generateMatchHerausforderung(career.spieler_avg ?? 60);
 
   await saveCareer(updates);
   return { career: await getOrCreateCareer(), messages: msgs };
@@ -888,6 +947,38 @@ export async function processResult(
   if (win) h2h[gegner_name].siege += 1;
   else h2h[gegner_name].niederlagen += 1;
   updates.h2h = h2h;
+
+  // Phase 1: Update win/loss streak
+  const currentSerie = career.aktuelle_serie ?? 0;
+  updates.aktuelle_serie = win
+    ? (currentSerie >= 0 ? currentSerie + 1 : 1)
+    : (currentSerie <= 0 ? currentSerie - 1 : -1);
+
+  // Phase 1: Check match challenge completion
+  const herausforderung = career.match_herausforderung ? { ...(career.match_herausforderung as any) } : null;
+  if (herausforderung) {
+    let erledigt = false;
+    if (herausforderung.ziel_typ === "sieg" && win) erledigt = true;
+    else if (herausforderung.ziel_typ === "180s" && my_180s >= herausforderung.ziel_wert) erledigt = true;
+    else if (herausforderung.ziel_typ === "avg" && my_avg >= herausforderung.ziel_wert) erledigt = true;
+    else if (herausforderung.ziel_typ === "hf" && my_hf >= herausforderung.ziel_wert) erledigt = true;
+    else if (herausforderung.ziel_typ === "co_pct" && my_co_pct >= herausforderung.ziel_wert) erledigt = true;
+
+    if (erledigt) {
+      const bonus = herausforderung.belohnung;
+      updates.bank_konto = (updates.bank_konto ?? career.bank_konto) + bonus;
+      msgs.push(`🎯 HERAUSFORDERUNG ERFÜLLT! +£${bonus.toLocaleString("en-GB")} — ${herausforderung.text}`);
+    } else {
+      msgs.push(`❌ Herausforderung verfehlt: ${herausforderung.text}`);
+    }
+    updates.match_herausforderung = null;
+  }
+
+  // Phase 1: Angstgegner message when player finally beats the fear
+  const h2hAfter = h2h[gegner_name];
+  if (win && h2hAfter.niederlagen >= 3 && h2hAfter.siege === 1) {
+    msgs.push(`💪 Angstgegner besiegt! Erster Sieg gegen ${gegner_name}!`);
+  }
 
   const turnier_baum = [...(career.turnier_baum as any[])];
   const botForm: Record<string, number> = { ...(career.bot_form as any) };
@@ -1214,6 +1305,13 @@ export function buildCareerState(career: any) {
       return bot ? bot.geld : null;
     })(),
     turnier_runden_log: career.turnier_runden_log ?? [],
+    // Phase 1: RPG features
+    aktuelle_serie: career.aktuelle_serie ?? 0,
+    match_herausforderung: career.match_herausforderung ?? null,
+    ist_angstgegner: (() => {
+      const h2hRec = (career.h2h as any)[career.gegner_name ?? ""] ?? { siege: 0, niederlagen: 0 };
+      return h2hRec.niederlagen >= 3 && h2hRec.niederlagen > h2hRec.siege;
+    })(),
   };
 }
 

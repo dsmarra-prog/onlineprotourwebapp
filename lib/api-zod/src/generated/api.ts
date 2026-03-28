@@ -100,6 +100,9 @@ export const GetCareerResponse = zod.object({
   checkout_bonus: zod.number(),
   schwierigkeitsgrad: zod.number().optional(),
   turnier_runden_log: zod.array(zod.any()).optional(),
+  aktuelle_serie: zod.number().optional(),
+  match_herausforderung: zod.record(zod.any()).nullable().optional(),
+  ist_angstgegner: zod.boolean().optional(),
 });
 
 /**
@@ -189,6 +192,9 @@ export const StartMatchResponse = zod.object({
     checkout_bonus: zod.number(),
     schwierigkeitsgrad: zod.number().optional(),
     turnier_runden_log: zod.array(zod.any()).optional(),
+  aktuelle_serie: zod.number().optional(),
+  match_herausforderung: zod.record(zod.any()).nullable().optional(),
+  ist_angstgegner: zod.boolean().optional(),
   }),
   messages: zod.array(zod.string()),
 });
@@ -289,6 +295,9 @@ export const SubmitResultResponse = zod.object({
     checkout_bonus: zod.number(),
     schwierigkeitsgrad: zod.number().optional(),
     turnier_runden_log: zod.array(zod.any()).optional(),
+  aktuelle_serie: zod.number().optional(),
+  match_herausforderung: zod.record(zod.any()).nullable().optional(),
+  ist_angstgegner: zod.boolean().optional(),
   }),
   messages: zod.array(zod.string()),
 });
@@ -380,6 +389,9 @@ export const PullAutodartsResponse = zod.object({
     checkout_bonus: zod.number(),
     schwierigkeitsgrad: zod.number().optional(),
     turnier_runden_log: zod.array(zod.any()).optional(),
+  aktuelle_serie: zod.number().optional(),
+  match_herausforderung: zod.record(zod.any()).nullable().optional(),
+  ist_angstgegner: zod.boolean().optional(),
   }),
   messages: zod.array(zod.string()),
 });
@@ -471,6 +483,9 @@ export const ResetCareerResponse = zod.object({
     checkout_bonus: zod.number(),
     schwierigkeitsgrad: zod.number().optional(),
     turnier_runden_log: zod.array(zod.any()).optional(),
+  aktuelle_serie: zod.number().optional(),
+  match_herausforderung: zod.record(zod.any()).nullable().optional(),
+  ist_angstgegner: zod.boolean().optional(),
   }),
   messages: zod.array(zod.string()),
 });
@@ -568,6 +583,9 @@ export const SetPlayerNameResponse = zod.object({
     checkout_bonus: zod.number(),
     schwierigkeitsgrad: zod.number().optional(),
     turnier_runden_log: zod.array(zod.any()).optional(),
+  aktuelle_serie: zod.number().optional(),
+  match_herausforderung: zod.record(zod.any()).nullable().optional(),
+  ist_angstgegner: zod.boolean().optional(),
   }),
   messages: zod.array(zod.string()),
 });
@@ -730,6 +748,9 @@ export const BuyEquipmentResponse = zod.object({
     checkout_bonus: zod.number(),
     schwierigkeitsgrad: zod.number().optional(),
     turnier_runden_log: zod.array(zod.any()).optional(),
+  aktuelle_serie: zod.number().optional(),
+  match_herausforderung: zod.record(zod.any()).nullable().optional(),
+  ist_angstgegner: zod.boolean().optional(),
   }),
   messages: zod.array(zod.string()),
 });

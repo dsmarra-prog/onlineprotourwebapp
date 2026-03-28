@@ -386,7 +386,7 @@ function DrawAnimation({ players, onDone, onSoundTrigger }: { players: string[];
 function GegnerProfil({ career }: { career: any }) {
   const {
     gegner_name, gegner_avg, gegner_form, h2h_siege, h2h_niederlagen,
-    gegner_platz, gegner_oom_geld, gegner_bot_level,
+    gegner_platz, gegner_oom_geld, gegner_bot_level, ist_angstgegner,
   } = career;
 
   const formEmoji = gegner_form?.form?.split(" ")[0] ?? "➡️";
@@ -406,8 +406,19 @@ function GegnerProfil({ career }: { career: any }) {
           <PlayerAvatar name={gegner_name} size={52} />
         </div>
         <div>
-          <h3 className="font-bold text-white text-lg leading-tight">{gegner_name}</h3>
-          <div className="flex items-center gap-2 mt-0.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-bold text-white text-lg leading-tight">{gegner_name}</h3>
+            {ist_angstgegner && (
+              <motion.span
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="text-xs font-bold px-2 py-0.5 rounded-full border border-red-500/60 bg-red-500/15 text-red-300"
+              >
+                ⚠️ Angstgegner
+              </motion.span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {gegner_platz && (
               <p className="text-sm text-muted-foreground">Platz {gegner_platz}</p>
             )}
@@ -577,6 +588,29 @@ export default function MatchView() {
                 </div>
                 <h3 className="text-2xl md:text-3xl font-bold text-primary truncate text-center md:text-right">{career.spieler_name}</h3>
                 <p className="text-muted-foreground text-sm">Platz {career.platz}</p>
+                {(career as any).aktuelle_serie !== 0 && (
+                  <motion.span
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
+                      (career as any).aktuelle_serie >= 5
+                        ? "text-emerald-200 border-emerald-400/60 bg-emerald-500/20"
+                        : (career as any).aktuelle_serie >= 3
+                        ? "text-green-300 border-green-500/50 bg-green-500/15"
+                        : (career as any).aktuelle_serie > 0
+                        ? "text-green-400/70 border-green-500/30 bg-green-500/10"
+                        : (career as any).aktuelle_serie <= -5
+                        ? "text-red-200 border-red-400/60 bg-red-500/20"
+                        : (career as any).aktuelle_serie <= -3
+                        ? "text-red-300 border-red-500/50 bg-red-500/15"
+                        : "text-red-400/70 border-red-500/30 bg-red-500/10"
+                    }`}
+                  >
+                    {(career as any).aktuelle_serie > 0
+                      ? `🔥 ${(career as any).aktuelle_serie} Siege`
+                      : `❄️ ${Math.abs((career as any).aktuelle_serie)} Niederlage${Math.abs((career as any).aktuelle_serie) > 1 ? "n" : ""}`}
+                  </motion.span>
+                )}
               </div>
               <div className="bg-secondary/80 rounded-full p-4 shrink-0">
                 <Swords className="w-8 h-8 text-muted-foreground" />
@@ -597,6 +631,29 @@ export default function MatchView() {
 
           {/* Opponent Profile */}
           <GegnerProfil career={career} />
+
+          {/* Match-Herausforderung (Side Quest) */}
+          {(career as any).match_herausforderung && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+              className="bg-amber-500/10 border border-amber-400/40 rounded-2xl p-4 flex items-start gap-4 shadow-[0_0_20px_rgba(245,158,11,0.08)]"
+            >
+              <div className="shrink-0 w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-xl">
+                🎯
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <p className="text-amber-300 font-bold text-sm uppercase tracking-wide">Match-Herausforderung</p>
+                  <span className="text-amber-200 font-mono font-bold text-sm shrink-0">
+                    +£{((career as any).match_herausforderung.belohnung as number).toLocaleString("en-GB")}
+                  </span>
+                </div>
+                <p className="text-white text-sm">{(career as any).match_herausforderung.text}</p>
+              </div>
+            </motion.div>
+          )}
 
           {/* YouTube Walk-on */}
           {career.walk_on_video && (
