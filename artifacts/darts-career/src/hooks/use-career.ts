@@ -88,11 +88,11 @@ export function useCareerActions() {
     resetCareer: resetCareerMutation.mutate,
     isResetting: resetCareerMutation.isPending,
 
-    setPlayerName: (args: string | { name: string; schwierigkeitsgrad?: number }) => {
+    setPlayerName: (args: string | { name: string; spieler_avg?: number }) => {
       const data = typeof args === "string"
-        ? { name: args, schwierigkeitsgrad: 5 }
-        : { name: args.name, schwierigkeitsgrad: args.schwierigkeitsgrad ?? 5 };
-      setNameMutation.mutate({ data });
+        ? { name: args, spieler_avg: 60 }
+        : { name: args.name, spieler_avg: args.spieler_avg ?? 60 };
+      setNameMutation.mutate({ data: data as any });
     },
     isSettingName: setNameMutation.isPending,
 

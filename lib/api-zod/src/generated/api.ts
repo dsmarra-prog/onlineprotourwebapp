@@ -475,7 +475,8 @@ export const ResetCareerResponse = zod.object({
  */
 export const SetPlayerNameBody = zod.object({
   name: zod.string(),
-  schwierigkeitsgrad: zod.number(),
+  spieler_avg: zod.number().optional(),
+  schwierigkeitsgrad: zod.number().optional(),
 });
 
 export const SetPlayerNameResponse = zod.object({

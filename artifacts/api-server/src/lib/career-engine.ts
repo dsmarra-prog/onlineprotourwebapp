@@ -379,33 +379,36 @@ function rand(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-// Autodarts bot level average ranges (matching Autodarts' actual bot skill distribution)
+// Autodarts bot level average ranges — matches the official Autodarts 11-level PPR chart
+// Level 1 = PPR ~20, Level 11 = PPR ~120
 const AUTODARTS_LEVEL_RANGES: Record<number, [number, number]> = {
-  1: [35, 46], 2: [46, 55], 3: [55, 64], 4: [64, 72],
-  5: [72, 79], 6: [79, 86], 7: [86, 93], 8: [93, 100], 9: [100, 110],
+  1:  [15,  25],
+  2:  [25,  35],
+  3:  [35,  45],
+  4:  [45,  55],
+  5:  [55,  65],
+  6:  [65,  75],
+  7:  [75,  85],
+  8:  [85,  95],
+  9:  [95, 105],
+  10: [105, 115],
+  11: [115, 125],
 };
 
 export function avgToAutodartsBotLevel(avg: number): number {
-  if (avg < 46) return 1;
-  if (avg < 55) return 2;
-  if (avg < 64) return 3;
-  if (avg < 72) return 4;
-  if (avg < 79) return 5;
-  if (avg < 86) return 6;
-  if (avg < 93) return 7;
-  if (avg < 100) return 8;
-  return 9;
+  // Level 1 = PPR ~20, each level ~10 PPR apart; level = round(avg/10) - 1
+  return Math.max(1, Math.min(11, Math.round(avg / 10) - 1));
 }
 
-function getBotAvg(name: string, botRangliste: any[], botForm: Record<string, number>, schwierigkeitsgrad: number = 5) {
+function getBotAvg(name: string, botRangliste: any[], botForm: Record<string, number>, spielerAvg: number = 60) {
   const sorted = [...botRangliste].sort((a, b) => b.geld - a.geld);
   const formBonus = botForm[name] ?? 0;
   const rank = sorted.findIndex((b) => b.name === name);
   let base: number;
-  // If it's an Autodarts level-named bot (e.g. "Level 4 – C"), use level-appropriate avg range
+  // Autodarts level-named bot (e.g. "Level 4 – C") → use level range directly
   const levelMatch = name.match(/^Level (\d+)/);
   if (levelMatch) {
-    const botLevel = Math.max(1, Math.min(9, parseInt(levelMatch[1])));
+    const botLevel = Math.max(1, Math.min(11, parseInt(levelMatch[1])));
     const [min, max] = AUTODARTS_LEVEL_RANGES[botLevel];
     base = rand(min, max);
   } else if (rank < 0) {
@@ -421,25 +424,28 @@ function getBotAvg(name: string, botRangliste: any[], botForm: Record<string, nu
   } else {
     base = rand(76, 86);
   }
-  const mult = DIFFICULTY_MULTIPLIERS[schwierigkeitsgrad] ?? 1.0;
-  return Math.round((base * mult + formBonus) * 10) / 10;
+  // No global multiplier — level-named bots already scale to player avg via level distribution
+  // spielerAvg kept as param for future use
+  return Math.round((base + formBonus) * 10) / 10;
 }
 
-// Generate Autodarts bot-style name from index (0-126)
-function autodartsBotName(idx: number): string {
-  // Distribute 127 bots across levels, fewer at extremes, most at middle
-  const levelDist = [8, 10, 12, 14, 18, 20, 20, 15, 10]; // sums to 127
-  let cumulative = 0;
-  for (let lvl = 0; lvl < levelDist.length; lvl++) {
-    if (idx < cumulative + levelDist[lvl]) {
-      const posInLevel = idx - cumulative;
-      const letter = String.fromCharCode(65 + (posInLevel % 26));
-      const suffix = posInLevel >= 26 ? `${letter}${Math.floor(posInLevel / 26)}` : letter;
-      return `Level ${lvl + 1} – ${suffix}`;
-    }
-    cumulative += levelDist[lvl];
+// Generate Q-School bot names centered around playerLevel (1–11, std dev ~2.5)
+function generateQSchoolBots(playerLevel: number, count: number): string[] {
+  const levelCounters: Record<number, number> = {};
+  const names: string[] = [];
+  for (let i = 0; i < count; i++) {
+    // Box-Muller normal distribution centered on playerLevel
+    const u = Math.max(1e-10, Math.random());
+    const v = Math.random();
+    const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+    const level = Math.max(1, Math.min(11, Math.round(playerLevel + z * 2.5)));
+    const pos = levelCounters[level] ?? 0;
+    levelCounters[level] = pos + 1;
+    const letter = String.fromCharCode(65 + (pos % 26));
+    const suffix = pos >= 26 ? `${letter}${Math.floor(pos / 26)}` : letter;
+    names.push(`Level ${level} – ${suffix}`);
   }
-  return "Level 9 – Z";
+  return names;
 }
 
 export function ermittlePlatz(
@@ -531,7 +537,10 @@ function generiereGegner(career: any) {
 
   if (!hat_tourcard) {
     size = 128;
-    const base = [...QSCHOOL_SPIELER, ...Array.from({ length: 127 }, (_, i) => autodartsBotName(i))];
+    const spielerAvg = career.spieler_avg ?? 60;
+    const playerLevel = avgToAutodartsBotLevel(spielerAvg);
+    const qBots = generateQSchoolBots(playerLevel, 119);
+    const base = [...QSCHOOL_SPIELER, ...qBots];
     for (let i = base.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [base[i], base[j]] = [base[j], base[i]];
@@ -556,8 +565,8 @@ function generiereGegner(career: any) {
     pool = pool.slice(0, size - 1);
   }
 
-  const schwierigkeit = career.schwierigkeitsgrad ?? 5;
-  const bots = pool.map((name) => ({ name, avg: getBotAvg(name, botRangliste, botForm, schwierigkeit) }));
+  const spielerAvg2 = career.spieler_avg ?? 60;
+  const bots = pool.map((name) => ({ name, avg: getBotAvg(name, botRangliste, botForm, spielerAvg2) }));
   let turnier_baum = [{ name: career.spieler_name, avg: 0 }, ...bots];
 
   for (let i = turnier_baum.length - 1; i > 0; i--) {
@@ -718,13 +727,14 @@ const DIFFICULTY_MULTIPLIERS: Record<number, number> = {
   9: 1.30,
 };
 
-export async function setPlayerName(name: string, schwierigkeitsgrad: number = 5) {
+export async function setPlayerName(name: string, spieler_avg: number = 60) {
   const trimmed = name.trim().substring(0, 30);
-  const level = Math.max(1, Math.min(9, schwierigkeitsgrad));
-  await saveCareer({ spieler_name: trimmed, name_set: true, schwierigkeitsgrad: level });
+  const avg = Math.max(15, Math.min(125, spieler_avg));
+  const level = avgToAutodartsBotLevel(avg);
+  await saveCareer({ spieler_name: trimmed, name_set: true, spieler_avg: avg });
   return {
     career: await getOrCreateCareer(),
-    messages: [`Willkommen, ${trimmed}! Schwierigkeitsgrad: ${DIFFICULTY_LABELS[level]}. Viel Erfolg!`],
+    messages: [`Willkommen, ${trimmed}! Dein Average: ${avg} → Autodarts Level ${level}. Viel Erfolg!`],
   };
 }
 
@@ -1068,6 +1078,8 @@ export function buildCareerState(career: any) {
     avg_bonus: career.avg_bonus ?? 0,
     checkout_bonus: career.checkout_bonus ?? 0,
     schwierigkeitsgrad: career.schwierigkeitsgrad ?? 5,
+    spieler_avg: career.spieler_avg ?? 60,
+    spieler_bot_level: avgToAutodartsBotLevel(career.spieler_avg ?? 60),
     gegner_bot_level: avgToAutodartsBotLevel(career.gegner_avg ?? 75),
     gegner_platz: (() => {
       const sorted = [...(career.bot_rangliste as any[])].sort((a, b) => b.geld - a.geld);

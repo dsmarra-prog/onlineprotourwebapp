@@ -8,11 +8,33 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Zap, Swords, MonitorPlay, Activity, RefreshCw, ChevronLeft,
-  CheckCircle2, TrendingUp, TrendingDown, Minus, User,
+  CheckCircle2, User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useDartsSounds } from "@/hooks/use-sounds";
+
+function isBot(name: string): boolean {
+  return /^Level \d+/.test(name);
+}
+
+function PlayerAvatar({ name, size = 48 }: { name: string; size?: number }) {
+  const style = isBot(name) ? "bottts" : "lorelei";
+  const bg = isBot(name) ? "0d1117" : "0f1923";
+  const url = `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(name)}&backgroundColor=${bg}&radius=50`;
+  return (
+    <img
+      src={url}
+      alt={name}
+      width={size}
+      height={size}
+      className="rounded-full border-2 border-border object-cover"
+      style={{ width: size, height: size }}
+      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+    />
+  );
+}
 
 const matchSchema = z.object({
   legs_won: z.coerce.number().min(0),
@@ -26,11 +48,12 @@ const matchSchema = z.object({
 type MatchFormValues = z.infer<typeof matchSchema>;
 
 // Draw animation: names being "drawn" from a hat
-function DrawAnimation({ players, onDone }: { players: string[]; onDone: () => void }) {
+function DrawAnimation({ players, onDone, onSoundTrigger }: { players: string[]; onDone: () => void; onSoundTrigger?: () => void }) {
   const [revealed, setRevealed] = useState<number[]>([]);
   const [done, setDone] = useState(false);
 
   useEffect(() => {
+    onSoundTrigger?.();
     let i = 0;
     const total = Math.min(players.length, 16);
     const timer = setInterval(() => {
@@ -114,8 +137,8 @@ function GegnerProfil({ career }: { career: any }) {
   return (
     <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
       <div className="flex items-center gap-3 border-b border-border pb-4">
-        <div className="w-12 h-12 rounded-full bg-secondary flex items-center justify-center shrink-0">
-          <User className="w-6 h-6 text-muted-foreground" />
+        <div className="shrink-0">
+          <PlayerAvatar name={gegner_name} size={52} />
         </div>
         <div>
           <h3 className="font-bold text-white text-lg leading-tight">{gegner_name}</h3>
@@ -191,6 +214,7 @@ export default function MatchView() {
   const [, setLocation] = useLocation();
   const [showDraw, setShowDraw] = useState(false);
   const [drawShown, setDrawShown] = useState(false);
+  const { playMatchStart, playDrawAnimation } = useDartsSounds();
 
   const form = useForm<MatchFormValues>({
     resolver: zodResolver(matchSchema),
@@ -201,6 +225,9 @@ export default function MatchView() {
   useEffect(() => {
     if (!isLoading && career && career.turnier_laeuft && !drawShown && career.aktuelle_runde === 0) {
       setShowDraw(true);
+      setDrawShown(true);
+      playMatchStart();
+    } else if (!isLoading && career && career.turnier_laeuft && !drawShown && career.aktuelle_runde > 0) {
       setDrawShown(true);
     }
   }, [career, isLoading]);
@@ -239,6 +266,7 @@ export default function MatchView() {
           <DrawAnimation
             players={uniquePlayers}
             onDone={() => setShowDraw(false)}
+            onSoundTrigger={playDrawAnimation}
           />
         )}
       </AnimatePresence>
@@ -277,17 +305,21 @@ export default function MatchView() {
               <Zap className="w-8 h-8 text-accent" />
             </motion.h2>
 
-            <div className="flex flex-col md:flex-row items-center justify-center gap-6 md:gap-12">
-              <div className="flex-1 text-right">
-                <h3 className="text-3xl md:text-4xl font-bold text-primary truncate">{career.spieler_name}</h3>
-                <p className="text-muted-foreground text-sm mt-1">Platz {career.platz}</p>
+            <div className="flex flex-col md:flex-row items-center justify-center gap-6 md:gap-10">
+              <div className="flex-1 flex flex-col items-center md:items-end gap-2">
+                <div className="w-16 h-16 rounded-full bg-primary/20 border-2 border-primary/40 flex items-center justify-center">
+                  <span className="text-2xl font-bold text-primary">{career.spieler_name?.charAt(0)}</span>
+                </div>
+                <h3 className="text-2xl md:text-3xl font-bold text-primary truncate text-center md:text-right">{career.spieler_name}</h3>
+                <p className="text-muted-foreground text-sm">Platz {career.platz}</p>
               </div>
               <div className="bg-secondary/80 rounded-full p-4 shrink-0">
                 <Swords className="w-8 h-8 text-muted-foreground" />
               </div>
-              <div className="flex-1 text-left">
-                <h3 className="text-3xl md:text-4xl font-bold text-white truncate">{career.gegner_name}</h3>
-                <p className={`text-sm mt-1 font-medium`}>{formEmoji} {career.gegner_form?.form?.split(" ").slice(1).join(" ")}</p>
+              <div className="flex-1 flex flex-col items-center md:items-start gap-2">
+                <PlayerAvatar name={career.gegner_name} size={64} />
+                <h3 className="text-2xl md:text-3xl font-bold text-white truncate text-center md:text-left">{career.gegner_name}</h3>
+                <p className={`text-sm font-medium`}>{formEmoji} {career.gegner_form?.form?.split(" ").slice(1).join(" ")}</p>
               </div>
             </div>
 

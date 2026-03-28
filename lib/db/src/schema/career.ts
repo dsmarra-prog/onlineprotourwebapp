@@ -39,6 +39,7 @@ export const careerTable = pgTable("career", {
   checkout_bonus: real("checkout_bonus").notNull().default(0),
   saison_avg_history: jsonb("saison_avg_history").notNull().default([]),
   schwierigkeitsgrad: integer("schwierigkeitsgrad").notNull().default(5),
+  spieler_avg: integer("spieler_avg").notNull().default(60),
 });
 
 export const insertCareerSchema = createInsertSchema(careerTable);

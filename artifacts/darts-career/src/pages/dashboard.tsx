@@ -9,17 +9,31 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const DIFFICULTY_INFO = [
-  { level: 1, label: "Level 1 – Anfänger", desc: "Sehr leichte Gegner, ideal zum Lernen", color: "text-green-400" },
-  { level: 2, label: "Level 2 – Einsteiger", desc: "Leichte Gegner mit schwachen Averages", color: "text-green-400" },
-  { level: 3, label: "Level 3 – Freizeit", desc: "Entspannte Matches, wenig Druck", color: "text-lime-400" },
-  { level: 4, label: "Level 4 – Fortgeschritten", desc: "Ausgewogen, leicht unter Standard", color: "text-yellow-400" },
-  { level: 5, label: "Level 5 – Standard", desc: "Reale PDC-Verhältnisse", color: "text-orange-400" },
-  { level: 6, label: "Level 6 – Anspruchsvoll", desc: "Gegner spielen über ihrem Niveau", color: "text-orange-500" },
-  { level: 7, label: "Level 7 – Profi", desc: "Hohe Averages, kein Erbarmen", color: "text-red-400" },
-  { level: 8, label: "Level 8 – Elite", desc: "Nur für Experten geeignet", color: "text-red-500" },
-  { level: 9, label: "Level 9 – Legende", desc: "Autodarts-Bestlevel, brutal hart", color: "text-red-600" },
-];
+function avgToLevel(avg: number): number {
+  return Math.max(1, Math.min(11, Math.round(avg / 10) - 1));
+}
+
+function levelColor(level: number): string {
+  if (level <= 2) return "text-slate-300";
+  if (level <= 4) return "text-yellow-300";
+  if (level <= 6) return "text-orange-300";
+  if (level <= 8) return "text-red-300";
+  return "text-pink-300";
+}
+
+const LEVEL_DESCS: Record<number, string> = {
+  1: "PPR ~20 – Absoluter Anfänger",
+  2: "PPR ~30 – Gelegentlicher Spieler",
+  3: "PPR ~40 – Hobbyist",
+  4: "PPR ~50 – Fortgeschritten",
+  5: "PPR ~60 – Vereinsspieler",
+  6: "PPR ~70 – Ambitioniert",
+  7: "PPR ~80 – Erfahrener Spieler",
+  8: "PPR ~90 – Semiprofi",
+  9: "PPR ~100 – Amateur-Profi",
+  10: "PPR ~110 – Hochklassig",
+  11: "PPR ~120 – Autodarts-Legende",
+};
 
 export default function Dashboard() {
   const { data: career, isLoading, error } = useGetCareer();
@@ -27,7 +41,9 @@ export default function Dashboard() {
   const [, setLocation] = useLocation();
   const [newName, setNewName] = useState("");
   const [setupStep, setSetupStep] = useState<1 | 2>(1);
-  const [selectedDifficulty, setSelectedDifficulty] = useState(5);
+  const [spielerAvg, setSpielerAvg] = useState(60);
+
+  const derivedLevel = avgToLevel(spielerAvg);
 
   if (isLoading) {
     return (
@@ -51,7 +67,6 @@ export default function Dashboard() {
     );
   }
 
-  // Name Setup Screen (2 Schritte)
   if (!career.name_set) {
     return (
       <Layout>
@@ -87,7 +102,7 @@ export default function Dashboard() {
                   disabled={!newName.trim()}
                   className="w-full text-lg py-6 bg-gradient-to-r from-primary to-cyan-400 hover:from-primary/90 hover:to-cyan-500 text-black font-bold"
                 >
-                  Weiter zum Schwierigkeitsgrad →
+                  Weiter →
                 </Button>
               </motion.div>
             ) : (
@@ -99,44 +114,67 @@ export default function Dashboard() {
                 className="bg-card border border-primary/40 rounded-3xl p-8 max-w-lg w-full shadow-[0_0_60px_rgba(0,210,255,0.1)]"
               >
                 <p className="text-xs text-primary uppercase tracking-widest font-bold mb-2 text-center">Schritt 2 von 2</p>
-                <h1 className="text-2xl font-display font-bold text-white mb-1 text-center">Schwierigkeitsgrad</h1>
-                <p className="text-muted-foreground text-sm mb-6 text-center">
-                  Basiert auf den Autodarts Bot-Leveln 1–9
+                <h1 className="text-2xl font-display font-bold text-white mb-1 text-center">Dein Autodarts Average</h1>
+                <p className="text-muted-foreground text-sm mb-8 text-center">
+                  Gegner werden an dein Level angepasst
                 </p>
 
-                <div className="space-y-2 mb-6">
-                  {DIFFICULTY_INFO.map((d) => (
-                    <button
-                      key={d.level}
-                      onClick={() => setSelectedDifficulty(d.level)}
-                      className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
-                        selectedDifficulty === d.level
-                          ? "bg-primary/10 border-primary"
-                          : "bg-secondary/20 border-border/50 hover:border-border"
-                      }`}
-                    >
-                      <span className={`text-xl font-mono font-bold w-6 text-center ${d.color}`}>{d.level}</span>
-                      <div>
-                        <p className={`font-bold text-sm ${selectedDifficulty === d.level ? "text-white" : "text-muted-foreground"}`}>{d.label}</p>
-                        <p className="text-xs text-muted-foreground">{d.desc}</p>
-                      </div>
-                      {selectedDifficulty === d.level && (
-                        <span className="ml-auto text-primary text-lg">✓</span>
-                      )}
-                    </button>
-                  ))}
+                <div className="mb-6 text-center">
+                  <div className="flex items-center justify-center gap-3 mb-3">
+                    <span className={`text-6xl font-mono font-bold ${levelColor(derivedLevel)}`}>
+                      {spielerAvg}
+                    </span>
+                  </div>
+                  <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-bold mb-2 ${
+                    derivedLevel <= 2 ? "border-slate-400/40 bg-slate-400/10 text-slate-200" :
+                    derivedLevel <= 4 ? "border-yellow-400/40 bg-yellow-400/10 text-yellow-200" :
+                    derivedLevel <= 6 ? "border-orange-400/40 bg-orange-400/10 text-orange-200" :
+                    derivedLevel <= 8 ? "border-red-400/40 bg-red-400/10 text-red-200" :
+                    "border-pink-400/40 bg-pink-400/10 text-pink-200"
+                  }`}>
+                    🎯 Autodarts Level {derivedLevel}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">{LEVEL_DESCS[derivedLevel]}</p>
+                </div>
+
+                <div className="px-2 mb-4">
+                  <input
+                    type="range"
+                    min={15}
+                    max={125}
+                    step={1}
+                    value={spielerAvg}
+                    onChange={(e) => setSpielerAvg(Number(e.target.value))}
+                    className="w-full accent-primary h-2 cursor-pointer"
+                  />
+                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                    <span>15 (Level 1)</span>
+                    <span>65 (Level 5)</span>
+                    <span>125 (Level 11)</span>
+                  </div>
+                </div>
+
+                <div className="bg-secondary/30 rounded-xl p-4 mb-6 border border-border/50">
+                  <p className="text-xs text-muted-foreground text-center mb-2 font-medium">Oder gib deinen Average direkt ein:</p>
+                  <input
+                    type="number"
+                    min={15}
+                    max={125}
+                    value={spielerAvg}
+                    onChange={(e) => {
+                      const v = Math.max(15, Math.min(125, Number(e.target.value) || 15));
+                      setSpielerAvg(v);
+                    }}
+                    className="w-full bg-background border border-border rounded-xl px-4 py-2 text-lg text-center text-white font-mono focus:outline-none focus:border-primary"
+                  />
                 </div>
 
                 <div className="flex gap-3">
-                  <Button
-                    variant="outline"
-                    onClick={() => setSetupStep(1)}
-                    className="flex-1"
-                  >
+                  <Button variant="outline" onClick={() => setSetupStep(1)} className="flex-1">
                     ← Zurück
                   </Button>
                   <Button
-                    onClick={() => setPlayerName({ name: newName, schwierigkeitsgrad: selectedDifficulty })}
+                    onClick={() => setPlayerName({ name: newName, spieler_avg: spielerAvg })}
                     disabled={isSettingName}
                     className="flex-1 bg-gradient-to-r from-primary to-cyan-400 hover:from-primary/90 hover:to-cyan-500 text-black font-bold"
                   >
@@ -162,7 +200,6 @@ export default function Dashboard() {
   return (
     <Layout>
       <div className="space-y-8">
-        {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
             <h1 className="text-4xl md:text-5xl font-display font-bold text-white tracking-tight">
@@ -194,7 +231,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* News Banner */}
         <AnimatePresence>
           {career.letzte_schlagzeile && (
             <motion.div
@@ -215,7 +251,6 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            {/* Stats Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-card border border-border rounded-2xl p-6 hover:border-primary/50 transition-colors">
                 <div className="flex items-center gap-3 mb-4">
@@ -282,7 +317,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Quick Links */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
                 { href: "/stats", label: "Statistiken", icon: "📊" },
@@ -302,7 +336,6 @@ export default function Dashboard() {
               ))}
             </div>
 
-            {/* Achievements */}
             <div className="bg-card border border-border rounded-2xl p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
@@ -336,9 +369,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Right Column */}
           <div className="space-y-6">
-            {/* Finances */}
             <div className="bg-gradient-to-br from-card to-secondary border border-border rounded-2xl p-6 relative overflow-hidden">
               <div className="absolute -right-4 -top-4 text-white/5 rotate-12 pointer-events-none">
                 <Banknote className="w-32 h-32" />
@@ -358,7 +389,6 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Sponsor */}
             <div className="bg-card border border-border rounded-2xl p-6">
               <h3 className="text-xl font-display font-bold mb-4 flex items-center gap-2">
                 <Zap className="w-5 h-5 text-yellow-400" /> Aktiver Sponsor
@@ -398,7 +428,6 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* OOM Table */}
             <div className="bg-card border border-border rounded-2xl overflow-hidden">
               <div className="p-5 border-b border-border bg-secondary/30">
                 <h3 className="text-xl font-display font-bold flex items-center gap-2">
