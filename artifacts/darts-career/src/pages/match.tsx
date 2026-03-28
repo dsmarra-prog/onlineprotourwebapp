@@ -8,12 +8,14 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Zap, Swords, MonitorPlay, Activity, RefreshCw, ChevronLeft,
-  CheckCircle2, TrendingUp,
+  CheckCircle2, TrendingUp, Trophy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDartsSounds } from "@/hooks/use-sounds";
 
 // Known real PDC pro players — everyone else is a fictional regional tour player
@@ -116,6 +118,188 @@ function PlayerInfoCard({
     </Popover>
   );
 }
+
+// ─── Bracket / Turnierbracket Modal ────────────────────────────────────────────
+
+function PastRoundView({ ergebnisse, spieler_name }: { ergebnisse: any[]; spieler_name: string }) {
+  const playerMatch = ergebnisse.find((e: any) => e.p1 === spieler_name || e.p2 === spieler_name);
+  const otherMatches = ergebnisse.filter((e: any) => e.p1 !== spieler_name && e.p2 !== spieler_name);
+  const isP1 = playerMatch?.p1 === spieler_name;
+
+  return (
+    <div className="space-y-6 p-4">
+      {playerMatch && (
+        <div className="bg-primary/10 border border-primary/40 rounded-2xl p-5">
+          <p className="text-xs text-primary uppercase tracking-widest font-bold mb-4">Dein Match</p>
+          <div className="flex items-center gap-6 justify-center flex-wrap">
+            <div className="text-center flex-1 min-w-[80px]">
+              <PlayerAvatar name={playerMatch.p1} size={44} />
+              <p className={`font-bold text-sm mt-2 truncate ${isP1 ? "text-primary" : "text-white"}`}>{playerMatch.p1}</p>
+              {playerMatch.p1_avg !== undefined && (
+                <p className="text-xs text-muted-foreground">Avg {playerMatch.p1_avg}</p>
+              )}
+            </div>
+            <div className="text-center shrink-0 px-2">
+              <p className="text-3xl font-bold font-mono text-white leading-none">
+                {isP1 ? playerMatch.p1_legs : playerMatch.p2_legs}
+                <span className="text-muted-foreground mx-1">:</span>
+                {isP1 ? playerMatch.p2_legs : playerMatch.p1_legs}
+              </p>
+              <span className={`text-sm font-bold mt-1 block ${playerMatch.winner === spieler_name ? "text-green-400" : "text-red-400"}`}>
+                {playerMatch.winner === spieler_name ? "✓ Sieg" : "✗ Niederlage"}
+              </span>
+            </div>
+            <div className="text-center flex-1 min-w-[80px]">
+              <PlayerAvatar name={playerMatch.p2} size={44} />
+              <p className={`font-bold text-sm mt-2 truncate ${!isP1 ? "text-primary" : "text-white"}`}>{playerMatch.p2}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div>
+        <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold mb-3">
+          Alle anderen Spiele ({otherMatches.length})
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+          {otherMatches.map((m: any, idx: number) => (
+            <div key={idx} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/20 text-xs border border-border/20">
+              <span className={`flex-1 truncate ${m.winner === m.p1 ? "font-semibold text-white" : "text-muted-foreground line-through"}`}>
+                {m.p1}
+              </span>
+              <span className="text-muted-foreground shrink-0 text-[10px] font-mono">vs</span>
+              <span className={`flex-1 truncate text-right ${m.winner === m.p2 ? "font-semibold text-white" : "text-muted-foreground line-through"}`}>
+                {m.p2}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CurrentRoundView({
+  matchups, spieler_name, turnier_bot_info, runden_info,
+}: { matchups: any[]; spieler_name: string; turnier_bot_info: any; runden_info: any }) {
+  const isSets = runden_info?.format === "sets";
+  return (
+    <div className="space-y-4 p-4">
+      <p className="text-sm text-muted-foreground border border-primary/20 bg-primary/5 rounded-xl px-4 py-2">
+        Aktuelle Runde — noch nicht gespielt · First to {runden_info?.first_to} {isSets ? "Sätze" : "Legs"}
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+        {matchups.map((matchup: any, idx: number) => {
+          const isActive = matchup.player1 === spieler_name || matchup.player2 === spieler_name;
+          const info1 = turnier_bot_info?.[matchup.player1];
+          const info2 = turnier_bot_info?.[matchup.player2];
+          return (
+            <div
+              key={idx}
+              className={`p-3 rounded-xl border ${isActive ? "bg-primary/10 border-primary/60 shadow-[0_0_10px_rgba(0,210,255,0.08)]" : "bg-secondary/20 border-border/40"}`}
+            >
+              {isActive && <span className="text-[9px] text-primary font-bold uppercase tracking-wider block mb-1">▶ Dein Match</span>}
+              <div className="space-y-0.5">
+                <p className={`text-xs font-medium truncate ${matchup.player1 === spieler_name ? "text-primary font-bold" : "text-foreground"}`}>
+                  {matchup.player1}
+                  {info1 && <span className="text-muted-foreground ml-1 font-normal text-[10px]">({Math.round(info1.avg)})</span>}
+                </p>
+                <span className="text-[9px] text-muted-foreground pl-1 block">vs</span>
+                <p className={`text-xs font-medium truncate ${matchup.player2 === spieler_name ? "text-primary font-bold" : "text-foreground"}`}>
+                  {matchup.player2}
+                  {info2 && <span className="text-muted-foreground ml-1 font-normal text-[10px]">({Math.round(info2.avg)})</span>}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function BracketModal({
+  spieler_name,
+  turnier_runden_log,
+  matchups,
+  runden_info,
+  turnier_bot_info,
+}: {
+  spieler_name: string;
+  turnier_runden_log: any[];
+  matchups: any[];
+  runden_info: any;
+  turnier_bot_info: any;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const allRunden = [
+    ...turnier_runden_log.map((r: any) => ({ ...r, isCurrent: false })),
+    ...(matchups.length > 0 ? [{ rundenName: runden_info?.name ?? "Aktuelle Runde", ergebnisse: null, currentMatchups: matchups, isCurrent: true }] : []),
+  ];
+
+  if (allRunden.length === 0) return null;
+
+  const defaultTab = String(allRunden.length - 1);
+
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => setOpen(true)}
+        className="w-full border-primary/30 text-primary hover:bg-primary/10 hover:text-primary"
+      >
+        <Trophy className="w-4 h-4 mr-2" />
+        Vollständiger Bracket
+      </Button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-5xl w-[95vw] h-[88vh] flex flex-col gap-0 p-0 overflow-hidden">
+          <DialogHeader className="px-6 py-4 border-b border-border/60 shrink-0">
+            <DialogTitle className="font-display text-lg flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-primary" />
+              Vollständiger Turnierbracket
+            </DialogTitle>
+          </DialogHeader>
+
+          <Tabs defaultValue={defaultTab} className="flex-1 flex flex-col overflow-hidden">
+            <TabsList className="h-auto rounded-none border-b border-border/60 bg-transparent px-4 py-2 gap-1 flex-wrap justify-start shrink-0 overflow-x-auto">
+              {allRunden.map((r, i) => (
+                <TabsTrigger
+                  key={i}
+                  value={String(i)}
+                  className="text-xs shrink-0 rounded-lg data-[state=active]:bg-primary/20 data-[state=active]:text-primary data-[state=active]:shadow-none"
+                >
+                  {r.isCurrent ? `▶ ${r.rundenName}` : `R${i + 1}: ${r.rundenName}`}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            <div className="flex-1 overflow-y-auto">
+              {allRunden.map((r, i) => (
+                <TabsContent key={i} value={String(i)} className="mt-0 h-full">
+                  {!r.isCurrent ? (
+                    <PastRoundView ergebnisse={r.ergebnisse} spieler_name={spieler_name} />
+                  ) : (
+                    <CurrentRoundView
+                      matchups={r.currentMatchups}
+                      spieler_name={spieler_name}
+                      turnier_bot_info={turnier_bot_info}
+                      runden_info={runden_info}
+                    />
+                  )}
+                </TabsContent>
+              ))}
+            </div>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// ───────────────────────────────────────────────────────────────────────────────
 
 const matchSchema = z.object({
   legs_won: z.coerce.number().min(0),
@@ -509,11 +693,21 @@ export default function MatchView() {
             <h3 className="text-lg font-display font-bold text-center mb-1">
               🏆 Turnierbracket
             </h3>
-            <p className="text-center text-muted-foreground text-xs mb-4 border-b border-border pb-3">
+            <p className="text-center text-muted-foreground text-xs mb-3">
               {career.runden_info.name} · First to {career.runden_info.first_to} {isSets ? "Sätze" : "Legs"}
             </p>
 
-            <div className="space-y-2 max-h-[65vh] overflow-y-auto pr-1">
+            <div className="mb-4 pb-3 border-b border-border">
+              <BracketModal
+                spieler_name={career.spieler_name}
+                turnier_runden_log={(career as any).turnier_runden_log ?? []}
+                matchups={career.matchups}
+                runden_info={career.runden_info}
+                turnier_bot_info={(career as any).turnier_bot_info}
+              />
+            </div>
+
+            <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
               {career.matchups.map((matchup: any, idx: number) => {
                 const isActive = matchup.player1 === career.spieler_name || matchup.player2 === career.spieler_name;
                 const info1 = career.turnier_bot_info?.[matchup.player1];

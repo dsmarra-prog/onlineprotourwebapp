@@ -839,6 +839,11 @@ export async function startMatch() {
   updates.letzte_schlagzeile = null;
   updates.turnier_laeuft = true;
 
+  // Reset round log when starting a fresh tournament
+  if (career.aktuelle_runde === 0) {
+    updates.turnier_runden_log = [];
+  }
+
   const { gegner_name, gegner_avg, turnier_baum } = generiereGegner({ ...career, ...updates });
   updates.gegner_name = gegner_name;
   updates.gegner_avg = gegner_avg;
@@ -888,11 +893,22 @@ export async function processResult(
   const botForm: Record<string, number> = { ...(career.bot_form as any) };
 
   const neuerBaum: any[] = [];
+  const roundMatchups: any[] = [];
   for (let i = 0; i < turnier_baum.length; i += 2) {
     const bot1 = turnier_baum[i];
     const bot2 = turnier_baum[i + 1];
     if (bot1.name === career.spieler_name || bot2.name === career.spieler_name) {
-      neuerBaum.push(win ? (bot1.name === career.spieler_name ? bot1 : bot2) : (bot1.name === career.spieler_name ? bot2 : bot1));
+      const playerIsP1 = bot1.name === career.spieler_name;
+      const winner = win ? (playerIsP1 ? bot1 : bot2) : (playerIsP1 ? bot2 : bot1);
+      neuerBaum.push(winner);
+      roundMatchups.push({
+        p1: bot1.name,
+        p2: bot2.name,
+        winner: winner.name,
+        p1_legs: playerIsP1 ? legs_won : legs_lost,
+        p2_legs: playerIsP1 ? legs_lost : legs_won,
+        p1_avg: playerIsP1 ? Math.round(my_avg * 10) / 10 : Math.round(career.gegner_avg * 10) / 10,
+      });
     } else {
       const a1 = bot1.avg * (0.9 + Math.random() * 0.2);
       const a2 = bot2.avg * (0.9 + Math.random() * 0.2);
@@ -902,10 +918,21 @@ export async function processResult(
       neuerBaum.push(winner);
       botForm[winner.name] = Math.min(5, (botForm[winner.name] ?? 0) + 0.5);
       botForm[loser.name] = Math.max(-5, (botForm[loser.name] ?? 0) - 0.5);
+      roundMatchups.push({ p1: bot1.name, p2: bot2.name, winner: winner.name });
     }
   }
   updates.turnier_baum = neuerBaum;
   updates.bot_form = botForm;
+
+  // Record this round's results in the runden_log
+  const rundenLogEntry = {
+    runde: career.aktuelle_runde,
+    rundenName: getRundenInfo(turnier_baum, career.hat_tourcard, career.aktuelles_turnier_index).name,
+    ergebnisse: roundMatchups,
+  };
+  const runden_log = [...((career.turnier_runden_log ?? []) as any[])];
+  runden_log.push(rundenLogEntry);
+  updates.turnier_runden_log = runden_log;
 
   msgs.push(`📊 Ergebnis eingetragen: ${legs_won} : ${legs_lost}`);
 
@@ -1186,6 +1213,7 @@ export function buildCareerState(career: any) {
       const bot = (career.bot_rangliste as any[]).find((b) => b.name === career.gegner_name);
       return bot ? bot.geld : null;
     })(),
+    turnier_runden_log: career.turnier_runden_log ?? [],
   };
 }
 
