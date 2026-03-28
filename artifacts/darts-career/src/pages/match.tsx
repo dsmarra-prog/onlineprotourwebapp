@@ -15,14 +15,34 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useDartsSounds } from "@/hooks/use-sounds";
 
-function isBot(name: string): boolean {
-  return /^Level \d+/.test(name);
-}
+// Known real PDC pro players — everyone else is a fictional regional tour player
+const PDC_PROS = new Set([
+  "Luke Humphries","Michael van Gerwen","Michael Smith","Gerwyn Price","Nathan Aspinall",
+  "Luke Littler","Rob Cross","Damon Heta","Dimitri Van den Bergh","Peter Wright",
+  "Danny Noppert","Chris Dobey","Jose de Sousa","Jonny Clayton","Gary Anderson",
+  "Brendan Dolan","Andrew Gilding","Callan Rydz","Mike De Decker","Dirk van Duijvenbode",
+  "Martin Schindler","Josh Rock","Jermaine Wattimena","Ryan Joyce","Joe Cullen",
+  "Ryan Searle","Raymond van Barneveld","John Henderson","Krzysztof Ratajski","Dave Chisnall",
+  "Mensur Suljovic","James Wade","Kim Huybrechts","Daryl Gurney","Scott Williams",
+  "Jim Williams","Jeffrey de Graaf","Mickey Mansell","Karel Sedlacek","Stephen Bunting",
+  "Ricky Evans","Kevin Doets","Florian Hempel","Gian van Veen","Ritchie Edhouse",
+  "Connor Scutt","Danny van Trijp","Paolo Nebrida","William O'Connor","Wessel Nijman",
+  "Ricardo Pietreczko","Matt Campbell","Madars Razma","Bradley Brooks","Luke Woodhouse",
+  "Gordon Mathers","Niels Zonneveld","Boris Krcmar","Rowby-John Rodriguez","Keane Barry",
+  "Ted Evetts","Ross Smith","Gary Robson","Martin Atkins","Mark Webster",
+  "Andy Boulton","Paul Hogan","Andy Hamilton","Adrian Lewis","Terry Jenkins",
+  "Dean Winstanley","Colin Osborne","Scott Waites","Kevin Painter","Paul Nicholson",
+  "Andy Smith","Noa-Lynn van Leuwen","Fallon Sherrock","Beau Greaves","Glen Durrant",
+  "Steve Beaton","Mervyn King","Tony O'Shea","Max Hopp","Corey Cadby",
+  "Darius Labanauskas","Ian White","Steve West","Jamie Caven","Robbie Green",
+  "Wayne Mardle","Kirk Shepherd","Chris Mason","Paul Lim","Wayne Jones","Colin Lloyd",
+]);
 
 function PlayerAvatar({ name, size = 48 }: { name: string; size?: number }) {
-  const style = isBot(name) ? "bottts" : "lorelei";
-  const bg = isBot(name) ? "0d1117" : "0f1923";
-  const url = `https://api.dicebear.com/9.x/${style}/svg?seed=${encodeURIComponent(name)}&backgroundColor=${bg}&radius=50`;
+  // All players now have human names — use portrait style for everyone
+  // PDC pros get a slightly different seed prefix so their avatar is distinct
+  const seed = PDC_PROS.has(name) ? `pro_${name}` : name;
+  const url = `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(seed)}&backgroundColor=0f1923&radius=50`;
   return (
     <img
       src={url}

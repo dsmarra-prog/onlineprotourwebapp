@@ -105,6 +105,63 @@ const DEFAULT_ACHIEVEMENTS = {
   millionaire: { name: "Millionär", desc: "Verdiene £1.000.000 auf der Order of Merit.", unlocked: false },
 };
 
+// Realistic Q-School / regional tour player name pool (~200 names)
+const BOT_NAME_POOL = [
+  // English
+  "Phil Morton", "Dave Richardson", "Mark Taylor", "Steve Cooper", "Paul Watson",
+  "Andy Fletcher", "Lee Morris", "Wayne Davies", "Chris Bennett", "Gary White",
+  "Ian Clarke", "Colin Evans", "Terry Shaw", "Roger Watts", "Mick Turner",
+  "Alan Crawford", "Tony Hayes", "Ray Burton", "Dennis Roberts", "Jack Fletcher",
+  "Tom Morris", "Ben Watson", "Will Parker", "Sam Clarke", "Chris Foster",
+  "Neil White", "Carl Davies", "Brian Robertson", "Stuart Harris", "Frank Kemp",
+  "Fred Parkin", "Charlie Keane", "Sid Coleman", "Jack Barton", "Bert Lawson",
+  "Ron Fowler", "Norman Perkins", "Reg Chambers", "Alf Preston", "Pete Harper",
+  "Geoff Sutton", "Len Bowden", "Vic Frost", "Walt Dawson", "Ernie Walters",
+  "Roy Simmons", "Ken Griffiths", "Harry Bowen", "Don Fletcher", "Cliff Reed",
+  "Dean Baines", "Lee Garner", "Scott Palmer", "Paul Houghton", "Mark Sutton",
+  "Kevin Walsh", "Rob Pearce", "Adam Gray", "Jason Tate", "Danny Bolton",
+  "Ricky Gibson", "Peter Stone", "Simon Barker", "Neil Turner", "Craig Thornton",
+  "Tom Bradley", "David Fenton", "Luke Cairns", "Jamie Prescott", "Kyle Henderson",
+  "Liam Wright", "Brandon Hughes", "Tyler Reed", "Jake Coleman", "Connor Sutton",
+  "Riley Chapman", "Callum Foster", "Ethan Barker", "Joshua Morris", "Ryan Bolton",
+  // Scottish
+  "Alasdair Reid", "Callum Shaw", "Douglas Grant", "Hamish Murray", "Ian Campbell",
+  "Ross McAllister", "Gordon McDougall", "Angus Fraser", "Duncan MacGregor", "Craig Kerr",
+  // Welsh
+  "Rhys Davies", "Owen Hughes", "Gareth Evans", "Liam Thomas", "Ieuan Roberts",
+  "Dylan Price", "Bryn Edwards", "Emlyn Rees", "Alun Morgan", "Huw Jenkins",
+  // Irish
+  "Seamus Gallagher", "Patrick Cunningham", "Declan Murphy", "Shane O'Brien", "Conor Kelly",
+  "Danny Flanagan", "Liam Brady", "Kevin Ryan", "Mark Collins", "Brian Casey",
+  // Dutch / Belgian
+  "Pieter Bakker", "Lars de Boer", "Sander Visser", "Tom van Dijk", "Roel Hoekstra",
+  "Joost Peters", "Erik van der Berg", "Nico Janssen", "Paul de Vries", "Kees Smit",
+  "Stefan Claes", "Thomas Dubois", "Nicolas Denis", "Bart Leclercq", "Kevin Lefevre",
+  "Arjan Tol", "Bas Dijkstra", "Daan Vink", "Floris Mulder", "Geert Vermeer",
+  // German / Austrian / Swiss
+  "Klaus Müller", "Dieter Weber", "Hans Zimmermann", "Wolfgang Lehmann", "Uwe Fischer",
+  "Stefan Becker", "Tobias Wagner", "Patrick Hofmann", "Andreas Schulze", "Marcel Hartmann",
+  "Ralf Brandt", "Jens Kuhn", "Bernd Vogt", "Christian Lang", "Michael Gross",
+  "Markus Haas", "Oliver Braun", "Thomas Richter", "Simon Schwarz", "Lukas Weiß",
+  // Nordic (Swedish / Danish / Norwegian / Finnish)
+  "Erik Lindqvist", "Magnus Bjornsen", "Anders Holm", "Jonas Eriksson", "Carl Pedersen",
+  "Mikael Strand", "Lars Nygaard", "Henrik Lund", "Tobias Dahl", "Sven Osterberg",
+  "Pekka Virtanen", "Timo Korhonen", "Jari Leinonen", "Heikki Mäkinen", "Kari Hakala",
+  // Polish / Czech / Slovak
+  "Radoslav Kral", "Jakub Svoboda", "Tomasz Kowalski", "Martin Novak", "Patrik Blaha",
+  "Lukas Polak", "Roman Cerny", "Marek Horak", "Ondrej Blazek", "Viktor Havlicek",
+  // Australian / New Zealand
+  "Ben Sullivan", "Jake Murray", "Tyler Ross", "Codie Henderson", "Kieran Carter",
+  "Bryce Mitchell", "Shane Cooper", "Dylan Hamilton", "Lachlan Andrews", "Blake Phillips",
+  "Zach Cameron", "Cody Pearce", "Nathan Walsh", "Josh Sutton", "Matt Lawson",
+  // Canadian / American
+  "Kyle Cooper", "Ryan Morris", "Tyler Crawford", "Brent Sullivan", "Chase Henderson",
+  "Aaron Brooks", "Jordan Stone", "Brett Andrews", "Travis Coleman", "Derek Walsh",
+  // Spanish / Portuguese
+  "Carlos Ruiz", "Fernando Sousa", "Miguel Torres", "Pedro Silva", "Rafael Gomez",
+  "Antonio Ferreira", "Manuel Correia", "Jorge Alves", "Luis Carvalho", "Ricardo Santos",
+];
+
 const QSCHOOL_SPIELER = [
   "Fallon Sherrock", "Max Hopp", "John Henderson", "Corey Cadby",
   "Darius Labanauskas", "Martin Schindler", "Ted Evetts", "Keane Barry",
@@ -429,23 +486,27 @@ function getBotAvg(name: string, botRangliste: any[], botForm: Record<string, nu
   return Math.round((base + formBonus) * 10) / 10;
 }
 
-// Generate Q-School bot names centered around playerLevel (1–11, std dev ~2.5)
-function generateQSchoolBots(playerLevel: number, count: number): string[] {
-  const levelCounters: Record<number, number> = {};
-  const names: string[] = [];
+// Helper: get avg from level for named bots (not using name pattern)
+function getBotAvgForLevel(level: number, formBonus: number = 0): number {
+  const [min, max] = AUTODARTS_LEVEL_RANGES[level] ?? [55, 75];
+  return Math.round((rand(min, max) + formBonus) * 10) / 10;
+}
+
+// Generate Q-School bots centered on playerLevel (1–11, std dev ~2.5), with real names
+function generateQSchoolBots(playerLevel: number, count: number): { name: string; level: number }[] {
+  // Shuffle the pool for varied picks each tournament
+  const shuffled = [...BOT_NAME_POOL].sort(() => Math.random() - 0.5);
+  const bots: { name: string; level: number }[] = [];
   for (let i = 0; i < count; i++) {
-    // Box-Muller normal distribution centered on playerLevel
     const u = Math.max(1e-10, Math.random());
     const v = Math.random();
     const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
     const level = Math.max(1, Math.min(11, Math.round(playerLevel + z * 2.5)));
-    const pos = levelCounters[level] ?? 0;
-    levelCounters[level] = pos + 1;
-    const letter = String.fromCharCode(65 + (pos % 26));
-    const suffix = pos >= 26 ? `${letter}${Math.floor(pos / 26)}` : letter;
-    names.push(`Level ${level} – ${suffix}`);
+    // Pick name from pool, wrapping if pool exhausted
+    const name = shuffled[i % shuffled.length];
+    bots.push({ name, level });
   }
-  return names;
+  return bots;
 }
 
 export function ermittlePlatz(
@@ -540,12 +601,37 @@ function generiereGegner(career: any) {
     const spielerAvg = career.spieler_avg ?? 60;
     const playerLevel = avgToAutodartsBotLevel(spielerAvg);
     const qBots = generateQSchoolBots(playerLevel, 119);
-    const base = [...QSCHOOL_SPIELER, ...qBots];
+    // Mix real Q-School players (string[]) with named bots ({name,level}[])
+    const base: ({ name: string; level?: number })[] = [
+      ...QSCHOOL_SPIELER.map((name) => ({ name })),
+      ...qBots,
+    ];
     for (let i = base.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [base[i], base[j]] = [base[j], base[i]];
     }
-    pool = base.slice(0, 127);
+    const sliced = base.slice(0, 127);
+    const spielerAvg2 = career.spieler_avg ?? 60;
+    const bots = sliced.map((item) => ({
+      name: item.name,
+      avg: item.level !== undefined
+        ? getBotAvgForLevel(item.level, botForm[item.name] ?? 0)
+        : getBotAvg(item.name, botRangliste, botForm, spielerAvg2),
+    }));
+    let turnier_baum = [{ name: career.spieler_name, avg: 0 }, ...bots];
+    for (let i = turnier_baum.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [turnier_baum[i], turnier_baum[j]] = [turnier_baum[j], turnier_baum[i]];
+    }
+    const idx = turnier_baum.findIndex((p) => p.name === career.spieler_name);
+    const oppIdx = idx % 2 === 0 ? idx + 1 : idx - 1;
+    const gegner = turnier_baum[oppIdx];
+    const tagesformFaktor = 0.9 + Math.random() * 0.2;
+    return {
+      gegner_name: gegner.name,
+      gegner_avg: Math.round(gegner.avg * tagesformFaktor * 10) / 10,
+      turnier_baum,
+    };
   } else {
     const t = KALENDER[aktuelles_turnier_index];
     if (t.name === "World Matchplay" || t.name === "World Grand Prix" || t.name === "European Championship") size = 32;
