@@ -1,17 +1,19 @@
+import { useState } from "react";
 import { Layout } from "@/components/layout";
 import { useGetCareer, useCareerActions } from "@/hooks/use-career";
 import { Link, useLocation } from "wouter";
-import { motion } from "framer-motion";
-import { 
-  Trophy, Banknote, Target, TrendingUp, 
-  Medal, ChevronRight, AlertCircle, PlayCircle 
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Trophy, Banknote, Target, TrendingUp, Medal, PlayCircle,
+  AlertCircle, ChevronRight, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
   const { data: career, isLoading, error } = useGetCareer();
-  const { startMatch, isStarting } = useCareerActions();
+  const { startMatch, isStarting, setPlayerName, isSettingName } = useCareerActions();
   const [, setLocation] = useLocation();
+  const [newName, setNewName] = useState("");
 
   if (isLoading) {
     return (
@@ -35,16 +37,59 @@ export default function Dashboard() {
     );
   }
 
+  // Name Setup Screen
+  if (!career.name_set) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[70vh]">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-card border border-primary/40 rounded-3xl p-10 max-w-md w-full text-center shadow-[0_0_60px_rgba(0,210,255,0.1)]"
+          >
+            <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Trophy className="w-10 h-10 text-primary" />
+            </div>
+            <h1 className="text-3xl font-display font-bold text-white mb-2">Karriere starten</h1>
+            <p className="text-muted-foreground mb-8">
+              Wie soll dein Darts-Profi heißen?
+            </p>
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && newName.trim()) setPlayerName(newName);
+              }}
+              placeholder="z.B. Dennis"
+              maxLength={30}
+              className="w-full bg-background border border-border rounded-xl px-4 py-3 text-lg text-center text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary mb-6"
+            />
+            <Button
+              onClick={() => newName.trim() && setPlayerName(newName)}
+              disabled={isSettingName || !newName.trim()}
+              className="w-full text-lg py-6 bg-gradient-to-r from-primary to-cyan-400 hover:from-primary/90 hover:to-cyan-500 text-black font-bold"
+            >
+              {isSettingName ? "Lade..." : "Los geht's! 🎯"}
+            </Button>
+          </motion.div>
+        </div>
+      </Layout>
+    );
+  }
+
   const handleStartMatch = () => {
     startMatch();
     setLocation("/match");
   };
 
+  const unlockedCount = Object.values(career.achievements).filter((a: any) => a.unlocked).length;
+  const totalAchievements = Object.values(career.achievements).length;
+
   return (
     <Layout>
       <div className="space-y-8">
-        
-        {/* Header Section */}
+        {/* Header */}
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>
             <h1 className="text-4xl md:text-5xl font-display font-bold text-white tracking-tight">
@@ -54,21 +99,20 @@ export default function Dashboard() {
               Saison {career.saison_jahr} • {career.hat_tourcard ? "Tour Card Holder" : "Q-School Teilnehmer"}
             </p>
           </div>
-
           <div className="shrink-0">
             {career.turnier_laeuft ? (
-              <Button 
+              <Button
                 onClick={() => setLocation("/match")}
-                className="w-full md:w-auto text-lg px-8 py-6 bg-gradient-to-r from-accent to-orange-400 hover:from-accent/90 hover:to-orange-500 text-black font-bold shadow-[0_0_20px_rgba(255,170,0,0.3)] hover:shadow-[0_0_25px_rgba(255,170,0,0.5)] transition-all"
+                className="w-full md:w-auto text-lg px-8 py-6 bg-gradient-to-r from-accent to-orange-400 hover:from-accent/90 hover:to-orange-500 text-black font-bold shadow-[0_0_20px_rgba(255,170,0,0.3)]"
               >
                 <PlayCircle className="w-6 h-6 mr-2" />
                 Weiter zum Match
               </Button>
             ) : (
-              <Button 
+              <Button
                 onClick={handleStartMatch}
                 disabled={isStarting}
-                className="w-full md:w-auto text-lg px-8 py-6 bg-gradient-to-r from-primary to-cyan-400 hover:from-primary/90 hover:to-cyan-500 text-black font-bold shadow-[0_0_20px_rgba(0,210,255,0.3)] hover:shadow-[0_0_25px_rgba(0,210,255,0.5)] transition-all"
+                className="w-full md:w-auto text-lg px-8 py-6 bg-gradient-to-r from-primary to-cyan-400 hover:from-primary/90 hover:to-cyan-500 text-black font-bold shadow-[0_0_20px_rgba(0,210,255,0.3)]"
               >
                 <Trophy className="w-6 h-6 mr-2" />
                 {isStarting ? "Lade..." : "Nächstes Turnier starten"}
@@ -78,25 +122,27 @@ export default function Dashboard() {
         </div>
 
         {/* News Banner */}
-        {career.letzte_schlagzeile && (
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-secondary/40 border-l-4 border-destructive p-6 rounded-r-2xl relative overflow-hidden"
-          >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-destructive/10 blur-[50px] -z-10" />
-            <h4 className="text-destructive font-bold text-sm tracking-widest uppercase mb-2">PDC News Express</h4>
-            <h2 className="text-2xl font-display font-bold text-white mb-2">{career.letzte_schlagzeile.titel}</h2>
-            <p className="text-muted-foreground italic text-lg border-l-2 border-muted-foreground/30 pl-4">
-              "{career.letzte_schlagzeile.text}"
-            </p>
-          </motion.div>
-        )}
+        <AnimatePresence>
+          {career.letzte_schlagzeile && (
+            <motion.div
+              key="news"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-secondary/40 border-l-4 border-destructive p-6 rounded-r-2xl relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-32 h-32 bg-destructive/10 blur-[50px] -z-10" />
+              <h4 className="text-destructive font-bold text-sm tracking-widest uppercase mb-2">PDC News Express</h4>
+              <h2 className="text-2xl font-display font-bold text-white mb-2">{career.letzte_schlagzeile.titel}</h2>
+              <p className="text-muted-foreground italic text-lg border-l-2 border-muted-foreground/30 pl-4">
+                "{career.letzte_schlagzeile.text}"
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* Main Status Column */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Stats Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-card border border-border rounded-2xl p-6 hover:border-primary/50 transition-colors">
                 <div className="flex items-center gap-3 mb-4">
@@ -111,7 +157,7 @@ export default function Dashboard() {
                     <span className="text-xl font-bold font-mono">{career.gesamt_avg.toFixed(2)}</span>
                   </div>
                   <div className="w-full bg-secondary rounded-full h-2">
-                    <div className="bg-primary h-2 rounded-full" style={{ width: `${Math.min(career.gesamt_avg, 120)}%` }} />
+                    <div className="bg-primary h-2 rounded-full" style={{ width: `${Math.min(career.gesamt_avg, 120) / 1.2}%` }} />
                   </div>
                   <div className="flex justify-between items-center mt-2">
                     <span className="text-muted-foreground">Doppel-Quote</span>
@@ -120,6 +166,16 @@ export default function Dashboard() {
                   <div className="w-full bg-secondary rounded-full h-2">
                     <div className="bg-accent h-2 rounded-full" style={{ width: `${career.gesamt_co}%` }} />
                   </div>
+                  {(career.avg_bonus > 0 || career.checkout_bonus > 0) && (
+                    <div className="pt-2 border-t border-border/50 flex gap-4">
+                      {career.avg_bonus > 0 && (
+                        <span className="text-xs text-green-400">+{career.avg_bonus} Avg (Equipment)</span>
+                      )}
+                      {career.checkout_bonus > 0 && (
+                        <span className="text-xs text-green-400">+{career.checkout_bonus}% CO (Equipment)</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -133,42 +189,73 @@ export default function Dashboard() {
                 <div className="space-y-4">
                   <div className="flex justify-between items-center border-b border-border pb-3">
                     <span className="text-muted-foreground">Nächstes Event</span>
-                    <span className="font-bold text-right pl-4">{career.turnier_name}</span>
+                    <span className="font-bold text-right pl-4 text-sm">{career.turnier_name}</span>
                   </div>
                   <div className="flex justify-between items-center border-b border-border pb-3">
                     <span className="text-muted-foreground">Weltrangliste</span>
                     <span className="font-bold text-primary text-xl">Platz {career.platz}</span>
                   </div>
+                  <div className="flex justify-between items-center border-b border-border pb-3">
+                    <span className="text-muted-foreground">Siege</span>
+                    <span className="font-bold">{career.stats_siege} / {career.stats_spiele} ({career.quote}%)</span>
+                  </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Siegquote</span>
-                    <span className="font-bold">{career.quote}%</span>
+                    <span className="text-muted-foreground">Höchstes Finish</span>
+                    <span className={`font-bold ${career.stats_highest_finish >= 170 ? 'text-yellow-400' : career.stats_highest_finish >= 100 ? 'text-primary' : ''}`}>
+                      {career.stats_highest_finish || "–"}
+                    </span>
                   </div>
                 </div>
               </div>
             </div>
 
+            {/* Quick Links */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { href: "/stats", label: "Statistiken", icon: "📊" },
+                { href: "/kalender", label: "Kalender", icon: "📅" },
+                { href: "/h2h", label: "Head-to-Head", icon: "⚔️" },
+                { href: "/history", label: "Turnierverlauf", icon: "📖" },
+              ].map(({ href, label, icon }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className="bg-card border border-border rounded-xl p-4 text-center hover:border-primary/50 hover:bg-primary/5 transition-all group"
+                >
+                  <div className="text-2xl mb-2">{icon}</div>
+                  <div className="text-sm font-medium text-muted-foreground group-hover:text-white transition-colors">{label}</div>
+                  <ChevronRight className="w-4 h-4 mx-auto mt-1 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                </Link>
+              ))}
+            </div>
+
             {/* Achievements */}
             <div className="bg-card border border-border rounded-2xl p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-3 bg-accent/10 rounded-xl">
-                  <Medal className="w-6 h-6 text-accent" />
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-accent/10 rounded-xl">
+                    <Medal className="w-6 h-6 text-accent" />
+                  </div>
+                  <h3 className="text-xl font-display font-bold">Meilensteine</h3>
                 </div>
-                <h3 className="text-xl font-display font-bold">Meilensteine</h3>
+                <span className="text-sm text-muted-foreground bg-secondary px-3 py-1 rounded-full">
+                  {unlockedCount}/{totalAchievements} freigeschaltet
+                </span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {Object.values(career.achievements).map((ach, i) => (
-                  <div 
-                    key={i} 
-                    className={`p-4 rounded-xl border flex items-start gap-4 transition-all ${
-                      ach.unlocked 
-                        ? 'bg-primary/5 border-primary/30 shadow-[0_0_10px_rgba(0,210,255,0.05)]' 
-                        : 'bg-secondary/20 border-border/50 opacity-60 grayscale'
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {Object.values(career.achievements).map((ach: any, i) => (
+                  <div
+                    key={i}
+                    className={`p-4 rounded-xl border flex items-start gap-3 transition-all ${
+                      ach.unlocked
+                        ? "bg-primary/5 border-primary/30 shadow-[0_0_10px_rgba(0,210,255,0.05)]"
+                        : "bg-secondary/20 border-border/50 opacity-50 grayscale"
                     }`}
                   >
-                    <Trophy className={`w-8 h-8 shrink-0 ${ach.unlocked ? 'text-primary' : 'text-muted-foreground'}`} />
+                    <Trophy className={`w-7 h-7 shrink-0 mt-0.5 ${ach.unlocked ? "text-primary" : "text-muted-foreground"}`} />
                     <div>
-                      <h4 className={`font-bold ${ach.unlocked ? 'text-white' : 'text-muted-foreground'}`}>{ach.name}</h4>
-                      <p className="text-sm text-muted-foreground mt-1 leading-snug">{ach.desc}</p>
+                      <h4 className={`font-bold text-sm ${ach.unlocked ? "text-white" : "text-muted-foreground"}`}>{ach.name}</h4>
+                      <p className="text-xs text-muted-foreground mt-1 leading-snug">{ach.desc}</p>
                     </div>
                   </div>
                 ))}
@@ -176,9 +263,8 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Right Column: Money & Sponsors & OOM */}
+          {/* Right Column */}
           <div className="space-y-6">
-            
             {/* Finances */}
             <div className="bg-gradient-to-br from-card to-secondary border border-border rounded-2xl p-6 relative overflow-hidden">
               <div className="absolute -right-4 -top-4 text-white/5 rotate-12 pointer-events-none">
@@ -190,20 +276,22 @@ export default function Dashboard() {
               <div className="space-y-4 relative z-10">
                 <div>
                   <p className="text-sm text-muted-foreground mb-1">Bankkonto</p>
-                  <p className="text-3xl font-mono font-bold text-white">£{career.bank_konto.toLocaleString('en-GB')}</p>
+                  <p className="text-3xl font-mono font-bold text-white">£{career.bank_konto.toLocaleString("en-GB")}</p>
                 </div>
                 <div className="pt-4 border-t border-border/50">
                   <p className="text-sm text-muted-foreground mb-1">Order of Merit (Preisgeld)</p>
-                  <p className="text-xl font-mono font-bold text-primary">£{career.order_of_merit_geld.toLocaleString('en-GB')}</p>
+                  <p className="text-xl font-mono font-bold text-primary">£{career.order_of_merit_geld.toLocaleString("en-GB")}</p>
                 </div>
               </div>
             </div>
 
             {/* Sponsor */}
             <div className="bg-card border border-border rounded-2xl p-6">
-              <h3 className="text-xl font-display font-bold mb-4">Aktiver Sponsor</h3>
+              <h3 className="text-xl font-display font-bold mb-4 flex items-center gap-2">
+                <Zap className="w-5 h-5 text-yellow-400" /> Aktiver Sponsor
+              </h3>
               {career.aktiver_sponsor ? (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="font-bold text-lg text-primary">{career.aktiver_sponsor.name}</span>
                     <span className="text-xs bg-secondary px-2 py-1 rounded-md text-muted-foreground">
@@ -211,22 +299,21 @@ export default function Dashboard() {
                     </span>
                   </div>
                   <p className="text-sm text-muted-foreground">{career.aktiver_sponsor.text}</p>
-                  
                   <div>
                     <div className="flex justify-between text-sm mb-1">
                       <span>Fortschritt</span>
                       <span className="font-mono">{career.aktiver_sponsor.aktuell} / {career.aktiver_sponsor.ziel_wert}</span>
                     </div>
                     <div className="w-full bg-secondary rounded-full h-2">
-                      <div 
-                        className="bg-primary h-2 rounded-full transition-all" 
-                        style={{ width: `${Math.min((career.aktiver_sponsor.aktuell / career.aktiver_sponsor.ziel_wert) * 100, 100)}%` }} 
+                      <div
+                        className="bg-yellow-400 h-2 rounded-full transition-all"
+                        style={{ width: `${Math.min((career.aktiver_sponsor.aktuell / career.aktiver_sponsor.ziel_wert) * 100, 100)}%` }}
                       />
                     </div>
                   </div>
-                  <div className="bg-primary/10 border border-primary/20 rounded-lg p-3 text-center">
+                  <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-lg p-3 text-center">
                     <span className="text-sm text-muted-foreground">Belohnung:</span>
-                    <span className="ml-2 font-bold text-primary">£{career.aktiver_sponsor.belohnung.toLocaleString('en-GB')}</span>
+                    <span className="ml-2 font-bold text-yellow-400">£{career.aktiver_sponsor.belohnung.toLocaleString("en-GB")}</span>
                   </div>
                 </div>
               ) : (
@@ -238,41 +325,39 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* OOM Table preview */}
-            <div className="bg-card border border-border rounded-2xl p-0 overflow-hidden">
+            {/* OOM Table */}
+            <div className="bg-card border border-border rounded-2xl overflow-hidden">
               <div className="p-5 border-b border-border bg-secondary/30">
                 <h3 className="text-xl font-display font-bold flex items-center gap-2">
-                  <Trophy className="w-5 h-5 text-accent" /> 
-                  PDC Top 10
+                  <Trophy className="w-5 h-5 text-accent" /> PDC Top 10
                 </h3>
               </div>
-              <div className="max-h-[300px] overflow-y-auto">
+              <div className="max-h-[280px] overflow-y-auto">
                 <table className="w-full text-sm">
-                  <thead className="bg-secondary/50 sticky top-0 backdrop-blur-md">
+                  <thead className="bg-secondary/50 sticky top-0">
                     <tr>
-                      <th className="text-left p-3 text-muted-foreground font-medium w-12">#</th>
+                      <th className="text-left p-3 text-muted-foreground font-medium w-10">#</th>
                       <th className="text-left p-3 text-muted-foreground font-medium">Spieler</th>
-                      <th className="text-right p-3 text-muted-foreground font-medium">Preisgeld</th>
+                      <th className="text-right p-3 text-muted-foreground font-medium">OoM</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
-                    {career.oom.map((s, i) => (
-                      <tr 
-                        key={i} 
-                        className={`transition-colors hover:bg-secondary/30 ${s.name === career.spieler_name ? 'bg-primary/10' : ''}`}
+                    {career.oom.map((s: any, i: number) => (
+                      <tr
+                        key={i}
+                        className={`transition-colors hover:bg-secondary/30 ${s.name === career.spieler_name ? "bg-primary/10" : ""}`}
                       >
-                        <td className="p-3 text-muted-foreground">{i + 1}</td>
-                        <td className={`p-3 font-medium ${s.name === career.spieler_name ? 'text-primary font-bold' : 'text-foreground'}`}>
+                        <td className="p-3 text-muted-foreground font-mono">{i + 1}</td>
+                        <td className={`p-3 font-medium ${s.name === career.spieler_name ? "text-primary font-bold" : ""}`}>
                           {s.name}
                         </td>
-                        <td className="p-3 text-right font-mono">£{s.geld.toLocaleString('en-GB')}</td>
+                        <td className="p-3 text-right font-mono text-xs">£{s.geld.toLocaleString("en-GB")}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             </div>
-
           </div>
         </div>
       </div>

@@ -30,6 +30,14 @@ export const careerTable = pgTable("career", {
   achievements: jsonb("achievements").notNull().default({}),
   turnier_baum: jsonb("turnier_baum").notNull().default([]),
   bot_rangliste: jsonb("bot_rangliste").notNull().default([]),
+  // New columns
+  name_set: boolean("name_set").notNull().default(false),
+  turnier_verlauf: jsonb("turnier_verlauf").notNull().default([]),
+  ranking_verlauf: jsonb("ranking_verlauf").notNull().default([]),
+  equipment: jsonb("equipment").notNull().default([]),
+  avg_bonus: real("avg_bonus").notNull().default(0),
+  checkout_bonus: real("checkout_bonus").notNull().default(0),
+  saison_avg_history: jsonb("saison_avg_history").notNull().default([]),
 });
 
 export const insertCareerSchema = createInsertSchema(careerTable);

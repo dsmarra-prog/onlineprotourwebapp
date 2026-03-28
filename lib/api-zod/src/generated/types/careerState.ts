@@ -6,14 +6,17 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CareerStateAchievements } from "./careerStateAchievements";
+import type { GegnerForm } from "./gegnerForm";
 import type { Headline } from "./headline";
 import type { Matchup } from "./matchup";
 import type { OomEntry } from "./oomEntry";
+import type { RankingRecord } from "./rankingRecord";
 import type { RoundInfo } from "./roundInfo";
 import type { Sponsor } from "./sponsor";
 
 export interface CareerState {
   spieler_name: string;
+  name_set: boolean;
   hat_tourcard: boolean;
   q_school_punkte: number;
   order_of_merit_geld: number;
@@ -23,6 +26,7 @@ export interface CareerState {
   aktuelle_runde: number;
   gegner_name: string;
   gegner_avg: number;
+  gegner_form: GegnerForm;
   stats_spiele: number;
   stats_siege: number;
   stats_legs_won: number;
@@ -43,4 +47,7 @@ export interface CareerState {
   h2h_siege: number;
   h2h_niederlagen: number;
   walk_on_video?: string | null;
+  ranking_verlauf: RankingRecord[];
+  avg_bonus: number;
+  checkout_bonus: number;
 }

@@ -19,6 +19,7 @@ export const HealthCheckResponse = zod.object({
  */
 export const GetCareerResponse = zod.object({
   spieler_name: zod.string(),
+  name_set: zod.boolean(),
   hat_tourcard: zod.boolean(),
   q_school_punkte: zod.number(),
   order_of_merit_geld: zod.number(),
@@ -28,6 +29,10 @@ export const GetCareerResponse = zod.object({
   aktuelle_runde: zod.number(),
   gegner_name: zod.string(),
   gegner_avg: zod.number(),
+  gegner_form: zod.object({
+    form: zod.string(),
+    bonus: zod.number(),
+  }),
   stats_spiele: zod.number(),
   stats_siege: zod.number(),
   stats_legs_won: zod.number(),
@@ -84,6 +89,15 @@ export const GetCareerResponse = zod.object({
   h2h_siege: zod.number(),
   h2h_niederlagen: zod.number(),
   walk_on_video: zod.string().nullish(),
+  ranking_verlauf: zod.array(
+    zod.object({
+      platz: zod.number(),
+      saison: zod.number(),
+      turnier: zod.string(),
+    }),
+  ),
+  avg_bonus: zod.number(),
+  checkout_bonus: zod.number(),
 });
 
 /**
@@ -92,6 +106,7 @@ export const GetCareerResponse = zod.object({
 export const StartMatchResponse = zod.object({
   career: zod.object({
     spieler_name: zod.string(),
+    name_set: zod.boolean(),
     hat_tourcard: zod.boolean(),
     q_school_punkte: zod.number(),
     order_of_merit_geld: zod.number(),
@@ -101,6 +116,10 @@ export const StartMatchResponse = zod.object({
     aktuelle_runde: zod.number(),
     gegner_name: zod.string(),
     gegner_avg: zod.number(),
+    gegner_form: zod.object({
+      form: zod.string(),
+      bonus: zod.number(),
+    }),
     stats_spiele: zod.number(),
     stats_siege: zod.number(),
     stats_legs_won: zod.number(),
@@ -157,6 +176,15 @@ export const StartMatchResponse = zod.object({
     h2h_siege: zod.number(),
     h2h_niederlagen: zod.number(),
     walk_on_video: zod.string().nullish(),
+    ranking_verlauf: zod.array(
+      zod.object({
+        platz: zod.number(),
+        saison: zod.number(),
+        turnier: zod.string(),
+      }),
+    ),
+    avg_bonus: zod.number(),
+    checkout_bonus: zod.number(),
   }),
   messages: zod.array(zod.string()),
 });
@@ -176,6 +204,7 @@ export const SubmitResultBody = zod.object({
 export const SubmitResultResponse = zod.object({
   career: zod.object({
     spieler_name: zod.string(),
+    name_set: zod.boolean(),
     hat_tourcard: zod.boolean(),
     q_school_punkte: zod.number(),
     order_of_merit_geld: zod.number(),
@@ -185,6 +214,10 @@ export const SubmitResultResponse = zod.object({
     aktuelle_runde: zod.number(),
     gegner_name: zod.string(),
     gegner_avg: zod.number(),
+    gegner_form: zod.object({
+      form: zod.string(),
+      bonus: zod.number(),
+    }),
     stats_spiele: zod.number(),
     stats_siege: zod.number(),
     stats_legs_won: zod.number(),
@@ -241,6 +274,15 @@ export const SubmitResultResponse = zod.object({
     h2h_siege: zod.number(),
     h2h_niederlagen: zod.number(),
     walk_on_video: zod.string().nullish(),
+    ranking_verlauf: zod.array(
+      zod.object({
+        platz: zod.number(),
+        saison: zod.number(),
+        turnier: zod.string(),
+      }),
+    ),
+    avg_bonus: zod.number(),
+    checkout_bonus: zod.number(),
   }),
   messages: zod.array(zod.string()),
 });
@@ -251,6 +293,7 @@ export const SubmitResultResponse = zod.object({
 export const PullAutodartsResponse = zod.object({
   career: zod.object({
     spieler_name: zod.string(),
+    name_set: zod.boolean(),
     hat_tourcard: zod.boolean(),
     q_school_punkte: zod.number(),
     order_of_merit_geld: zod.number(),
@@ -260,6 +303,10 @@ export const PullAutodartsResponse = zod.object({
     aktuelle_runde: zod.number(),
     gegner_name: zod.string(),
     gegner_avg: zod.number(),
+    gegner_form: zod.object({
+      form: zod.string(),
+      bonus: zod.number(),
+    }),
     stats_spiele: zod.number(),
     stats_siege: zod.number(),
     stats_legs_won: zod.number(),
@@ -316,6 +363,15 @@ export const PullAutodartsResponse = zod.object({
     h2h_siege: zod.number(),
     h2h_niederlagen: zod.number(),
     walk_on_video: zod.string().nullish(),
+    ranking_verlauf: zod.array(
+      zod.object({
+        platz: zod.number(),
+        saison: zod.number(),
+        turnier: zod.string(),
+      }),
+    ),
+    avg_bonus: zod.number(),
+    checkout_bonus: zod.number(),
   }),
   messages: zod.array(zod.string()),
 });
@@ -326,6 +382,7 @@ export const PullAutodartsResponse = zod.object({
 export const ResetCareerResponse = zod.object({
   career: zod.object({
     spieler_name: zod.string(),
+    name_set: zod.boolean(),
     hat_tourcard: zod.boolean(),
     q_school_punkte: zod.number(),
     order_of_merit_geld: zod.number(),
@@ -335,6 +392,10 @@ export const ResetCareerResponse = zod.object({
     aktuelle_runde: zod.number(),
     gegner_name: zod.string(),
     gegner_avg: zod.number(),
+    gegner_form: zod.object({
+      form: zod.string(),
+      bonus: zod.number(),
+    }),
     stats_spiele: zod.number(),
     stats_siege: zod.number(),
     stats_legs_won: zod.number(),
@@ -391,6 +452,268 @@ export const ResetCareerResponse = zod.object({
     h2h_siege: zod.number(),
     h2h_niederlagen: zod.number(),
     walk_on_video: zod.string().nullish(),
+    ranking_verlauf: zod.array(
+      zod.object({
+        platz: zod.number(),
+        saison: zod.number(),
+        turnier: zod.string(),
+      }),
+    ),
+    avg_bonus: zod.number(),
+    checkout_bonus: zod.number(),
+  }),
+  messages: zod.array(zod.string()),
+});
+
+/**
+ * @summary Set player name (first-time setup)
+ */
+export const SetPlayerNameBody = zod.object({
+  name: zod.string(),
+});
+
+export const SetPlayerNameResponse = zod.object({
+  career: zod.object({
+    spieler_name: zod.string(),
+    name_set: zod.boolean(),
+    hat_tourcard: zod.boolean(),
+    q_school_punkte: zod.number(),
+    order_of_merit_geld: zod.number(),
+    bank_konto: zod.number(),
+    saison_jahr: zod.number(),
+    turnier_laeuft: zod.boolean(),
+    aktuelle_runde: zod.number(),
+    gegner_name: zod.string(),
+    gegner_avg: zod.number(),
+    gegner_form: zod.object({
+      form: zod.string(),
+      bonus: zod.number(),
+    }),
+    stats_spiele: zod.number(),
+    stats_siege: zod.number(),
+    stats_legs_won: zod.number(),
+    stats_legs_lost: zod.number(),
+    stats_180s: zod.number(),
+    stats_highest_finish: zod.number(),
+    achievements: zod.record(
+      zod.string(),
+      zod.object({
+        name: zod.string(),
+        desc: zod.string(),
+        unlocked: zod.boolean(),
+      }),
+    ),
+    aktiver_sponsor: zod
+      .object({
+        name: zod.string(),
+        ziel_typ: zod.string(),
+        ziel_wert: zod.number(),
+        aktuell: zod.number(),
+        turniere_zeit: zod.number(),
+        belohnung: zod.number(),
+        text: zod.string(),
+      })
+      .nullish(),
+    letzte_schlagzeile: zod
+      .object({
+        titel: zod.string(),
+        text: zod.string(),
+      })
+      .nullish(),
+    platz: zod.number(),
+    turnier_name: zod.string(),
+    quote: zod.number(),
+    gesamt_avg: zod.number(),
+    gesamt_co: zod.number(),
+    oom: zod.array(
+      zod.object({
+        name: zod.string(),
+        geld: zod.number(),
+      }),
+    ),
+    runden_info: zod.object({
+      name: zod.string(),
+      first_to: zod.number(),
+      format: zod.string(),
+    }),
+    matchups: zod.array(
+      zod.object({
+        player1: zod.string(),
+        player2: zod.string(),
+      }),
+    ),
+    h2h_siege: zod.number(),
+    h2h_niederlagen: zod.number(),
+    walk_on_video: zod.string().nullish(),
+    ranking_verlauf: zod.array(
+      zod.object({
+        platz: zod.number(),
+        saison: zod.number(),
+        turnier: zod.string(),
+      }),
+    ),
+    avg_bonus: zod.number(),
+    checkout_bonus: zod.number(),
+  }),
+  messages: zod.array(zod.string()),
+});
+
+/**
+ * @summary Get full tournament history
+ */
+export const GetTournamentHistoryResponse = zod.object({
+  history: zod.array(
+    zod.object({
+      name: zod.string(),
+      typ: zod.string(),
+      runde: zod.string(),
+      ergebnis: zod.string(),
+      preisgeld: zod.number(),
+      saison: zod.number(),
+      avg: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary Get all H2H records
+ */
+export const GetH2HResponse = zod.object({
+  records: zod.array(
+    zod.object({
+      name: zod.string(),
+      siege: zod.number(),
+      niederlagen: zod.number(),
+    }),
+  ),
+});
+
+/**
+ * @summary Get full season calendar with status
+ */
+export const GetCalendarResponse = zod.object({
+  entries: zod.array(
+    zod.object({
+      index: zod.number(),
+      name: zod.string(),
+      typ: zod.string(),
+      format: zod.string(),
+      min_platz: zod.number().nullish(),
+      status: zod.string(),
+      qualifiziert: zod.boolean(),
+    }),
+  ),
+  aktuelles_turnier_index: zod.number(),
+});
+
+/**
+ * @summary Get available equipment and owned items
+ */
+export const GetEquipmentResponse = zod.object({
+  items: zod.array(
+    zod.object({
+      id: zod.string(),
+      name: zod.string(),
+      beschreibung: zod.string(),
+      preis: zod.number(),
+      kategorie: zod.string(),
+      bonus_typ: zod.string(),
+      bonus_wert: zod.number(),
+      owned: zod.boolean(),
+    }),
+  ),
+  bank_konto: zod.number(),
+});
+
+/**
+ * @summary Buy an equipment item
+ */
+export const BuyEquipmentBody = zod.object({
+  id: zod.string(),
+});
+
+export const BuyEquipmentResponse = zod.object({
+  career: zod.object({
+    spieler_name: zod.string(),
+    name_set: zod.boolean(),
+    hat_tourcard: zod.boolean(),
+    q_school_punkte: zod.number(),
+    order_of_merit_geld: zod.number(),
+    bank_konto: zod.number(),
+    saison_jahr: zod.number(),
+    turnier_laeuft: zod.boolean(),
+    aktuelle_runde: zod.number(),
+    gegner_name: zod.string(),
+    gegner_avg: zod.number(),
+    gegner_form: zod.object({
+      form: zod.string(),
+      bonus: zod.number(),
+    }),
+    stats_spiele: zod.number(),
+    stats_siege: zod.number(),
+    stats_legs_won: zod.number(),
+    stats_legs_lost: zod.number(),
+    stats_180s: zod.number(),
+    stats_highest_finish: zod.number(),
+    achievements: zod.record(
+      zod.string(),
+      zod.object({
+        name: zod.string(),
+        desc: zod.string(),
+        unlocked: zod.boolean(),
+      }),
+    ),
+    aktiver_sponsor: zod
+      .object({
+        name: zod.string(),
+        ziel_typ: zod.string(),
+        ziel_wert: zod.number(),
+        aktuell: zod.number(),
+        turniere_zeit: zod.number(),
+        belohnung: zod.number(),
+        text: zod.string(),
+      })
+      .nullish(),
+    letzte_schlagzeile: zod
+      .object({
+        titel: zod.string(),
+        text: zod.string(),
+      })
+      .nullish(),
+    platz: zod.number(),
+    turnier_name: zod.string(),
+    quote: zod.number(),
+    gesamt_avg: zod.number(),
+    gesamt_co: zod.number(),
+    oom: zod.array(
+      zod.object({
+        name: zod.string(),
+        geld: zod.number(),
+      }),
+    ),
+    runden_info: zod.object({
+      name: zod.string(),
+      first_to: zod.number(),
+      format: zod.string(),
+    }),
+    matchups: zod.array(
+      zod.object({
+        player1: zod.string(),
+        player2: zod.string(),
+      }),
+    ),
+    h2h_siege: zod.number(),
+    h2h_niederlagen: zod.number(),
+    walk_on_video: zod.string().nullish(),
+    ranking_verlauf: zod.array(
+      zod.object({
+        platz: zod.number(),
+        saison: zod.number(),
+        turnier: zod.string(),
+      }),
+    ),
+    avg_bonus: zod.number(),
+    checkout_bonus: zod.number(),
   }),
   messages: zod.array(zod.string()),
 });

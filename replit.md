@@ -1,8 +1,22 @@
-# Workspace
+# PDC Darts Karriere Modus
 
 ## Overview
 
-pnpm workspace monorepo using TypeScript. Each package manages its own dependencies.
+Vollständige PDC Darts Karriere-Simulation als pnpm-Monorepo. React + Vite Frontend, Express API-Backend, PostgreSQL-Datenbank. Deutsche Benutzeroberfläche, dunkles Design, Neon-Cyan Akzent.
+
+## Features
+- **Spieler-Setup**: Namenseingabe beim ersten Start
+- **38 Turniere** im Saison-Kalender (Players Championships, European Tour, World Series, Majors)
+- **128 echte PDC-Spieler** in der Rangliste (Luke Humphries, MvG, Michael Smith, etc.)
+- **Statistiken-Seite**: Average-Verlauf, Doppelquote, Siegquote, Weltranglistenverlauf (Charts)
+- **Head-to-Head**: Alle Duelle im Überblick mit Siegquoten
+- **Saison-Kalender**: Alle 38 Events mit Status, Filter, Qualifikationsstatus
+- **Equipment-Shop**: 9 Artikel (Darts, Flights, Shafts, Board, Coaching) mit Avg/CO-Boni
+- **Turnierverlauf**: Alle vergangenen Turniere mit Ergebnissen und Preisgeld
+- **Sponsor-Missionen**: Zufällige Sponsorenverträge mit 9 verschiedenen Zieltypen
+- **Achievements**: 12 Meilensteine
+- **Autodarts-Integration**: Match-Daten direkt von Autodarts API importieren
+- **Form-Tracking**: Gegner-Form wird angezeigt (Heißlauf, Kältephase etc.)
 
 ## Stack
 

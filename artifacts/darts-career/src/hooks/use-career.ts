@@ -6,28 +6,50 @@ import {
   useSubmitResult,
   usePullAutodarts,
   useResetCareer,
+  useSetPlayerName,
+  useBuyEquipment,
+  useGetTournamentHistory,
+  useGetH2H,
+  useGetCalendar,
+  useGetEquipment,
   getGetCareerQueryKey,
+  getGetTournamentHistoryQueryKey,
+  getGetH2HQueryKey,
+  getGetCalendarQueryKey,
+  getGetEquipmentQueryKey,
 } from "@workspace/api-client-react";
 import type { MatchResult } from "@workspace/api-client-react/src/generated/api.schemas";
 
-// Utility hook to wrap mutations with toast notifications and query invalidation
 export function useCareerActions() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: getGetCareerQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetTournamentHistoryQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetH2HQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetCalendarQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetEquipmentQueryKey() });
+  };
+
   const handleSuccess = (data: any) => {
-    // Show toasts for all messages returned from the backend
     if (data?.messages && Array.isArray(data.messages)) {
       data.messages.forEach((msg: string) => {
+        const isError = msg.includes("❌");
+        const isAchievement = msg.includes("⭐") || msg.includes("👑") || msg.includes("💰");
+        const isWin = msg.includes("🏆") || msg.includes("TOURCARD");
         toast({
-          title: "Update",
+          title: isAchievement ? "Achievement!" : isWin ? "Turniersieg!" : isError ? "Fehler" : "Update",
           description: msg,
-          className: msg.includes("❌") ? "border-destructive text-destructive-foreground" : "border-primary",
+          className: isError
+            ? "border-destructive"
+            : isAchievement || isWin
+            ? "border-yellow-400 bg-yellow-950"
+            : "border-primary",
         });
       });
     }
-    // Invalidate the main career query to refresh UI
-    queryClient.invalidateQueries({ queryKey: getGetCareerQueryKey() });
+    invalidateAll();
   };
 
   const handleError = (error: any) => {
@@ -38,41 +60,40 @@ export function useCareerActions() {
     });
   };
 
-  const startMatchMutation = useStartMatch({
-    mutation: { onSuccess: handleSuccess, onError: handleError }
-  });
-
-  const submitResultMutation = useSubmitResult({
-    mutation: { onSuccess: handleSuccess, onError: handleError }
-  });
-
-  const pullAutodartsMutation = usePullAutodarts({
-    mutation: { onSuccess: handleSuccess, onError: handleError }
-  });
-
+  const startMatchMutation = useStartMatch({ mutation: { onSuccess: handleSuccess, onError: handleError } });
+  const submitResultMutation = useSubmitResult({ mutation: { onSuccess: handleSuccess, onError: handleError } });
+  const pullAutodartsMutation = usePullAutodarts({ mutation: { onSuccess: handleSuccess, onError: handleError } });
   const resetCareerMutation = useResetCareer({
-    mutation: { 
+    mutation: {
       onSuccess: (data) => {
         handleSuccess(data);
         toast({ title: "Karriere zurückgesetzt!", description: "Alles auf Anfang." });
-      }, 
-      onError: handleError 
-    }
+      },
+      onError: handleError,
+    },
   });
+  const setNameMutation = useSetPlayerName({ mutation: { onSuccess: handleSuccess, onError: handleError } });
+  const buyEquipmentMutation = useBuyEquipment({ mutation: { onSuccess: handleSuccess, onError: handleError } });
 
   return {
     startMatch: startMatchMutation.mutate,
     isStarting: startMatchMutation.isPending,
-    
+
     submitResult: (data: MatchResult) => submitResultMutation.mutate({ data }),
     isSubmitting: submitResultMutation.isPending,
-    
+
     pullAutodarts: pullAutodartsMutation.mutate,
     isPulling: pullAutodartsMutation.isPending,
-    
+
     resetCareer: resetCareerMutation.mutate,
     isResetting: resetCareerMutation.isPending,
+
+    setPlayerName: (name: string) => setNameMutation.mutate({ data: { name } }),
+    isSettingName: setNameMutation.isPending,
+
+    buyEquipment: (id: string) => buyEquipmentMutation.mutate({ data: { id } }),
+    isBuying: buyEquipmentMutation.isPending,
   };
 }
 
-export { useGetCareer };
+export { useGetCareer, useGetTournamentHistory, useGetH2H, useGetCalendar, useGetEquipment };

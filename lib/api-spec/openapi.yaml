@@ -96,6 +96,96 @@ paths:
               schema:
                 $ref: "#/components/schemas/CareerResponse"
 
+  /career/name:
+    post:
+      operationId: setPlayerName
+      tags: [career]
+      summary: Set player name (first-time setup)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetNameRequest"
+      responses:
+        "200":
+          description: Name set successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CareerResponse"
+
+  /career/history:
+    get:
+      operationId: getTournamentHistory
+      tags: [career]
+      summary: Get full tournament history
+      responses:
+        "200":
+          description: Tournament history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TournamentHistoryResponse"
+
+  /career/h2h:
+    get:
+      operationId: getH2H
+      tags: [career]
+      summary: Get all H2H records
+      responses:
+        "200":
+          description: H2H records
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/H2HResponse"
+
+  /career/calendar:
+    get:
+      operationId: getCalendar
+      tags: [career]
+      summary: Get full season calendar with status
+      responses:
+        "200":
+          description: Season calendar
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CalendarResponse"
+
+  /career/equipment:
+    get:
+      operationId: getEquipment
+      tags: [career]
+      summary: Get available equipment and owned items
+      responses:
+        "200":
+          description: Equipment list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EquipmentResponse"
+
+  /career/equipment/buy:
+    post:
+      operationId: buyEquipment
+      tags: [career]
+      summary: Buy an equipment item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BuyEquipmentRequest"
+      responses:
+        "200":
+          description: Purchase result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CareerResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -105,6 +195,22 @@ components:
           type: string
       required:
         - status
+
+    SetNameRequest:
+      type: object
+      properties:
+        name:
+          type: string
+      required:
+        - name
+
+    BuyEquipmentRequest:
+      type: object
+      properties:
+        id:
+          type: string
+      required:
+        - id
 
     MatchResult:
       type: object
@@ -212,11 +318,133 @@ components:
         - belohnung
         - text
 
+    TournamentRecord:
+      type: object
+      properties:
+        name:
+          type: string
+        typ:
+          type: string
+        runde:
+          type: string
+        ergebnis:
+          type: string
+        preisgeld:
+          type: integer
+        saison:
+          type: integer
+        avg:
+          type: number
+      required:
+        - name
+        - typ
+        - runde
+        - ergebnis
+        - preisgeld
+        - saison
+        - avg
+
+    RankingRecord:
+      type: object
+      properties:
+        platz:
+          type: integer
+        saison:
+          type: integer
+        turnier:
+          type: string
+      required:
+        - platz
+        - saison
+        - turnier
+
+    EquipmentItem:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        beschreibung:
+          type: string
+        preis:
+          type: integer
+        kategorie:
+          type: string
+        bonus_typ:
+          type: string
+        bonus_wert:
+          type: number
+        owned:
+          type: boolean
+      required:
+        - id
+        - name
+        - beschreibung
+        - preis
+        - kategorie
+        - bonus_typ
+        - bonus_wert
+        - owned
+
+    CalendarEntry:
+      type: object
+      properties:
+        index:
+          type: integer
+        name:
+          type: string
+        typ:
+          type: string
+        format:
+          type: string
+        min_platz:
+          type: integer
+          nullable: true
+        status:
+          type: string
+        qualifiziert:
+          type: boolean
+      required:
+        - index
+        - name
+        - typ
+        - format
+        - status
+        - qualifiziert
+
+    H2HRecord:
+      type: object
+      properties:
+        name:
+          type: string
+        siege:
+          type: integer
+        niederlagen:
+          type: integer
+      required:
+        - name
+        - siege
+        - niederlagen
+
+    GegnerForm:
+      type: object
+      properties:
+        form:
+          type: string
+        bonus:
+          type: number
+      required:
+        - form
+        - bonus
+
     CareerState:
       type: object
       properties:
         spieler_name:
           type: string
+        name_set:
+          type: boolean
         hat_tourcard:
           type: boolean
         q_school_punkte:
@@ -235,6 +463,8 @@ components:
           type: string
         gegner_avg:
           type: number
+        gegner_form:
+          $ref: "#/components/schemas/GegnerForm"
         stats_spiele:
           type: integer
         stats_siege:
@@ -284,8 +514,17 @@ components:
         walk_on_video:
           type: string
           nullable: true
+        ranking_verlauf:
+          type: array
+          items:
+            $ref: "#/components/schemas/RankingRecord"
+        avg_bonus:
+          type: number
+        checkout_bonus:
+          type: number
       required:
         - spieler_name
+        - name_set
         - hat_tourcard
         - q_school_punkte
         - order_of_merit_geld
@@ -295,6 +534,7 @@ components:
         - aktuelle_runde
         - gegner_name
         - gegner_avg
+        - gegner_form
         - stats_spiele
         - stats_siege
         - stats_legs_won
@@ -312,6 +552,9 @@ components:
         - matchups
         - h2h_siege
         - h2h_niederlagen
+        - ranking_verlauf
+        - avg_bonus
+        - checkout_bonus
 
     CareerResponse:
       type: object
@@ -325,3 +568,49 @@ components:
       required:
         - career
         - messages
+
+    TournamentHistoryResponse:
+      type: object
+      properties:
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/TournamentRecord"
+      required:
+        - history
+
+    H2HResponse:
+      type: object
+      properties:
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/H2HRecord"
+      required:
+        - records
+
+    CalendarResponse:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/CalendarEntry"
+        aktuelles_turnier_index:
+          type: integer
+      required:
+        - entries
+        - aktuelles_turnier_index
+
+    EquipmentResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/EquipmentItem"
+        bank_konto:
+          type: integer
+      required:
+        - items
+        - bank_konto

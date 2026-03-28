@@ -9,6 +9,14 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface SetNameRequest {
+  name: string;
+}
+
+export interface BuyEquipmentRequest {
+  id: string;
+}
+
 export interface MatchResult {
   legs_won: number;
   legs_lost: number;
@@ -55,10 +63,59 @@ export interface Sponsor {
   text: string;
 }
 
+export interface TournamentRecord {
+  name: string;
+  typ: string;
+  runde: string;
+  ergebnis: string;
+  preisgeld: number;
+  saison: number;
+  avg: number;
+}
+
+export interface RankingRecord {
+  platz: number;
+  saison: number;
+  turnier: string;
+}
+
+export interface EquipmentItem {
+  id: string;
+  name: string;
+  beschreibung: string;
+  preis: number;
+  kategorie: string;
+  bonus_typ: string;
+  bonus_wert: number;
+  owned: boolean;
+}
+
+export interface CalendarEntry {
+  index: number;
+  name: string;
+  typ: string;
+  format: string;
+  min_platz?: number | null;
+  status: string;
+  qualifiziert: boolean;
+}
+
+export interface H2HRecord {
+  name: string;
+  siege: number;
+  niederlagen: number;
+}
+
+export interface GegnerForm {
+  form: string;
+  bonus: number;
+}
+
 export type CareerStateAchievements = { [key: string]: Achievement };
 
 export interface CareerState {
   spieler_name: string;
+  name_set: boolean;
   hat_tourcard: boolean;
   q_school_punkte: number;
   order_of_merit_geld: number;
@@ -68,6 +125,7 @@ export interface CareerState {
   aktuelle_runde: number;
   gegner_name: string;
   gegner_avg: number;
+  gegner_form: GegnerForm;
   stats_spiele: number;
   stats_siege: number;
   stats_legs_won: number;
@@ -88,9 +146,30 @@ export interface CareerState {
   h2h_siege: number;
   h2h_niederlagen: number;
   walk_on_video?: string | null;
+  ranking_verlauf: RankingRecord[];
+  avg_bonus: number;
+  checkout_bonus: number;
 }
 
 export interface CareerResponse {
   career: CareerState;
   messages: string[];
+}
+
+export interface TournamentHistoryResponse {
+  history: TournamentRecord[];
+}
+
+export interface H2HResponse {
+  records: H2HRecord[];
+}
+
+export interface CalendarResponse {
+  entries: CalendarEntry[];
+  aktuelles_turnier_index: number;
+}
+
+export interface EquipmentResponse {
+  items: EquipmentItem[];
+  bank_konto: number;
 }

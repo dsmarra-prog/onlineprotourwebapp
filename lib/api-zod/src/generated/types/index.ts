@@ -7,13 +7,25 @@
  */
 
 export * from "./achievement";
+export * from "./buyEquipmentRequest";
+export * from "./calendarEntry";
+export * from "./calendarResponse";
 export * from "./careerResponse";
 export * from "./careerState";
 export * from "./careerStateAchievements";
+export * from "./equipmentItem";
+export * from "./equipmentResponse";
+export * from "./gegnerForm";
+export * from "./h2HRecord";
+export * from "./h2HResponse";
 export * from "./headline";
 export * from "./healthStatus";
 export * from "./matchResult";
 export * from "./matchup";
 export * from "./oomEntry";
+export * from "./rankingRecord";
 export * from "./roundInfo";
+export * from "./setNameRequest";
 export * from "./sponsor";
+export * from "./tournamentHistoryResponse";
+export * from "./tournamentRecord";

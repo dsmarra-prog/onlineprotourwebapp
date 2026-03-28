@@ -6,8 +6,12 @@ import {
   pullFromAutodarts,
   resetCareer,
   buildCareerState,
+  buildCalendar,
+  buildEquipment,
+  buyEquipment,
+  setPlayerName,
 } from "../lib/career-engine.js";
-import { SubmitResultBody } from "@workspace/api-zod";
+import { SubmitResultBody, BuyEquipmentBody, SetPlayerNameBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -63,6 +67,82 @@ router.post("/career/reset", async (req, res) => {
     res.json(result);
   } catch (err) {
     req.log.error({ err }, "Error resetting career");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/career/name", async (req, res) => {
+  try {
+    const parsed = SetPlayerNameBody.safeParse(req.body);
+    if (!parsed.success || !parsed.data.name.trim()) {
+      res.status(400).json({ error: "Invalid name" });
+      return;
+    }
+    const result = await setPlayerName(parsed.data.name);
+    res.json({ career: buildCareerState(result.career), messages: result.messages });
+  } catch (err) {
+    req.log.error({ err }, "Error setting name");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/career/history", async (req, res) => {
+  try {
+    const career = await getOrCreateCareer();
+    res.json({ history: career.turnier_verlauf ?? [] });
+  } catch (err) {
+    req.log.error({ err }, "Error getting history");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/career/h2h", async (req, res) => {
+  try {
+    const career = await getOrCreateCareer();
+    const h2h: Record<string, { siege: number; niederlagen: number }> = career.h2h as any ?? {};
+    const records = Object.entries(h2h)
+      .map(([name, stats]) => ({ name, siege: stats.siege, niederlagen: stats.niederlagen }))
+      .sort((a, b) => (b.siege + b.niederlagen) - (a.siege + a.niederlagen));
+    res.json({ records });
+  } catch (err) {
+    req.log.error({ err }, "Error getting H2H");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/career/calendar", async (req, res) => {
+  try {
+    const career = await getOrCreateCareer();
+    const entries = buildCalendar(career);
+    res.json({ entries, aktuelles_turnier_index: career.aktuelles_turnier_index });
+  } catch (err) {
+    req.log.error({ err }, "Error getting calendar");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/career/equipment", async (req, res) => {
+  try {
+    const career = await getOrCreateCareer();
+    const items = buildEquipment(career);
+    res.json({ items, bank_konto: career.bank_konto });
+  } catch (err) {
+    req.log.error({ err }, "Error getting equipment");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/career/equipment/buy", async (req, res) => {
+  try {
+    const parsed = BuyEquipmentBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Invalid request" });
+      return;
+    }
+    const result = await buyEquipment(parsed.data.id);
+    res.json(result);
+  } catch (err) {
+    req.log.error({ err }, "Error buying equipment");
     res.status(500).json({ error: "Internal server error" });
   }
 });

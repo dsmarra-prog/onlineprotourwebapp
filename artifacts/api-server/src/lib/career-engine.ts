@@ -1,21 +1,94 @@
 import { db, careerTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
-const WALK_ON_VIDEOS: Record<string, string> = {
+export const WALK_ON_VIDEOS: Record<string, string> = {
   "Michael van Gerwen": "zaJ1AC4wT3Y",
   "Gerwyn Price": "HbDDzJvGguc",
   "Luke Littler": "I66tENw1feA",
+  "Luke Humphries": "x9bHvQc_VnU",
+  "Michael Smith": "kLKK21m9tOo",
+  "Peter Wright": "HSTa28UTMUQ",
+  "Gary Anderson": "MWkDjHrMjvI",
+  "Jonny Clayton": "zFBkl4Y3cdo",
+  "Jose de Sousa": "fOJQiHKbFRU",
+  "Rob Cross": "g9sWxBF-78M",
+  "Dimitri Van den Bergh": "t6_rVl63CXQ",
+  "Nathan Aspinall": "V7aeO3EFMHE",
+  "Damon Heta": "CmXOuX5dM34",
+  "Raymond van Barneveld": "mVRHGVpbYgQ",
+  "James Wade": "nPXyHv5Lvfc",
+  "Mensur Suljovic": "hY7mK9cXZdA",
 };
 
-const KALENDER = [
+export const KALENDER = [
+  // Q1 – Players Championships
   { name: "Players Championship 1", typ: "ProTour", format: "legs" },
-  { name: "UK Open", typ: "Major", min_platz: 128, format: "legs" },
-  { name: "Premier League Night", typ: "Major", min_platz: 8, format: "legs" },
   { name: "Players Championship 2", typ: "ProTour", format: "legs" },
+  { name: "Players Championship 3", typ: "ProTour", format: "legs" },
+  // UK Open (Major)
+  { name: "UK Open", typ: "Major", min_platz: 128, format: "legs" },
+  // Q2 – Players Championships
+  { name: "Players Championship 4", typ: "ProTour", format: "legs" },
+  { name: "Players Championship 5", typ: "ProTour", format: "legs" },
+  { name: "Players Championship 6", typ: "ProTour", format: "legs" },
+  // European Tour
+  { name: "European Tour 1", typ: "EuropeanTour", min_platz: 64, format: "legs" },
+  { name: "European Tour 2", typ: "EuropeanTour", min_platz: 64, format: "legs" },
+  // Premier League
+  { name: "Premier League Night", typ: "Major", min_platz: 8, format: "legs" },
+  // Q3 – Players Championships
+  { name: "Players Championship 7", typ: "ProTour", format: "legs" },
+  { name: "Players Championship 8", typ: "ProTour", format: "legs" },
+  { name: "Players Championship 9", typ: "ProTour", format: "legs" },
+  // US Masters / World Series
+  { name: "US Masters", typ: "WorldSeries", min_platz: 32, format: "legs" },
+  // European Tour
+  { name: "European Tour 3", typ: "EuropeanTour", min_platz: 64, format: "legs" },
+  { name: "European Tour 4", typ: "EuropeanTour", min_platz: 64, format: "legs" },
+  // Q4 – Players Championships
+  { name: "Players Championship 10", typ: "ProTour", format: "legs" },
+  { name: "Players Championship 11", typ: "ProTour", format: "legs" },
+  { name: "Players Championship 12", typ: "ProTour", format: "legs" },
+  // World Matchplay (Major)
   { name: "World Matchplay", typ: "Major", min_platz: 16, format: "legs" },
+  // Q5 – Players Championships
+  { name: "Players Championship 13", typ: "ProTour", format: "legs" },
+  { name: "Players Championship 14", typ: "ProTour", format: "legs" },
+  // European Tour
+  { name: "European Tour 5", typ: "EuropeanTour", min_platz: 64, format: "legs" },
+  { name: "European Tour 6", typ: "EuropeanTour", min_platz: 64, format: "legs" },
+  // Brisbane Masters / World Series
+  { name: "Brisbane Masters", typ: "WorldSeries", min_platz: 32, format: "legs" },
+  // Q6 – Players Championships
+  { name: "Players Championship 15", typ: "ProTour", format: "legs" },
+  { name: "Players Championship 16", typ: "ProTour", format: "legs" },
+  // World Grand Prix (Major)
   { name: "World Grand Prix", typ: "Major", min_platz: 32, format: "sets" },
+  // Q7 – Players Championships
+  { name: "Players Championship 17", typ: "ProTour", format: "legs" },
+  { name: "Players Championship 18", typ: "ProTour", format: "legs" },
+  // European Championship
+  { name: "European Championship", typ: "Major", min_platz: 24, format: "sets" },
+  // Q8 – Players Championships
+  { name: "Players Championship 19", typ: "ProTour", format: "legs" },
+  { name: "Players Championship 20", typ: "ProTour", format: "legs" },
+  // Grand Slam of Darts (Major)
+  { name: "Grand Slam of Darts", typ: "Major", min_platz: 16, format: "sets" },
+  // Q9 – Players Championships
+  { name: "Players Championship 21", typ: "ProTour", format: "legs" },
+  { name: "Players Championship 22", typ: "ProTour", format: "legs" },
+  // Players Championship Finals (Major)
+  { name: "Players Championship Finals", typ: "Major", min_platz: 64, format: "legs" },
+  // PDC World Championship (Major, Season finale)
   { name: "PDC World Championship", typ: "Major", min_platz: 96, format: "sets" },
 ];
+
+const PRIZE_MONEY: Record<string, { win: number; rd_exit: (round: number) => number }> = {
+  ProTour: { win: 15000, rd_exit: (r) => r * 500 },
+  Major: { win: 150000, rd_exit: (r) => r * 5000 },
+  EuropeanTour: { win: 25000, rd_exit: (r) => r * 1000 },
+  WorldSeries: { win: 40000, rd_exit: (r) => r * 1500 },
+};
 
 const DEFAULT_ACHIEVEMENTS = {
   first_win: { name: "Erstes Blut", desc: "Gewinne dein allererstes Match.", unlocked: false },
@@ -23,12 +96,103 @@ const DEFAULT_ACHIEVEMENTS = {
   first_title: { name: "Silberzeug!", desc: "Gewinne dein erstes Turnier.", unlocked: false },
   top64: { name: "Etabliert", desc: "Erreiche die Top 64 der Welt.", unlocked: false },
   top16: { name: "Elite", desc: "Erreiche die Top 16 der Welt.", unlocked: false },
+  top8: { name: "World Class", desc: "Erreiche die Top 8 der Welt.", unlocked: false },
   first_180: { name: "Maximum!", desc: "Wirf deine erste 180 im Match.", unlocked: false },
   ton_finish: { name: "Ton Plus", desc: "Checke ein Finish von 100 oder höher.", unlocked: false },
   big_fish: { name: "The Big Fish", desc: "Checke die magische 170.", unlocked: false },
+  first_major: { name: "Major Champion", desc: "Gewinne dein erstes Major-Turnier.", unlocked: false },
+  century_180s: { name: "180 Maschine", desc: "Wirf insgesamt 100 Maximums.", unlocked: false },
+  millionaire: { name: "Millionär", desc: "Verdiene £1.000.000 auf der Order of Merit.", unlocked: false },
 };
 
-const QSCHOOL_SPIELER = ["Fallon Sherrock", "Max Hopp", "John Henderson", "Corey Cadby"];
+const QSCHOOL_SPIELER = [
+  "Fallon Sherrock", "Max Hopp", "John Henderson", "Corey Cadby",
+  "Darius Labanauskas", "Martin Schindler", "Ted Evetts", "Keane Barry",
+];
+
+export const EQUIPMENT_CATALOG = [
+  {
+    id: "darts_pro",
+    name: "Pro Darts (24g Wolfram)",
+    beschreibung: "+1.5 Average durch bessere Balance",
+    preis: 800,
+    kategorie: "Darts",
+    bonus_typ: "avg",
+    bonus_wert: 1.5,
+  },
+  {
+    id: "darts_premium",
+    name: "Premium Darts (26g Tungsten)",
+    beschreibung: "+3.0 Average, Top-of-the-line Darts",
+    preis: 2500,
+    kategorie: "Darts",
+    bonus_typ: "avg",
+    bonus_wert: 3.0,
+  },
+  {
+    id: "flights_pro",
+    name: "Pro Flights (Kite-Shape)",
+    beschreibung: "+0.5% Doppelquote durch stabilen Flug",
+    preis: 200,
+    kategorie: "Flights",
+    bonus_typ: "checkout",
+    bonus_wert: 0.5,
+  },
+  {
+    id: "flights_premium",
+    name: "Shape Flights (Custom-Cut)",
+    beschreibung: "+1.5% Doppelquote",
+    preis: 600,
+    kategorie: "Flights",
+    bonus_typ: "checkout",
+    bonus_wert: 1.5,
+  },
+  {
+    id: "shaft_pro",
+    name: "Carbon Shafts",
+    beschreibung: "+1.0 Average, keine Deflections",
+    preis: 500,
+    kategorie: "Shafts",
+    bonus_typ: "avg",
+    bonus_wert: 1.0,
+  },
+  {
+    id: "board_gran",
+    name: "Gran Board Pro",
+    beschreibung: "+1.0% Doppelquote durch besseres Practice",
+    preis: 1200,
+    kategorie: "Board",
+    bonus_typ: "checkout",
+    bonus_wert: 1.0,
+  },
+  {
+    id: "board_winmau",
+    name: "Winmau Blade 6 Board",
+    beschreibung: "+2.0 Average durch optimales Training",
+    preis: 2000,
+    kategorie: "Board",
+    bonus_typ: "avg",
+    bonus_wert: 2.0,
+  },
+  {
+    id: "shirt_sponsor",
+    name: "Sponsor-Shirt",
+    beschreibung: "+£500 Startgeld pro Turnier (passiv)",
+    preis: 3000,
+    kategorie: "Kleidung",
+    bonus_typ: "startgeld",
+    bonus_wert: 500,
+  },
+  {
+    id: "coaching",
+    name: "Elite-Coaching (1 Saison)",
+    beschreibung: "+2.0 Average und +1.0% Doppelquote",
+    preis: 5000,
+    kategorie: "Training",
+    bonus_typ: "coaching",
+    bonus_wert: 2.0,
+  },
+];
 
 function buildDefaultBotRangliste() {
   return [
@@ -169,7 +333,8 @@ export async function getOrCreateCareer() {
     .insert(careerTable)
     .values({
       id: 1,
-      spieler_name: "Dennis",
+      spieler_name: "Spieler",
+      name_set: false,
       hat_tourcard: false,
       q_school_punkte: 0,
       order_of_merit_geld: 0,
@@ -195,6 +360,12 @@ export async function getOrCreateCareer() {
       achievements: DEFAULT_ACHIEVEMENTS,
       turnier_baum: [],
       bot_rangliste: defaultBots,
+      turnier_verlauf: [],
+      ranking_verlauf: [],
+      equipment: [],
+      avg_bonus: 0,
+      checkout_bonus: 0,
+      saison_avg_history: [],
     })
     .returning();
   return inserted[0];
@@ -214,9 +385,11 @@ function getBotAvg(name: string, botRangliste: any[], botForm: Record<string, nu
   const rank = sorted.findIndex((b) => b.name === name);
   let base: number;
   if (rank < 0) base = rand(65, 75);
-  else if (rank < 16) base = rand(95, 105);
-  else if (rank < 64) base = rand(86, 94);
-  else base = rand(76, 85);
+  else if (rank < 8) base = rand(98, 108);
+  else if (rank < 16) base = rand(94, 103);
+  else if (rank < 32) base = rand(89, 97);
+  else if (rank < 64) base = rand(84, 92);
+  else base = rand(76, 86);
   return Math.round((base + formBonus) * 10) / 10;
 }
 
@@ -230,6 +403,17 @@ export function ermittlePlatz(
   );
   const idx = alle.findIndex((s) => s.name === spielerName);
   return idx + 1;
+}
+
+export function getGegnerForm(name: string, botForm: Record<string, number>) {
+  const bonus = botForm[name] ?? 0;
+  let form: string;
+  if (bonus >= 3) form = "🔥 Heißlauf";
+  else if (bonus >= 1.5) form = "📈 Gute Form";
+  else if (bonus >= -1.5) form = "➡️ Normalform";
+  else if (bonus >= -3) form = "📉 Schwächephase";
+  else form = "❄️ Kältephase";
+  return { form, bonus };
 }
 
 export function getRundenInfo(
@@ -267,6 +451,8 @@ export function getRundenInfo(
     let first_to: number;
     if (t.typ === "ProTour") {
       first_to = aktuell >= 8 ? 6 : aktuell === 4 ? 7 : 8;
+    } else if (t.typ === "EuropeanTour") {
+      first_to = aktuell >= 8 ? 8 : aktuell === 4 ? 10 : 12;
     } else {
       first_to = aktuell >= 8 ? 10 : aktuell === 4 ? 13 : 18;
     }
@@ -276,8 +462,8 @@ export function getRundenInfo(
 
 function generiereGegner(career: any) {
   const { hat_tourcard, aktuelles_turnier_index, aktuelle_runde, turnier_baum: existingBaum } = career;
-  let botRangliste = career.bot_rangliste as any[];
-  let botForm = career.bot_form as Record<string, number>;
+  const botRangliste = career.bot_rangliste as any[];
+  const botForm = career.bot_form as Record<string, number>;
 
   if (aktuelle_runde > 0 && existingBaum.length > 0) {
     const idx = existingBaum.findIndex((p: any) => p.name === career.spieler_name);
@@ -296,16 +482,17 @@ function generiereGegner(career: any) {
 
   if (!hat_tourcard) {
     size = 128;
-    const shuffled = [...QSCHOOL_SPIELER, ...Array.from({ length: 127 }, (_, i) => `Amateur ${i + 1}`)];
-    for (let i = shuffled.length - 1; i > 0; i--) {
+    const base = [...QSCHOOL_SPIELER, ...Array.from({ length: 127 }, (_, i) => `Amateur ${i + 1}`)];
+    for (let i = base.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      [base[i], base[j]] = [base[j], base[i]];
     }
-    pool = shuffled.slice(0, 127);
+    pool = base.slice(0, 127);
   } else {
     const t = KALENDER[aktuelles_turnier_index];
-    if (t.name === "World Matchplay" || t.name === "World Grand Prix") size = 32;
+    if (t.name === "World Matchplay" || t.name === "World Grand Prix" || t.name === "European Championship") size = 32;
     else if (t.name === "Premier League Night") size = 8;
+    else if (t.typ === "EuropeanTour" || t.typ === "WorldSeries") size = 32;
     else size = 128;
 
     const alleBots = [...botRangliste].sort((a, b) => b.geld - a.geld);
@@ -380,6 +567,22 @@ function generiereSchlagzeile(
   return { titel, text };
 }
 
+function getMoreSponsorMissions() {
+  const sponsoren = ["Winmau", "Target", "RedDragon", "Unicorn", "L-Style", "Paddy Power", "Betway", "Unibet", "Bodog", "CAZOO"];
+  const ziele = [
+    { typ: "180s", ziel: 10, belohnung: 2000, text: "Wirf zehn 180er" },
+    { typ: "180s", ziel: 20, belohnung: 4000, text: "Wirf zwanzig 180er" },
+    { typ: "siege", ziel: 3, belohnung: 3500, text: "Gewinne 3 Matches" },
+    { typ: "siege", ziel: 5, belohnung: 6000, text: "Gewinne 5 Matches" },
+    { typ: "hf", ziel: 100, belohnung: 1500, text: "Checke 100+ (Highfinish)" },
+    { typ: "hf", ziel: 140, belohnung: 3000, text: "Checke ein 140+ Finish" },
+    { typ: "hf", ziel: 170, belohnung: 8000, text: "Checke die legendäre 170" },
+    { typ: "spiele", ziel: 10, belohnung: 2500, text: "Spiele 10 Matches" },
+    { typ: "avg", ziel: 90, belohnung: 3000, text: "Erreiche 90+ Average in einem Match" },
+  ];
+  return { sponsoren, ziele };
+}
+
 function nextTurnier(career: any): { msgs: string[]; updates: any } {
   const msgs: string[] = [];
   const updates: any = {};
@@ -399,6 +602,15 @@ function nextTurnier(career: any): { msgs: string[]; updates: any } {
   updates.aktuelles_turnier_index = aktuelles_turnier_index;
   updates.saison_jahr = saison_jahr;
 
+  // Track ranking progression
+  const ranking_verlauf: any[] = [...((career.ranking_verlauf ?? []) as any[])];
+  ranking_verlauf.push({
+    platz,
+    saison: career.saison_jahr,
+    turnier: KALENDER[career.aktuelles_turnier_index].name,
+  });
+  updates.ranking_verlauf = ranking_verlauf.slice(-50); // keep last 50
+
   const botForm: Record<string, number> = { ...career.bot_form };
   for (const bot in botForm) botForm[bot] *= 0.8;
   updates.bot_form = botForm;
@@ -413,27 +625,28 @@ function nextTurnier(career: any): { msgs: string[]; updates: any } {
   }
 
   if (!aktiver_sponsor && career.hat_tourcard && Math.random() < 0.4) {
-    const sponsoren = ["Winmau", "Target", "RedDragon", "Unicorn", "L-Style", "Paddy Power"];
-    const ziele = [
-      { typ: "180s", ziel: 10, belohnung: 2000, text: "Wirf zehn 180er" },
-      { typ: "siege", ziel: 3, belohnung: 3500, text: "Gewinne 3 Matches" },
-      { typ: "hf", ziel: 100, belohnung: 1500, text: "Checke 100+ (Highfinish)" },
-    ];
+    const { sponsoren, ziele } = getMoreSponsorMissions();
     const ziel = ziele[Math.floor(Math.random() * ziele.length)];
     aktiver_sponsor = {
       name: sponsoren[Math.floor(Math.random() * sponsoren.length)],
       ziel_typ: ziel.typ,
       ziel_wert: ziel.ziel,
       aktuell: 0,
-      turniere_zeit: 3,
+      turniere_zeit: 4,
       belohnung: ziel.belohnung,
       text: ziel.text,
     };
-    msgs.push(`📝 Angebot von ${aktiver_sponsor.name}! Ziel: ${aktiver_sponsor.text} in den nächsten 3 Turnieren. Bonus: £${aktiver_sponsor.belohnung.toLocaleString()}`);
+    msgs.push(`📝 Angebot von ${aktiver_sponsor.name}! Ziel: ${aktiver_sponsor.text} in den nächsten 4 Turnieren. Bonus: £${aktiver_sponsor.belohnung.toLocaleString()}`);
   }
 
   updates.aktiver_sponsor = aktiver_sponsor;
   return { msgs, updates };
+}
+
+export async function setPlayerName(name: string) {
+  const trimmed = name.trim().substring(0, 30);
+  await saveCareer({ spieler_name: trimmed, name_set: true });
+  return { career: await getOrCreateCareer(), messages: [`Willkommen, ${trimmed}! Deine Karriere beginnt jetzt.`] };
 }
 
 export async function startMatch() {
@@ -443,8 +656,13 @@ export async function startMatch() {
 
   if (career.hat_tourcard && career.aktuelle_runde === 0) {
     const t = KALENDER[career.aktuelles_turnier_index];
-    let kosten = t.typ === "ProTour" ? 250 : 500;
+    let kosten = t.typ === "ProTour" ? 250 : t.typ === "EuropeanTour" ? 400 : t.typ === "WorldSeries" ? 600 : 500;
     if (t.name === "Premier League Night") kosten = 0;
+
+    // Equipment bonus: shirt sponsor reduces travel costs
+    const ownedEquip = career.equipment as string[];
+    if (ownedEquip.includes("shirt_sponsor")) kosten = Math.max(0, kosten - 500);
+
     updates.bank_konto = career.bank_konto - kosten;
     if (kosten > 0) msgs.push(`💸 Reise- & Startgebühren bezahlt: -£${kosten}`);
   }
@@ -538,26 +756,35 @@ export async function processResult(
     turnier_sieger = sim_baum[0]?.name;
   }
 
+  // Sponsor progress
   let aktiver_sponsor = career.aktiver_sponsor ? { ...(career.aktiver_sponsor as any) } : null;
   if (aktiver_sponsor) {
     if (aktiver_sponsor.ziel_typ === "180s") aktiver_sponsor.aktuell += my_180s;
     else if (aktiver_sponsor.ziel_typ === "siege" && win) aktiver_sponsor.aktuell += 1;
-    else if (aktiver_sponsor.ziel_typ === "hf" && my_hf >= aktiver_sponsor.ziel_wert)
-      aktiver_sponsor.aktuell = aktiver_sponsor.ziel_wert;
+    else if (aktiver_sponsor.ziel_typ === "hf" && my_hf >= aktiver_sponsor.ziel_wert) aktiver_sponsor.aktuell = aktiver_sponsor.ziel_wert;
+    else if (aktiver_sponsor.ziel_typ === "spiele") aktiver_sponsor.aktuell += 1;
+    else if (aktiver_sponsor.ziel_typ === "avg" && my_avg >= aktiver_sponsor.ziel_wert) aktiver_sponsor.aktuell = aktiver_sponsor.ziel_wert;
 
     if (aktiver_sponsor.aktuell >= aktiver_sponsor.ziel_wert) {
       const bonus = aktiver_sponsor.belohnung;
       updates.bank_konto = (updates.bank_konto ?? career.bank_konto) + bonus;
-      msgs.push(`🤝 ZIEL ERREICHT! ${aktiver_sponsor.name} zahlt dir deinen Sponsoren-Bonus von £${bonus.toLocaleString()}.`);
+      msgs.push(`🤝 ZIEL ERREICHT! ${aktiver_sponsor.name} zahlt Sponsoren-Bonus: £${bonus.toLocaleString()}`);
       aktiver_sponsor = null;
     }
     updates.aktiver_sponsor = aktiver_sponsor;
   }
 
   const achievements: any = { ...(career.achievements as any) };
+
+  // Achievement checks
   if (my_180s > 0 && !achievements.first_180?.unlocked) {
     achievements.first_180.unlocked = true;
     msgs.push("🎯 ONE HUNDRED AND EIGHTY! Deine erste 180 geworfen!");
+  }
+  if ((career.stats_180s + my_180s) >= 100 && !achievements.century_180s?.unlocked) {
+    achievements.century_180s = achievements.century_180s || {};
+    achievements.century_180s.unlocked = true;
+    msgs.push("🎯 180 MASCHINE! Du hast 100 Maximums geworfen!");
   }
   if (my_hf >= 100 && !achievements.ton_finish?.unlocked) {
     achievements.ton_finish.unlocked = true;
@@ -565,7 +792,7 @@ export async function processResult(
   }
   if (my_hf >= 170 && !achievements.big_fish?.unlocked) {
     achievements.big_fish.unlocked = true;
-    msgs.push("🎯 The Big Fish! Du hast die magische 170 gecheckt!");
+    msgs.push("🎯 THE BIG FISH! Die magische 170 gecheckt!");
   }
 
   if (win) {
@@ -579,8 +806,9 @@ export async function processResult(
       const neue_punkte = career.q_school_punkte + 1;
       if (neue_punkte >= 5) {
         updates.hat_tourcard = true;
+        achievements.tourcard = achievements.tourcard || {};
         achievements.tourcard.unlocked = true;
-        msgs.push("🎯 Tourcard Gewonnen! Willkommen bei den Profis!");
+        msgs.push("🎯 TOURCARD GEWONNEN! Willkommen bei den Profis!");
         updates.turnier_laeuft = false;
         updates.aktuelle_runde = 0;
         updates.turnier_baum = [];
@@ -589,9 +817,7 @@ export async function processResult(
         updates.q_school_punkte = neue_punkte;
         updates.aktuelle_runde = career.aktuelle_runde + 1;
         const { gegner_name, gegner_avg, turnier_baum: newBaum } = generiereGegner({
-          ...career,
-          ...updates,
-          turnier_baum: neuerBaum,
+          ...career, ...updates, turnier_baum: neuerBaum,
         });
         updates.gegner_name = gegner_name;
         updates.gegner_avg = gegner_avg;
@@ -600,17 +826,30 @@ export async function processResult(
     } else {
       updates.aktuelle_runde = career.aktuelle_runde + 1;
       const t = KALENDER[career.aktuelles_turnier_index];
+      const pm = PRIZE_MONEY[t.typ] ?? PRIZE_MONEY["ProTour"];
 
       if (neuerBaum.length === 1) {
-        const geld = t.typ === "ProTour" ? 15000 : 150000;
+        const geld = pm.win;
         updates.order_of_merit_geld = career.order_of_merit_geld + geld;
         updates.bank_konto = (updates.bank_konto ?? career.bank_konto) + geld;
         updates.letzte_schlagzeile = generiereSchlagzeile(career.spieler_name, t.name, "Finale", true, my_avg);
+
         if (!achievements.first_title?.unlocked) {
           achievements.first_title.unlocked = true;
-          msgs.push("⭐ Silberzeug! Du hast dein erstes Turnier gewonnen.");
+          msgs.push("⭐ Silberzeug! Erstes Turnier gewonnen!");
+        }
+        if (t.typ === "Major" && !achievements.first_major?.unlocked) {
+          achievements.first_major = achievements.first_major || {};
+          achievements.first_major.unlocked = true;
+          msgs.push("👑 MAJOR CHAMPION! Du hast dein erstes Major gewonnen!");
         }
         msgs.push(`🏆 TURNIERSIEG! ${t.name} gewonnen! Preisgeld: £${geld.toLocaleString()}`);
+
+        // Add to history
+        const turnier_verlauf: any[] = [...((career.turnier_verlauf ?? []) as any[])];
+        turnier_verlauf.unshift({ name: t.name, typ: t.typ, runde: "Finale", ergebnis: "Sieg", preisgeld: geld, saison: career.saison_jahr, avg: my_avg });
+        updates.turnier_verlauf = turnier_verlauf.slice(0, 100);
+
         updates.turnier_laeuft = false;
         updates.aktuelle_runde = 0;
         updates.turnier_baum = [];
@@ -619,9 +858,7 @@ export async function processResult(
         Object.assign(updates, nextUpdates);
       } else {
         const { gegner_name, gegner_avg, turnier_baum: newBaum } = generiereGegner({
-          ...career,
-          ...updates,
-          turnier_baum: neuerBaum,
+          ...career, ...updates, turnier_baum: neuerBaum,
         });
         updates.gegner_name = gegner_name;
         updates.gegner_avg = gegner_avg;
@@ -630,13 +867,19 @@ export async function processResult(
     }
   } else {
     if (career.hat_tourcard) {
-      const trostGeld = career.aktuelle_runde * 1000;
+      const t = KALENDER[career.aktuelles_turnier_index];
+      const pm = PRIZE_MONEY[t.typ] ?? PRIZE_MONEY["ProTour"];
+      const trostGeld = pm.rd_exit(career.aktuelle_runde);
       updates.order_of_merit_geld = career.order_of_merit_geld + trostGeld;
       updates.bank_konto = (updates.bank_konto ?? career.bank_konto) + trostGeld;
       msgs.push(`❌ Ausgeschieden. Preisgeld gesichert: £${trostGeld.toLocaleString()}`);
       const rundenName = getRundenInfo(neuerBaum, true, career.aktuelles_turnier_index).name;
-      const t = KALENDER[career.aktuelles_turnier_index];
       updates.letzte_schlagzeile = generiereSchlagzeile(career.spieler_name, t.name, rundenName, false, my_avg, turnier_sieger);
+
+      // Add to history
+      const turnier_verlauf: any[] = [...((career.turnier_verlauf ?? []) as any[])];
+      turnier_verlauf.unshift({ name: t.name, typ: t.typ, runde: rundenName, ergebnis: "Niederlage", preisgeld: trostGeld, saison: career.saison_jahr, avg: my_avg });
+      updates.turnier_verlauf = turnier_verlauf.slice(0, 100);
     } else {
       msgs.push("❌ Niederlage. Q-School Tag beendet.");
     }
@@ -650,7 +893,9 @@ export async function processResult(
     }
   }
 
-  const platz = ermittlePlatz(career.bot_rangliste as any[], career.spieler_name, updates.order_of_merit_geld ?? career.order_of_merit_geld);
+  const newOoM = updates.order_of_merit_geld ?? career.order_of_merit_geld;
+  const platz = ermittlePlatz(career.bot_rangliste as any[], career.spieler_name, newOoM);
+
   if (platz <= 64 && !achievements.top64?.unlocked) {
     achievements.top64.unlocked = true;
     msgs.push("⭐ Achievement: Etabliert! Du bist in den Top 64!");
@@ -659,6 +904,17 @@ export async function processResult(
     achievements.top16.unlocked = true;
     msgs.push("⭐ Achievement: Elite! Du bist in den Top 16!");
   }
+  if (platz <= 8 && !achievements.top8?.unlocked) {
+    achievements.top8 = achievements.top8 || { name: "World Class", desc: "Erreiche die Top 8 der Welt.", unlocked: false };
+    achievements.top8.unlocked = true;
+    msgs.push("⭐ Achievement: World Class! Du bist in den Top 8 der Welt!");
+  }
+  if (newOoM >= 1000000 && !achievements.millionaire?.unlocked) {
+    achievements.millionaire = achievements.millionaire || {};
+    achievements.millionaire.unlocked = true;
+    msgs.push("💰 MILLIONÄR! Du hast £1.000.000 auf der Order of Merit verdient!");
+  }
+
   updates.achievements = achievements;
 
   await saveCareer(updates);
@@ -692,13 +948,13 @@ export function buildCareerState(career: any) {
 
   const h2h: Record<string, { siege: number; niederlagen: number }> = career.h2h ?? {};
   const h2hStats = h2h[career.gegner_name] ?? { siege: 0, niederlagen: 0 };
-
   const runden_info = getRundenInfo(turnier_baum, career.hat_tourcard, career.aktuelles_turnier_index);
-
   const walk_on_video = WALK_ON_VIDEOS[career.gegner_name] ?? null;
+  const gegner_form = getGegnerForm(career.gegner_name, career.bot_form ?? {});
 
   return {
     spieler_name: career.spieler_name,
+    name_set: career.name_set ?? false,
     hat_tourcard: career.hat_tourcard,
     q_school_punkte: career.q_school_punkte,
     order_of_merit_geld: career.order_of_merit_geld,
@@ -708,6 +964,7 @@ export function buildCareerState(career: any) {
     aktuelle_runde: career.aktuelle_runde,
     gegner_name: career.gegner_name,
     gegner_avg: career.gegner_avg,
+    gegner_form,
     stats_spiele: career.stats_spiele,
     stats_siege: career.stats_siege,
     stats_legs_won: career.stats_legs_won,
@@ -728,7 +985,57 @@ export function buildCareerState(career: any) {
     h2h_siege: h2hStats.siege,
     h2h_niederlagen: h2hStats.niederlagen,
     walk_on_video,
+    ranking_verlauf: career.ranking_verlauf ?? [],
+    avg_bonus: career.avg_bonus ?? 0,
+    checkout_bonus: career.checkout_bonus ?? 0,
   };
+}
+
+export function buildCalendar(career: any) {
+  const platz = ermittlePlatz(career.bot_rangliste, career.spieler_name, career.order_of_merit_geld);
+  return KALENDER.map((t, index) => {
+    const qualifiziert = !t.min_platz || platz <= t.min_platz;
+    let status = "upcoming";
+    if (index < career.aktuelles_turnier_index) status = "played";
+    else if (index === career.aktuelles_turnier_index) status = career.turnier_laeuft ? "live" : "next";
+    return { index, name: t.name, typ: t.typ, format: t.format, min_platz: t.min_platz ?? null, status, qualifiziert };
+  });
+}
+
+export function buildEquipment(career: any) {
+  const owned: string[] = career.equipment ?? [];
+  return EQUIPMENT_CATALOG.map((item) => ({ ...item, owned: owned.includes(item.id) }));
+}
+
+export async function buyEquipment(id: string) {
+  const career = await getOrCreateCareer();
+  const item = EQUIPMENT_CATALOG.find((e) => e.id === id);
+  if (!item) return { career: buildCareerState(career), messages: ["❌ Artikel nicht gefunden."] };
+
+  const owned: string[] = [...(career.equipment as string[])];
+  if (owned.includes(id)) return { career: buildCareerState(career), messages: ["Du besitzt diesen Artikel bereits."] };
+
+  if (career.bank_konto < item.preis)
+    return { career: buildCareerState(career), messages: [`❌ Nicht genug Geld! Du brauchst £${item.preis.toLocaleString()}.`] };
+
+  owned.push(id);
+  let avg_bonus = career.avg_bonus ?? 0;
+  let checkout_bonus = career.checkout_bonus ?? 0;
+
+  if (item.bonus_typ === "avg") avg_bonus += item.bonus_wert;
+  if (item.bonus_typ === "checkout") checkout_bonus += item.bonus_wert;
+  if (item.bonus_typ === "coaching") {
+    avg_bonus += item.bonus_wert;
+    checkout_bonus += 1.0;
+  }
+
+  await saveCareer({
+    bank_konto: career.bank_konto - item.preis,
+    equipment: owned,
+    avg_bonus,
+    checkout_bonus,
+  });
+  return { career: buildCareerState(await getOrCreateCareer()), messages: [`✅ ${item.name} gekauft! Bonus aktiv.`] };
 }
 
 const AUTODARTS_API_URL = "https://api.autodarts.io/as/v0/matches/filter?size=10&page=0&sort=-finished_at";
@@ -736,17 +1043,13 @@ const AUTODARTS_BEARER_TOKEN = "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia
 
 export async function pullFromAutodarts() {
   const career = await getOrCreateCareer();
-  const msgs: string[] = [];
-
   try {
     const response = await fetch(AUTODARTS_API_URL, {
       headers: { Authorization: AUTODARTS_BEARER_TOKEN, Accept: "application/json" },
     });
-
     if (!response.ok) {
       return { career: buildCareerState(career), messages: [`❌ Verbindungsfehler zu Autodarts (Code ${response.status}). Token abgelaufen?`] };
     }
-
     const data = await response.json();
     let matches: any[];
     if (Array.isArray(data)) matches = data;
@@ -754,9 +1057,7 @@ export async function pullFromAutodarts() {
     else if (data.matches) matches = data.matches;
     else matches = [];
 
-    if (!matches.length) {
-      return { career: buildCareerState(career), messages: ["❌ Keine Matches im Autodarts-Profil gefunden."] };
-    }
+    if (!matches.length) return { career: buildCareerState(career), messages: ["❌ Keine Matches im Autodarts-Profil gefunden."] };
 
     const letztes_match = matches[0];
     const players = letztes_match.players ?? [];
@@ -776,13 +1077,11 @@ export async function pullFromAutodarts() {
       const my_180s = parseInt(stats["180s"] ?? 0);
       const my_hf = parseInt(stats.highestFinish ?? 0);
       const my_co_pct = parseFloat(stats.checkoutPercentage ?? 0);
-
       const result = await processResult(legs_won, legs_lost, my_avg, my_180s, my_hf, my_co_pct);
       result.messages.push("✅ Daten erfolgreich von Autodarts importiert!");
       return result;
-    } else {
-      return { career: buildCareerState(career), messages: ["❌ Dein Spielername wurde im letzten Match nicht gefunden."] };
     }
+    return { career: buildCareerState(career), messages: ["❌ Dein Spielername wurde im letzten Match nicht gefunden."] };
   } catch (e: any) {
     return { career: buildCareerState(career), messages: [`Fehler beim Abrufen der Daten: ${e.message}`] };
   }

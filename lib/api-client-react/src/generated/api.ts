@@ -17,10 +17,16 @@ import type {
 } from "@tanstack/react-query";
 
 import type {
+  BuyEquipmentRequest,
+  CalendarResponse,
   CareerResponse,
   CareerState,
+  EquipmentResponse,
+  H2HResponse,
   HealthStatus,
   MatchResult,
+  SetNameRequest,
+  TournamentHistoryResponse,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -501,4 +507,464 @@ export const useResetCareer = <
   TContext
 > => {
   return useMutation(getResetCareerMutationOptions(options));
+};
+
+/**
+ * @summary Set player name (first-time setup)
+ */
+export const getSetPlayerNameUrl = () => {
+  return `/api/career/name`;
+};
+
+export const setPlayerName = async (
+  setNameRequest: SetNameRequest,
+  options?: RequestInit,
+): Promise<CareerResponse> => {
+  return customFetch<CareerResponse>(getSetPlayerNameUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(setNameRequest),
+  });
+};
+
+export const getSetPlayerNameMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setPlayerName>>,
+    TError,
+    { data: BodyType<SetNameRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof setPlayerName>>,
+  TError,
+  { data: BodyType<SetNameRequest> },
+  TContext
+> => {
+  const mutationKey = ["setPlayerName"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof setPlayerName>>,
+    { data: BodyType<SetNameRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return setPlayerName(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SetPlayerNameMutationResult = NonNullable<
+  Awaited<ReturnType<typeof setPlayerName>>
+>;
+export type SetPlayerNameMutationBody = BodyType<SetNameRequest>;
+export type SetPlayerNameMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Set player name (first-time setup)
+ */
+export const useSetPlayerName = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof setPlayerName>>,
+    TError,
+    { data: BodyType<SetNameRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof setPlayerName>>,
+  TError,
+  { data: BodyType<SetNameRequest> },
+  TContext
+> => {
+  return useMutation(getSetPlayerNameMutationOptions(options));
+};
+
+/**
+ * @summary Get full tournament history
+ */
+export const getGetTournamentHistoryUrl = () => {
+  return `/api/career/history`;
+};
+
+export const getTournamentHistory = async (
+  options?: RequestInit,
+): Promise<TournamentHistoryResponse> => {
+  return customFetch<TournamentHistoryResponse>(getGetTournamentHistoryUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTournamentHistoryQueryKey = () => {
+  return [`/api/career/history`] as const;
+};
+
+export const getGetTournamentHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTournamentHistory>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getTournamentHistory>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetTournamentHistoryQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getTournamentHistory>>
+  > = ({ signal }) => getTournamentHistory({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTournamentHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTournamentHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTournamentHistory>>
+>;
+export type GetTournamentHistoryQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get full tournament history
+ */
+
+export function useGetTournamentHistory<
+  TData = Awaited<ReturnType<typeof getTournamentHistory>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getTournamentHistory>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTournamentHistoryQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get all H2H records
+ */
+export const getGetH2HUrl = () => {
+  return `/api/career/h2h`;
+};
+
+export const getH2H = async (options?: RequestInit): Promise<H2HResponse> => {
+  return customFetch<H2HResponse>(getGetH2HUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetH2HQueryKey = () => {
+  return [`/api/career/h2h`] as const;
+};
+
+export const getGetH2HQueryOptions = <
+  TData = Awaited<ReturnType<typeof getH2H>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof getH2H>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetH2HQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getH2H>>> = ({
+    signal,
+  }) => getH2H({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getH2H>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetH2HQueryResult = NonNullable<Awaited<ReturnType<typeof getH2H>>>;
+export type GetH2HQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get all H2H records
+ */
+
+export function useGetH2H<
+  TData = Awaited<ReturnType<typeof getH2H>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<Awaited<ReturnType<typeof getH2H>>, TError, TData>;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetH2HQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get full season calendar with status
+ */
+export const getGetCalendarUrl = () => {
+  return `/api/career/calendar`;
+};
+
+export const getCalendar = async (
+  options?: RequestInit,
+): Promise<CalendarResponse> => {
+  return customFetch<CalendarResponse>(getGetCalendarUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCalendarQueryKey = () => {
+  return [`/api/career/calendar`] as const;
+};
+
+export const getGetCalendarQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCalendar>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCalendar>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetCalendarQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getCalendar>>> = ({
+    signal,
+  }) => getCalendar({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCalendar>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCalendarQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCalendar>>
+>;
+export type GetCalendarQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get full season calendar with status
+ */
+
+export function useGetCalendar<
+  TData = Awaited<ReturnType<typeof getCalendar>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getCalendar>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCalendarQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get available equipment and owned items
+ */
+export const getGetEquipmentUrl = () => {
+  return `/api/career/equipment`;
+};
+
+export const getEquipment = async (
+  options?: RequestInit,
+): Promise<EquipmentResponse> => {
+  return customFetch<EquipmentResponse>(getGetEquipmentUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetEquipmentQueryKey = () => {
+  return [`/api/career/equipment`] as const;
+};
+
+export const getGetEquipmentQueryOptions = <
+  TData = Awaited<ReturnType<typeof getEquipment>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getEquipment>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetEquipmentQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getEquipment>>> = ({
+    signal,
+  }) => getEquipment({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getEquipment>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetEquipmentQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getEquipment>>
+>;
+export type GetEquipmentQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get available equipment and owned items
+ */
+
+export function useGetEquipment<
+  TData = Awaited<ReturnType<typeof getEquipment>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getEquipment>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetEquipmentQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Buy an equipment item
+ */
+export const getBuyEquipmentUrl = () => {
+  return `/api/career/equipment/buy`;
+};
+
+export const buyEquipment = async (
+  buyEquipmentRequest: BuyEquipmentRequest,
+  options?: RequestInit,
+): Promise<CareerResponse> => {
+  return customFetch<CareerResponse>(getBuyEquipmentUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(buyEquipmentRequest),
+  });
+};
+
+export const getBuyEquipmentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof buyEquipment>>,
+    TError,
+    { data: BodyType<BuyEquipmentRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof buyEquipment>>,
+  TError,
+  { data: BodyType<BuyEquipmentRequest> },
+  TContext
+> => {
+  const mutationKey = ["buyEquipment"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof buyEquipment>>,
+    { data: BodyType<BuyEquipmentRequest> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return buyEquipment(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type BuyEquipmentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof buyEquipment>>
+>;
+export type BuyEquipmentMutationBody = BodyType<BuyEquipmentRequest>;
+export type BuyEquipmentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Buy an equipment item
+ */
+export const useBuyEquipment = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof buyEquipment>>,
+    TError,
+    { data: BodyType<BuyEquipmentRequest> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof buyEquipment>>,
+  TError,
+  { data: BodyType<BuyEquipmentRequest> },
+  TContext
+> => {
+  return useMutation(getBuyEquipmentMutationOptions(options));
 };
