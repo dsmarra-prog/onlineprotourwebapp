@@ -10,6 +10,8 @@ import {
   buildEquipment,
   buyEquipment,
   setPlayerName,
+  avgToAutodartsBotLevel,
+  ermittlePlatz,
 } from "../lib/career-engine.js";
 import { SubmitResultBody, BuyEquipmentBody, SetPlayerNameBody } from "@workspace/api-zod";
 
@@ -143,6 +145,61 @@ router.post("/career/equipment/buy", async (req, res) => {
     res.json(result);
   } catch (err) {
     req.log.error({ err }, "Error buying equipment");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/career/oom", async (req, res) => {
+  try {
+    const career = await getOrCreateCareer();
+    const botRangliste: any[] = career.bot_rangliste as any[] ?? [];
+    const sorted = [...botRangliste].sort((a, b) => b.geld - a.geld);
+    const spielerPlatz = ermittlePlatz(botRangliste, career.spieler_name, career.order_of_merit_geld);
+    // Map rank position to Autodarts bot level (top players = higher level)
+    function rankToBotLevel(rank: number, total: number): number {
+      const pct = rank / total;
+      if (pct < 0.06) return 9;      // Top 6% → Level 9
+      if (pct < 0.13) return 8;      // Top 13%
+      if (pct < 0.25) return 7;
+      if (pct < 0.40) return 6;
+      if (pct < 0.60) return 5;
+      if (pct < 0.75) return 4;
+      if (pct < 0.88) return 3;
+      if (pct < 0.95) return 2;
+      return 1;
+    }
+    const total = sorted.length;
+    const entries = sorted.map((b, idx) => ({
+      platz: idx + 1,
+      name: b.name,
+      geld: b.geld,
+      bot_level: rankToBotLevel(idx, total),
+    }));
+    // Insert player at their position
+    const spielerEntry = {
+      platz: spielerPlatz,
+      name: career.spieler_name,
+      geld: career.order_of_merit_geld,
+      bot_level: null,
+      is_player: true,
+    };
+    const result = entries.map((e, i) => ({
+      ...e,
+      is_player: false,
+      platz: i + 1,
+    }));
+    // Find insertion point for player
+    const insertIdx = result.findIndex((e) => e.geld <= career.order_of_merit_geld);
+    if (insertIdx === -1) {
+      result.push(spielerEntry as any);
+    } else {
+      result.splice(insertIdx, 0, spielerEntry as any);
+    }
+    // Re-number ranks
+    result.forEach((e, i) => { e.platz = i + 1; });
+    res.json({ entries: result, spieler_name: career.spieler_name });
+  } catch (err) {
+    req.log.error({ err }, "Error getting OoM");
     res.status(500).json({ error: "Internal server error" });
   }
 });

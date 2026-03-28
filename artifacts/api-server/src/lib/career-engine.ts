@@ -379,20 +379,67 @@ function rand(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+// Autodarts bot level average ranges (matching Autodarts' actual bot skill distribution)
+const AUTODARTS_LEVEL_RANGES: Record<number, [number, number]> = {
+  1: [35, 46], 2: [46, 55], 3: [55, 64], 4: [64, 72],
+  5: [72, 79], 6: [79, 86], 7: [86, 93], 8: [93, 100], 9: [100, 110],
+};
+
+export function avgToAutodartsBotLevel(avg: number): number {
+  if (avg < 46) return 1;
+  if (avg < 55) return 2;
+  if (avg < 64) return 3;
+  if (avg < 72) return 4;
+  if (avg < 79) return 5;
+  if (avg < 86) return 6;
+  if (avg < 93) return 7;
+  if (avg < 100) return 8;
+  return 9;
+}
+
 function getBotAvg(name: string, botRangliste: any[], botForm: Record<string, number>, schwierigkeitsgrad: number = 5) {
   const sorted = [...botRangliste].sort((a, b) => b.geld - a.geld);
   const formBonus = botForm[name] ?? 0;
   const rank = sorted.findIndex((b) => b.name === name);
   let base: number;
-  // Base averages matching real Autodarts bot skill distribution
-  if (rank < 0) base = rand(65, 75);
-  else if (rank < 8) base = rand(98, 108);
-  else if (rank < 16) base = rand(94, 103);
-  else if (rank < 32) base = rand(89, 97);
-  else if (rank < 64) base = rand(84, 92);
-  else base = rand(76, 86);
+  // If it's an Autodarts level-named bot (e.g. "Level 4 – C"), use level-appropriate avg range
+  const levelMatch = name.match(/^Level (\d+)/);
+  if (levelMatch) {
+    const botLevel = Math.max(1, Math.min(9, parseInt(levelMatch[1])));
+    const [min, max] = AUTODARTS_LEVEL_RANGES[botLevel];
+    base = rand(min, max);
+  } else if (rank < 0) {
+    base = rand(65, 75);
+  } else if (rank < 8) {
+    base = rand(98, 108);
+  } else if (rank < 16) {
+    base = rand(94, 103);
+  } else if (rank < 32) {
+    base = rand(89, 97);
+  } else if (rank < 64) {
+    base = rand(84, 92);
+  } else {
+    base = rand(76, 86);
+  }
   const mult = DIFFICULTY_MULTIPLIERS[schwierigkeitsgrad] ?? 1.0;
   return Math.round((base * mult + formBonus) * 10) / 10;
+}
+
+// Generate Autodarts bot-style name from index (0-126)
+function autodartsBotName(idx: number): string {
+  // Distribute 127 bots across levels, fewer at extremes, most at middle
+  const levelDist = [8, 10, 12, 14, 18, 20, 20, 15, 10]; // sums to 127
+  let cumulative = 0;
+  for (let lvl = 0; lvl < levelDist.length; lvl++) {
+    if (idx < cumulative + levelDist[lvl]) {
+      const posInLevel = idx - cumulative;
+      const letter = String.fromCharCode(65 + (posInLevel % 26));
+      const suffix = posInLevel >= 26 ? `${letter}${Math.floor(posInLevel / 26)}` : letter;
+      return `Level ${lvl + 1} – ${suffix}`;
+    }
+    cumulative += levelDist[lvl];
+  }
+  return "Level 9 – Z";
 }
 
 export function ermittlePlatz(
@@ -484,7 +531,7 @@ function generiereGegner(career: any) {
 
   if (!hat_tourcard) {
     size = 128;
-    const base = [...QSCHOOL_SPIELER, ...Array.from({ length: 127 }, (_, i) => `Amateur ${i + 1}`)];
+    const base = [...QSCHOOL_SPIELER, ...Array.from({ length: 127 }, (_, i) => autodartsBotName(i))];
     for (let i = base.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [base[i], base[j]] = [base[j], base[i]];
@@ -1021,6 +1068,7 @@ export function buildCareerState(career: any) {
     avg_bonus: career.avg_bonus ?? 0,
     checkout_bonus: career.checkout_bonus ?? 0,
     schwierigkeitsgrad: career.schwierigkeitsgrad ?? 5,
+    gegner_bot_level: avgToAutodartsBotLevel(career.gegner_avg ?? 75),
     gegner_platz: (() => {
       const sorted = [...(career.bot_rangliste as any[])].sort((a, b) => b.geld - a.geld);
       const idx = sorted.findIndex((b) => b.name === career.gegner_name);

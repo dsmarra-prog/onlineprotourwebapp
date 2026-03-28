@@ -8,9 +8,9 @@ import MatchView from "@/pages/match";
 import StatsPage from "@/pages/stats";
 import H2HPage from "@/pages/h2h";
 import CalendarPage from "@/pages/calendar";
-import EquipmentPage from "@/pages/equipment";
 import HistoryPage from "@/pages/history";
 import HallOfFamePage from "@/pages/hall-of-fame";
+import OrderOfMeritPage from "@/pages/order-of-merit";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -29,9 +29,9 @@ function Router() {
       <Route path="/stats" component={StatsPage} />
       <Route path="/h2h" component={H2HPage} />
       <Route path="/kalender" component={CalendarPage} />
-      <Route path="/equipment" component={EquipmentPage} />
       <Route path="/history" component={HistoryPage} />
       <Route path="/hall-of-fame" component={HallOfFamePage} />
+      <Route path="/order-of-merit" component={OrderOfMeritPage} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Trophy, Home, Settings, BarChart2, Users, Calendar,
-  ShoppingBag, BookOpen,
+  BookOpen, ListOrdered,
 } from "lucide-react";
 import { useCareerActions } from "@/hooks/use-career";
 
@@ -10,10 +10,10 @@ const navItems = [
   { href: "/", label: "Dashboard", icon: Home },
   { href: "/stats", label: "Statistiken", icon: BarChart2 },
   { href: "/kalender", label: "Kalender", icon: Calendar },
+  { href: "/order-of-merit", label: "Order of Merit", icon: ListOrdered },
   { href: "/h2h", label: "H2H", icon: Users },
   { href: "/history", label: "Verlauf", icon: BookOpen },
   { href: "/hall-of-fame", label: "Hall of Fame", icon: Trophy },
-  { href: "/equipment", label: "Shop", icon: ShoppingBag },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {

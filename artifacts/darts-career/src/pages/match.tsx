@@ -98,7 +98,7 @@ function DrawAnimation({ players, onDone }: { players: string[]; onDone: () => v
 function GegnerProfil({ career }: { career: any }) {
   const {
     gegner_name, gegner_avg, gegner_form, h2h_siege, h2h_niederlagen,
-    gegner_platz, gegner_oom_geld,
+    gegner_platz, gegner_oom_geld, gegner_bot_level,
   } = career;
 
   const formEmoji = gegner_form?.form?.split(" ")[0] ?? "➡️";
@@ -119,9 +119,25 @@ function GegnerProfil({ career }: { career: any }) {
         </div>
         <div>
           <h3 className="font-bold text-white text-lg leading-tight">{gegner_name}</h3>
-          <p className="text-sm text-muted-foreground">
-            {gegner_platz ? `Weltrangliste Platz ${gegner_platz}` : "Unranked"}
-          </p>
+          <div className="flex items-center gap-2 mt-0.5">
+            {gegner_platz && (
+              <p className="text-sm text-muted-foreground">Platz {gegner_platz}</p>
+            )}
+            {gegner_bot_level != null && (
+              <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full border ${
+                gegner_bot_level <= 2 ? "border-slate-500/40 bg-slate-500/10 text-slate-300" :
+                gegner_bot_level <= 4 ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-300" :
+                gegner_bot_level <= 6 ? "border-orange-500/40 bg-orange-500/10 text-orange-300" :
+                gegner_bot_level <= 8 ? "border-red-500/40 bg-red-500/10 text-red-300" :
+                "border-pink-500/40 bg-pink-500/10 text-pink-300"
+              }`}>
+                🎯 Autodarts Level {gegner_bot_level}
+              </span>
+            )}
+            {!gegner_platz && !gegner_bot_level && (
+              <p className="text-sm text-muted-foreground">Unranked</p>
+            )}
+          </div>
         </div>
       </div>
 
