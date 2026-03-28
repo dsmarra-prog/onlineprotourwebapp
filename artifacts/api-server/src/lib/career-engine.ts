@@ -462,13 +462,7 @@ function getBotAvg(name: string, botRangliste: any[], botForm: Record<string, nu
   const formBonus = botForm[name] ?? 0;
   const rank = sorted.findIndex((b) => b.name === name);
   let base: number;
-  // Autodarts level-named bot (e.g. "Level 4 – C") → use level range directly
-  const levelMatch = name.match(/^Level (\d+)/);
-  if (levelMatch) {
-    const botLevel = Math.max(1, Math.min(11, parseInt(levelMatch[1])));
-    const [min, max] = AUTODARTS_LEVEL_RANGES[botLevel];
-    base = rand(min, max);
-  } else if (rank < 0) {
+  if (rank < 0) {
     base = rand(65, 75);
   } else if (rank < 8) {
     base = rand(98, 108);
@@ -481,9 +475,10 @@ function getBotAvg(name: string, botRangliste: any[], botForm: Record<string, nu
   } else {
     base = rand(76, 86);
   }
-  // No global multiplier — level-named bots already scale to player avg via level distribution
-  // spielerAvg kept as param for future use
-  return Math.round((base + formBonus) * 10) / 10;
+  // Scale PDC pro avg toward the player's level so climbing the rankings is achievable.
+  // At playerAvg ≥ 90 pros are at full strength; at playerAvg 30 they play at ~65% of their base.
+  const scaleFactor = spielerAvg >= 90 ? 1.0 : Math.max(0.65, 0.65 + (spielerAvg - 30) / (90 - 30) * 0.35);
+  return Math.round((base * scaleFactor + formBonus) * 10) / 10;
 }
 
 // Helper: get avg from level for named bots (not using name pattern)
@@ -492,17 +487,16 @@ function getBotAvgForLevel(level: number, formBonus: number = 0): number {
   return Math.round((rand(min, max) + formBonus) * 10) / 10;
 }
 
-// Generate Q-School bots centered on playerLevel (1–11, std dev ~2.5), with real names
+// Generate Q-School bots centered on playerLevel (1–11, std dev ~1.2), with real names
 function generateQSchoolBots(playerLevel: number, count: number): { name: string; level: number }[] {
-  // Shuffle the pool for varied picks each tournament
   const shuffled = [...BOT_NAME_POOL].sort(() => Math.random() - 0.5);
   const bots: { name: string; level: number }[] = [];
   for (let i = 0; i < count; i++) {
     const u = Math.max(1e-10, Math.random());
     const v = Math.random();
     const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-    const level = Math.max(1, Math.min(11, Math.round(playerLevel + z * 2.5)));
-    // Pick name from pool, wrapping if pool exhausted
+    // σ=1.2 → tight spread: ~95% of bots within ±2 levels of the player
+    const level = Math.max(1, Math.min(11, Math.round(playerLevel + z * 1.2)));
     const name = shuffled[i % shuffled.length];
     bots.push({ name, level });
   }
@@ -1121,6 +1115,21 @@ export function buildCareerState(career: any) {
     }
   }
 
+  // Per-player lookup for tooltips in the bracket
+  const botForm = career.bot_form as Record<string, number>;
+  const turnier_bot_info: Record<string, { avg: number; form: string; geld: number; level: number }> = {};
+  turnier_baum.forEach((bot: any) => {
+    const fv = botForm[bot.name] ?? 0;
+    const form = fv >= 3 ? "🔥 Topform" : fv >= 1 ? "📈 Aufsteigend" : fv <= -3 ? "❄️ Kaltform" : fv <= -1 ? "📉 Absteigend" : "➡️ Normalform";
+    const geldEntry = (career.bot_rangliste as any[]).find((b: any) => b.name === bot.name);
+    turnier_bot_info[bot.name] = {
+      avg: bot.avg ?? 0,
+      form,
+      geld: geldEntry?.geld ?? 0,
+      level: avgToAutodartsBotLevel(bot.avg ?? 60),
+    };
+  });
+
   const h2h: Record<string, { siege: number; niederlagen: number }> = career.h2h ?? {};
   const h2hStats = h2h[career.gegner_name] ?? { siege: 0, niederlagen: 0 };
   const runden_info = getRundenInfo(turnier_baum, career.hat_tourcard, career.aktuelles_turnier_index);
@@ -1157,6 +1166,7 @@ export function buildCareerState(career: any) {
     oom,
     runden_info,
     matchups,
+    turnier_bot_info,
     h2h_siege: h2hStats.siege,
     h2h_niederlagen: h2hStats.niederlagen,
     walk_on_video,

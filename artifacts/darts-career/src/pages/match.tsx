@@ -8,11 +8,12 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Zap, Swords, MonitorPlay, Activity, RefreshCw, ChevronLeft,
-  CheckCircle2, User,
+  CheckCircle2, TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useDartsSounds } from "@/hooks/use-sounds";
 
 // Known real PDC pro players — everyone else is a fictional regional tour player
@@ -53,6 +54,66 @@ function PlayerAvatar({ name, size = 48 }: { name: string; size?: number }) {
       style={{ width: size, height: size }}
       onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
     />
+  );
+}
+
+// Inline info card shown when clicking a player name in the bracket
+function PlayerInfoCard({
+  name,
+  info,
+  isSelf,
+  children,
+}: {
+  name: string;
+  info?: { avg: number; form: string; geld: number; level: number };
+  isSelf?: boolean;
+  children: React.ReactNode;
+}) {
+  if (isSelf || !info) return <>{children}</>;
+
+  const levelColor =
+    info.level <= 2 ? "text-slate-300 border-slate-500/40 bg-slate-500/10" :
+    info.level <= 4 ? "text-yellow-300 border-yellow-500/40 bg-yellow-500/10" :
+    info.level <= 6 ? "text-orange-300 border-orange-500/40 bg-orange-500/10" :
+    info.level <= 8 ? "text-red-300 border-red-500/40 bg-red-500/10" :
+    "text-pink-300 border-pink-500/40 bg-pink-500/10";
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>{children}</PopoverTrigger>
+      <PopoverContent
+        side="left"
+        align="center"
+        sideOffset={8}
+        className="w-56 p-0 bg-[#0d1117] border border-border/60 shadow-xl rounded-xl overflow-hidden"
+      >
+        <div className="border-b border-border/40 px-3 py-2 flex items-center gap-2">
+          <PlayerAvatar name={name} size={32} />
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-white truncate">{name}</p>
+            <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full border ${levelColor}`}>
+              🎯 Level {info.level}
+            </span>
+          </div>
+        </div>
+        <div className="px-3 py-2 space-y-1.5 text-xs">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Erwart. Average</span>
+            <span className="font-mono font-bold text-white">{info.avg.toFixed(1)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Tagesform</span>
+            <span className="font-medium">{info.form}</span>
+          </div>
+          {info.geld > 0 && (
+            <div className="flex justify-between border-t border-border/40 pt-1.5 mt-1">
+              <span className="text-muted-foreground flex items-center gap-1"><TrendingUp className="w-3 h-3" />Saison-Preisgeld</span>
+              <span className="font-mono font-bold text-primary">£{info.geld.toLocaleString("en-GB")}</span>
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -455,6 +516,8 @@ export default function MatchView() {
             <div className="space-y-2 max-h-[65vh] overflow-y-auto pr-1">
               {career.matchups.map((matchup: any, idx: number) => {
                 const isActive = matchup.player1 === career.spieler_name || matchup.player2 === career.spieler_name;
+                const info1 = career.turnier_bot_info?.[matchup.player1];
+                const info2 = career.turnier_bot_info?.[matchup.player2];
                 return (
                   <motion.div
                     key={idx}
@@ -471,13 +534,17 @@ export default function MatchView() {
                       <div className="absolute -left-0.5 top-1/2 -translate-y-1/2 w-1 h-6 bg-primary rounded-r-full" />
                     )}
                     <div className="flex flex-col gap-0.5">
-                      <span className={`text-xs truncate font-medium ${matchup.player1 === career.spieler_name ? "text-primary font-bold" : "text-foreground"}`}>
-                        {matchup.player1}
-                      </span>
+                      <PlayerInfoCard name={matchup.player1} info={info1} isSelf={matchup.player1 === career.spieler_name}>
+                        <button className={`text-xs truncate font-medium text-left w-full rounded px-0.5 hover:underline cursor-pointer transition-colors ${matchup.player1 === career.spieler_name ? "text-primary font-bold cursor-default hover:no-underline" : "text-foreground hover:text-primary"}`}>
+                          {matchup.player1}
+                        </button>
+                      </PlayerInfoCard>
                       <span className="text-[9px] text-muted-foreground pl-1.5">vs</span>
-                      <span className={`text-xs truncate font-medium ${matchup.player2 === career.spieler_name ? "text-primary font-bold" : "text-foreground"}`}>
-                        {matchup.player2}
-                      </span>
+                      <PlayerInfoCard name={matchup.player2} info={info2} isSelf={matchup.player2 === career.spieler_name}>
+                        <button className={`text-xs truncate font-medium text-left w-full rounded px-0.5 hover:underline cursor-pointer transition-colors ${matchup.player2 === career.spieler_name ? "text-primary font-bold cursor-default hover:no-underline" : "text-foreground hover:text-primary"}`}>
+                          {matchup.player2}
+                        </button>
+                      </PlayerInfoCard>
                     </div>
                     {isActive && (
                       <span className="absolute top-1 right-2 text-[9px] text-primary font-bold uppercase tracking-wider">LIVE</span>
