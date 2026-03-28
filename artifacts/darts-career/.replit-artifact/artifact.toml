@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "PDC Karriere Modus"
+title = "OnlineProTour"
 version = "1.0.0"
 id = "artifacts/darts-career"
 router = "path"

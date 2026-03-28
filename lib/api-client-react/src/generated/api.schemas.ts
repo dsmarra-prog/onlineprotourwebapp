@@ -11,6 +11,7 @@ export interface HealthStatus {
 
 export interface SetNameRequest {
   name: string;
+  schwierigkeitsgrad: number;
 }
 
 export interface BuyEquipmentRequest {
@@ -149,6 +150,7 @@ export interface CareerState {
   ranking_verlauf: RankingRecord[];
   avg_bonus: number;
   checkout_bonus: number;
+  schwierigkeitsgrad?: number;
 }
 
 export interface CareerResponse {

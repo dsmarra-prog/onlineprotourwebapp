@@ -9,11 +9,25 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+const DIFFICULTY_INFO = [
+  { level: 1, label: "Level 1 – Anfänger", desc: "Sehr leichte Gegner, ideal zum Lernen", color: "text-green-400" },
+  { level: 2, label: "Level 2 – Einsteiger", desc: "Leichte Gegner mit schwachen Averages", color: "text-green-400" },
+  { level: 3, label: "Level 3 – Freizeit", desc: "Entspannte Matches, wenig Druck", color: "text-lime-400" },
+  { level: 4, label: "Level 4 – Fortgeschritten", desc: "Ausgewogen, leicht unter Standard", color: "text-yellow-400" },
+  { level: 5, label: "Level 5 – Standard", desc: "Reale PDC-Verhältnisse", color: "text-orange-400" },
+  { level: 6, label: "Level 6 – Anspruchsvoll", desc: "Gegner spielen über ihrem Niveau", color: "text-orange-500" },
+  { level: 7, label: "Level 7 – Profi", desc: "Hohe Averages, kein Erbarmen", color: "text-red-400" },
+  { level: 8, label: "Level 8 – Elite", desc: "Nur für Experten geeignet", color: "text-red-500" },
+  { level: 9, label: "Level 9 – Legende", desc: "Autodarts-Bestlevel, brutal hart", color: "text-red-600" },
+];
+
 export default function Dashboard() {
   const { data: career, isLoading, error } = useGetCareer();
   const { startMatch, isStarting, setPlayerName, isSettingName } = useCareerActions();
   const [, setLocation] = useLocation();
   const [newName, setNewName] = useState("");
+  const [setupStep, setSetupStep] = useState<1 | 2>(1);
+  const [selectedDifficulty, setSelectedDifficulty] = useState(5);
 
   if (isLoading) {
     return (
@@ -37,42 +51,101 @@ export default function Dashboard() {
     );
   }
 
-  // Name Setup Screen
+  // Name Setup Screen (2 Schritte)
   if (!career.name_set) {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[70vh]">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-card border border-primary/40 rounded-3xl p-10 max-w-md w-full text-center shadow-[0_0_60px_rgba(0,210,255,0.1)]"
-          >
-            <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Trophy className="w-10 h-10 text-primary" />
-            </div>
-            <h1 className="text-3xl font-display font-bold text-white mb-2">Karriere starten</h1>
-            <p className="text-muted-foreground mb-8">
-              Wie soll dein Darts-Profi heißen?
-            </p>
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && newName.trim()) setPlayerName(newName);
-              }}
-              placeholder="z.B. Dennis"
-              maxLength={30}
-              className="w-full bg-background border border-border rounded-xl px-4 py-3 text-lg text-center text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary mb-6"
-            />
-            <Button
-              onClick={() => newName.trim() && setPlayerName(newName)}
-              disabled={isSettingName || !newName.trim()}
-              className="w-full text-lg py-6 bg-gradient-to-r from-primary to-cyan-400 hover:from-primary/90 hover:to-cyan-500 text-black font-bold"
-            >
-              {isSettingName ? "Lade..." : "Los geht's! 🎯"}
-            </Button>
-          </motion.div>
+          <AnimatePresence mode="wait">
+            {setupStep === 1 ? (
+              <motion.div
+                key="step1"
+                initial={{ opacity: 0, x: -30 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -30 }}
+                className="bg-card border border-primary/40 rounded-3xl p-10 max-w-md w-full text-center shadow-[0_0_60px_rgba(0,210,255,0.1)]"
+              >
+                <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <Trophy className="w-10 h-10 text-primary" />
+                </div>
+                <p className="text-xs text-primary uppercase tracking-widest font-bold mb-2">Schritt 1 von 2</p>
+                <h1 className="text-3xl font-display font-bold text-white mb-2">Karriere starten</h1>
+                <p className="text-muted-foreground mb-8">Wie soll dein Darts-Profi heißen?</p>
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && newName.trim()) setSetupStep(2);
+                  }}
+                  placeholder="z.B. Dennis"
+                  maxLength={30}
+                  className="w-full bg-background border border-border rounded-xl px-4 py-3 text-lg text-center text-white placeholder:text-muted-foreground focus:outline-none focus:border-primary mb-6"
+                />
+                <Button
+                  onClick={() => newName.trim() && setSetupStep(2)}
+                  disabled={!newName.trim()}
+                  className="w-full text-lg py-6 bg-gradient-to-r from-primary to-cyan-400 hover:from-primary/90 hover:to-cyan-500 text-black font-bold"
+                >
+                  Weiter zum Schwierigkeitsgrad →
+                </Button>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="step2"
+                initial={{ opacity: 0, x: 30 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 30 }}
+                className="bg-card border border-primary/40 rounded-3xl p-8 max-w-lg w-full shadow-[0_0_60px_rgba(0,210,255,0.1)]"
+              >
+                <p className="text-xs text-primary uppercase tracking-widest font-bold mb-2 text-center">Schritt 2 von 2</p>
+                <h1 className="text-2xl font-display font-bold text-white mb-1 text-center">Schwierigkeitsgrad</h1>
+                <p className="text-muted-foreground text-sm mb-6 text-center">
+                  Basiert auf den Autodarts Bot-Leveln 1–9
+                </p>
+
+                <div className="space-y-2 mb-6">
+                  {DIFFICULTY_INFO.map((d) => (
+                    <button
+                      key={d.level}
+                      onClick={() => setSelectedDifficulty(d.level)}
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
+                        selectedDifficulty === d.level
+                          ? "bg-primary/10 border-primary"
+                          : "bg-secondary/20 border-border/50 hover:border-border"
+                      }`}
+                    >
+                      <span className={`text-xl font-mono font-bold w-6 text-center ${d.color}`}>{d.level}</span>
+                      <div>
+                        <p className={`font-bold text-sm ${selectedDifficulty === d.level ? "text-white" : "text-muted-foreground"}`}>{d.label}</p>
+                        <p className="text-xs text-muted-foreground">{d.desc}</p>
+                      </div>
+                      {selectedDifficulty === d.level && (
+                        <span className="ml-auto text-primary text-lg">✓</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => setSetupStep(1)}
+                    className="flex-1"
+                  >
+                    ← Zurück
+                  </Button>
+                  <Button
+                    onClick={() => setPlayerName({ name: newName, schwierigkeitsgrad: selectedDifficulty })}
+                    disabled={isSettingName}
+                    className="flex-1 bg-gradient-to-r from-primary to-cyan-400 hover:from-primary/90 hover:to-cyan-500 text-black font-bold"
+                  >
+                    {isSettingName ? "Starte..." : `🎯 Karriere starten`}
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </Layout>
     );

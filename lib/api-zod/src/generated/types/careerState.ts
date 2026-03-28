@@ -50,4 +50,5 @@ export interface CareerState {
   ranking_verlauf: RankingRecord[];
   avg_bonus: number;
   checkout_bonus: number;
+  schwierigkeitsgrad?: number;
 }

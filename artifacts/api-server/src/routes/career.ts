@@ -78,7 +78,7 @@ router.post("/career/name", async (req, res) => {
       res.status(400).json({ error: "Invalid name" });
       return;
     }
-    const result = await setPlayerName(parsed.data.name);
+    const result = await setPlayerName(parsed.data.name, parsed.data.schwierigkeitsgrad ?? 5);
     res.json({ career: buildCareerState(result.career), messages: result.messages });
   } catch (err) {
     req.log.error({ err }, "Error setting name");

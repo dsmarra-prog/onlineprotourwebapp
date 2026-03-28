@@ -201,8 +201,11 @@ components:
       properties:
         name:
           type: string
+        schwierigkeitsgrad:
+          type: integer
       required:
         - name
+        - schwierigkeitsgrad
 
     BuyEquipmentRequest:
       type: object
@@ -522,6 +525,8 @@ components:
           type: number
         checkout_bonus:
           type: number
+        schwierigkeitsgrad:
+          type: integer
       required:
         - spieler_name
         - name_set

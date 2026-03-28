@@ -379,18 +379,20 @@ function rand(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function getBotAvg(name: string, botRangliste: any[], botForm: Record<string, number>) {
+function getBotAvg(name: string, botRangliste: any[], botForm: Record<string, number>, schwierigkeitsgrad: number = 5) {
   const sorted = [...botRangliste].sort((a, b) => b.geld - a.geld);
   const formBonus = botForm[name] ?? 0;
   const rank = sorted.findIndex((b) => b.name === name);
   let base: number;
+  // Base averages matching real Autodarts bot skill distribution
   if (rank < 0) base = rand(65, 75);
   else if (rank < 8) base = rand(98, 108);
   else if (rank < 16) base = rand(94, 103);
   else if (rank < 32) base = rand(89, 97);
   else if (rank < 64) base = rand(84, 92);
   else base = rand(76, 86);
-  return Math.round((base + formBonus) * 10) / 10;
+  const mult = DIFFICULTY_MULTIPLIERS[schwierigkeitsgrad] ?? 1.0;
+  return Math.round((base * mult + formBonus) * 10) / 10;
 }
 
 export function ermittlePlatz(
@@ -507,7 +509,8 @@ function generiereGegner(career: any) {
     pool = pool.slice(0, size - 1);
   }
 
-  const bots = pool.map((name) => ({ name, avg: getBotAvg(name, botRangliste, botForm) }));
+  const schwierigkeit = career.schwierigkeitsgrad ?? 5;
+  const bots = pool.map((name) => ({ name, avg: getBotAvg(name, botRangliste, botForm, schwierigkeit) }));
   let turnier_baum = [{ name: career.spieler_name, avg: 0 }, ...bots];
 
   for (let i = turnier_baum.length - 1; i > 0; i--) {
@@ -643,10 +646,39 @@ function nextTurnier(career: any): { msgs: string[]; updates: any } {
   return { msgs, updates };
 }
 
-export async function setPlayerName(name: string) {
+const DIFFICULTY_LABELS: Record<number, string> = {
+  1: "Anfänger – Autodarts Level 1",
+  2: "Einsteiger – Autodarts Level 2",
+  3: "Freizeit – Autodarts Level 3",
+  4: "Fortgeschritten – Autodarts Level 4",
+  5: "Standard – Autodarts Level 5",
+  6: "Anspruchsvoll – Autodarts Level 6",
+  7: "Profi – Autodarts Level 7",
+  8: "Elite – Autodarts Level 8",
+  9: "Legende – Autodarts Level 9",
+};
+
+// Autodarts-mapped multipliers per difficulty level
+const DIFFICULTY_MULTIPLIERS: Record<number, number> = {
+  1: 0.52,
+  2: 0.63,
+  3: 0.74,
+  4: 0.87,
+  5: 1.0,
+  6: 1.07,
+  7: 1.14,
+  8: 1.21,
+  9: 1.30,
+};
+
+export async function setPlayerName(name: string, schwierigkeitsgrad: number = 5) {
   const trimmed = name.trim().substring(0, 30);
-  await saveCareer({ spieler_name: trimmed, name_set: true });
-  return { career: await getOrCreateCareer(), messages: [`Willkommen, ${trimmed}! Deine Karriere beginnt jetzt.`] };
+  const level = Math.max(1, Math.min(9, schwierigkeitsgrad));
+  await saveCareer({ spieler_name: trimmed, name_set: true, schwierigkeitsgrad: level });
+  return {
+    career: await getOrCreateCareer(),
+    messages: [`Willkommen, ${trimmed}! Schwierigkeitsgrad: ${DIFFICULTY_LABELS[level]}. Viel Erfolg!`],
+  };
 }
 
 export async function startMatch() {
@@ -988,6 +1020,16 @@ export function buildCareerState(career: any) {
     ranking_verlauf: career.ranking_verlauf ?? [],
     avg_bonus: career.avg_bonus ?? 0,
     checkout_bonus: career.checkout_bonus ?? 0,
+    schwierigkeitsgrad: career.schwierigkeitsgrad ?? 5,
+    gegner_platz: (() => {
+      const sorted = [...(career.bot_rangliste as any[])].sort((a, b) => b.geld - a.geld);
+      const idx = sorted.findIndex((b) => b.name === career.gegner_name);
+      return idx >= 0 ? idx + 1 : null;
+    })(),
+    gegner_oom_geld: (() => {
+      const bot = (career.bot_rangliste as any[]).find((b) => b.name === career.gegner_name);
+      return bot ? bot.geld : null;
+    })(),
   };
 }
 

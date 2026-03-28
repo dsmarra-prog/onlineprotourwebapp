@@ -98,6 +98,7 @@ export const GetCareerResponse = zod.object({
   ),
   avg_bonus: zod.number(),
   checkout_bonus: zod.number(),
+  schwierigkeitsgrad: zod.number().optional(),
 });
 
 /**
@@ -185,6 +186,7 @@ export const StartMatchResponse = zod.object({
     ),
     avg_bonus: zod.number(),
     checkout_bonus: zod.number(),
+    schwierigkeitsgrad: zod.number().optional(),
   }),
   messages: zod.array(zod.string()),
 });
@@ -283,6 +285,7 @@ export const SubmitResultResponse = zod.object({
     ),
     avg_bonus: zod.number(),
     checkout_bonus: zod.number(),
+    schwierigkeitsgrad: zod.number().optional(),
   }),
   messages: zod.array(zod.string()),
 });
@@ -372,6 +375,7 @@ export const PullAutodartsResponse = zod.object({
     ),
     avg_bonus: zod.number(),
     checkout_bonus: zod.number(),
+    schwierigkeitsgrad: zod.number().optional(),
   }),
   messages: zod.array(zod.string()),
 });
@@ -461,6 +465,7 @@ export const ResetCareerResponse = zod.object({
     ),
     avg_bonus: zod.number(),
     checkout_bonus: zod.number(),
+    schwierigkeitsgrad: zod.number().optional(),
   }),
   messages: zod.array(zod.string()),
 });
@@ -470,6 +475,7 @@ export const ResetCareerResponse = zod.object({
  */
 export const SetPlayerNameBody = zod.object({
   name: zod.string(),
+  schwierigkeitsgrad: zod.number(),
 });
 
 export const SetPlayerNameResponse = zod.object({
@@ -554,6 +560,7 @@ export const SetPlayerNameResponse = zod.object({
     ),
     avg_bonus: zod.number(),
     checkout_bonus: zod.number(),
+    schwierigkeitsgrad: zod.number().optional(),
   }),
   messages: zod.array(zod.string()),
 });
@@ -714,6 +721,7 @@ export const BuyEquipmentResponse = zod.object({
     ),
     avg_bonus: zod.number(),
     checkout_bonus: zod.number(),
+    schwierigkeitsgrad: zod.number().optional(),
   }),
   messages: zod.array(zod.string()),
 });

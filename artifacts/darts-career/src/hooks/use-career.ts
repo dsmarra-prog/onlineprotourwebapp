@@ -88,7 +88,12 @@ export function useCareerActions() {
     resetCareer: resetCareerMutation.mutate,
     isResetting: resetCareerMutation.isPending,
 
-    setPlayerName: (name: string) => setNameMutation.mutate({ data: { name } }),
+    setPlayerName: (args: string | { name: string; schwierigkeitsgrad?: number }) => {
+      const data = typeof args === "string"
+        ? { name: args, schwierigkeitsgrad: 5 }
+        : { name: args.name, schwierigkeitsgrad: args.schwierigkeitsgrad ?? 5 };
+      setNameMutation.mutate({ data });
+    },
     isSettingName: setNameMutation.isPending,
 
     buyEquipment: (id: string) => buyEquipmentMutation.mutate({ data: { id } }),

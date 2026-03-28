@@ -8,4 +8,5 @@
 
 export interface SetNameRequest {
   name: string;
+  schwierigkeitsgrad: number;
 }
