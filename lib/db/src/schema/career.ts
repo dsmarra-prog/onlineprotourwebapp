@@ -43,6 +43,8 @@ export const careerTable = pgTable("career", {
   turnier_runden_log: jsonb("turnier_runden_log").notNull().default([]),
   aktuelle_serie: integer("aktuelle_serie").notNull().default(0),
   match_herausforderung: jsonb("match_herausforderung"),
+  social_follower: integer("social_follower").notNull().default(0),
+  nachrichten_feed: jsonb("nachrichten_feed").notNull().default([]),
 });
 
 export const insertCareerSchema = createInsertSchema(careerTable);

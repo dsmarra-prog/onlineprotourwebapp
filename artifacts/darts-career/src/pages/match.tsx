@@ -655,6 +655,38 @@ export default function MatchView() {
             </motion.div>
           )}
 
+          {/* Gegner Social Media Post */}
+          {(career as any).gegner_social_post && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.1 }}
+              className="bg-card border border-border/60 rounded-2xl p-4"
+            >
+              <div className="flex items-center gap-2 mb-3 text-xs text-muted-foreground/70">
+                <span className="font-mono font-bold text-primary/70 uppercase tracking-widest text-[10px]">
+                  {(career as any).gegner_social_post.quelle}
+                </span>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="shrink-0">
+                  <PlayerAvatar name={(career as any).gegner_social_post.autor} size={40} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className="font-bold text-white text-sm leading-none">
+                      {(career as any).gegner_social_post.autor}
+                    </span>
+                    <span className="text-xs text-muted-foreground/60">· Vor dem Match</span>
+                  </div>
+                  <p className="text-sm text-white/85 leading-relaxed">
+                    {(career as any).gegner_social_post.inhalt}
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {/* YouTube Walk-on */}
           {career.walk_on_video && (
             <motion.div

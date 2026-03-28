@@ -609,6 +609,128 @@ function getMomentumFaktor(serie: number): number {
   return 1.0;
 }
 
+// ─── Phase 2: Social Media & Nachrichten ─────────────────────────────────────
+
+function seededPick<T>(arr: T[], seed: string): T {
+  const hash = Array.from(seed).reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0);
+  return arr[Math.abs(hash) % arr.length];
+}
+
+function generateSocialPost(
+  gegner_name: string,
+  spieler_name: string,
+  career: any
+): { autor: string; inhalt: string; quelle: string } {
+  const h2hRecord = (career.h2h as any)[gegner_name] ?? { siege: 0, niederlagen: 0 };
+  const serie = career.aktuelle_serie ?? 0;
+  const ist_angstgegner = h2hRecord.niederlagen >= 3 && h2hRecord.niederlagen > h2hRecord.siege;
+  const seed = gegner_name + String(career.aktuelles_turnier_index ?? 0) + String(career.aktuelle_runde ?? 0);
+
+  let pool: string[];
+  if (ist_angstgegner) {
+    pool = [
+      `Wieder mal gegen ${spieler_name}. Kenne seinen Stil in- und auswendig. Freue mich drauf 😈`,
+      `${spieler_name} hat sich gut entwickelt – das gebe ich zu. Aber der direkte Vergleich spricht für mich. Let's go! 🎯`,
+      `Guten Morgen alle. Heute gegen ${spieler_name}. Ich kenne jede seiner Schwächen. 😏`,
+    ];
+  } else if (serie >= 3) {
+    pool = [
+      `Man redet viel über ${spieler_name} gerade... Mal sehen ob die Strähne heute Abend hält. 😏`,
+      `${spieler_name} spielt gut zuletzt – das stimmt. Aber heute testet er diese Form gegen mich. 💪`,
+      `Jeder Lauf endet irgendwann. Heute wäre ein guter Zeitpunkt dafür. 🏹`,
+    ];
+  } else if (h2hRecord.niederlagen > 0 && h2hRecord.niederlagen >= h2hRecord.siege) {
+    pool = [
+      `Letzte Begegnung gegen ${spieler_name} war schmerzhaft. Heute sieht das ganz anders aus! ⚡`,
+      `${spieler_name} hatte letztes Mal einfach Glück. Heute spielen wir es sauber durch. Rematch! 🏆`,
+      `Immer wieder gerne gegen ${spieler_name}. Letztes Mal war ein Ausrutscher. Heute nicht. 🎯`,
+    ];
+  } else {
+    pool = [
+      `Heute steht ${spieler_name} auf meiner Seite des Brackets. Konzentriert und bereit! 🎯`,
+      `Match heute gegen ${spieler_name}. Alles vorbereitet, Zeit zu liefern. 💪`,
+      `Freue mich auf das Spiel gegen ${spieler_name}. Gutes Match erwartet! 👊`,
+      `Fokus. Vorbereitung. Heute gegen ${spieler_name} – let's make it count! 🏹`,
+      `Anpfiff! Gegen ${spieler_name} heute. Gut vorbereitet und heiß auf das Match. ✅`,
+    ];
+  }
+
+  const inhalt = seededPick(pool, seed);
+  const quelle = seededPick(["X / Twitter", "Instagram"], seed + "q");
+  return { autor: gegner_name, inhalt, quelle };
+}
+
+const ZEITUNGS_QUELLEN = ["PDC Tour News", "Darts World", "Bulls Eye Blog", "Pro Darts Weekly"];
+const ZEITUNGS_AUTOREN = ["Martin Hoffmann", "Klaus Werner", "Stefan Braun", "Thomas Reuter", "Redaktion"];
+
+function generateZeitungsartikel(
+  spieler_name: string,
+  gegner_name: string,
+  win: boolean,
+  legs_won: number,
+  legs_lost: number,
+  my_avg: number,
+  my_180s: number,
+  my_hf: number,
+  turnier_name: string,
+  runde_name: string,
+  serie: number,
+  ist_turnier_sieg: boolean
+): { titel: string; inhalt: string; quelle: string; autor: string; wichtigkeit: "normal" | "hoch" } | null {
+  const quelle = ZEITUNGS_QUELLEN[Math.floor(Math.random() * ZEITUNGS_QUELLEN.length)];
+  const autor = ZEITUNGS_AUTOREN[Math.floor(Math.random() * ZEITUNGS_AUTOREN.length)];
+
+  if (ist_turnier_sieg) {
+    return {
+      titel: `🏆 TURNIERSIEG! ${spieler_name} gewinnt den ${turnier_name}`,
+      inhalt: `In einem dominanten Auftritt sichert sich ${spieler_name} den Titel beim ${turnier_name}. Im Finale gegen ${gegner_name} setzte sich der Spieler mit ${legs_won}:${legs_lost} durch. Starker Average von ${my_avg.toFixed(2)}.`,
+      quelle, autor, wichtigkeit: "hoch",
+    };
+  }
+  if (my_hf >= 150 && win) {
+    return {
+      titel: `Atemberaubend! ${spieler_name} checkt ${my_hf} beim ${turnier_name}`,
+      inhalt: `Beim ${turnier_name} sorgte ${spieler_name} für das Highlight des Tages. Ein ${my_hf}-Finish krönte den ${legs_won}:${legs_lost}-Sieg gegen ${gegner_name}. Average: ${my_avg.toFixed(2)}.`,
+      quelle, autor, wichtigkeit: "hoch",
+    };
+  }
+  if (my_hf >= 120 && win) {
+    return {
+      titel: `Spektakuläres ${my_hf}-Finish von ${spieler_name} beim ${turnier_name}`,
+      inhalt: `Mit einem beeindruckenden ${my_hf}-Checkout überraschte ${spieler_name} beim ${turnier_name} und bezwang ${gegner_name} mit ${legs_won}:${legs_lost}. Average: ${my_avg.toFixed(2)}.`,
+      quelle, autor, wichtigkeit: "hoch",
+    };
+  }
+  if (my_180s >= 3 && win) {
+    return {
+      titel: `${my_180s}× Maximum! ${spieler_name} dominiert ${gegner_name} beim ${turnier_name}`,
+      inhalt: `Mit ${my_180s} perfekten Aufnahmen zeigte ${spieler_name} eine außergewöhnliche Leistung beim ${turnier_name}. ${legs_won}:${legs_lost}-Sieg gegen ${gegner_name}. Average: ${my_avg.toFixed(2)}.`,
+      quelle, autor, wichtigkeit: "hoch",
+    };
+  }
+  if (serie >= 5 && win) {
+    return {
+      titel: `Heiße Strähne: ${spieler_name} feiert ${serie}. Sieg in Folge beim ${turnier_name}`,
+      inhalt: `${spieler_name} ist nicht zu stoppen! Mit dem ${legs_won}:${legs_lost}-Triumph gegen ${gegner_name} beim ${turnier_name} setzt der Spieler seine beeindruckende Serie fort.`,
+      quelle, autor, wichtigkeit: "hoch",
+    };
+  }
+  if (win) {
+    if (Math.random() > 0.65) return null;
+    const templates = [
+      { titel: `${spieler_name} souverän: ${legs_won}:${legs_lost} gegen ${gegner_name} beim ${turnier_name}`, inhalt: `Im ${runde_name} des ${turnier_name} überzeugte ${spieler_name} gegen ${gegner_name}. Average: ${my_avg.toFixed(2)}.` },
+      { titel: `Solide Leistung: ${spieler_name} schlägt ${gegner_name} und zieht weiter`, inhalt: `${spieler_name} passiert die ${runde_name} beim ${turnier_name} mit einem ${legs_won}:${legs_lost}-Sieg über ${gegner_name}. Average: ${my_avg.toFixed(2)}.` },
+    ];
+    return { ...templates[Math.floor(Math.random() * templates.length)], quelle, autor, wichtigkeit: "normal" };
+  }
+  if (Math.random() > 0.4) return null;
+  return {
+    titel: `${spieler_name} scheidet im ${runde_name} beim ${turnier_name} aus`,
+    inhalt: `${legs_won}:${legs_lost}-Niederlage für ${spieler_name} gegen ${gegner_name} beim ${turnier_name}. Average: ${my_avg.toFixed(2)}.`,
+    quelle, autor, wichtigkeit: "normal",
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 function generiereGegner(career: any) {
@@ -905,8 +1027,12 @@ export async function startMatch() {
   else if (serie <= -3) msgs.push(`❄️ ${Math.abs(serie)} Niederlagen in Folge. Gegner greift selbstsicher an (+${Math.round((momentumFaktor - 1) * 100)}% AVG).`);
   if (ist_angstgegner) msgs.push(`⚠️ Angstgegner: ${gegner_name} hat dich bereits ${h2hRecord.niederlagen}x besiegt!`);
 
-  // Phase 1: Generate per-match challenge
-  updates.match_herausforderung = generateMatchHerausforderung(career.spieler_avg ?? 60);
+  // Phase 1: Generate per-match challenge – only if player has an active sponsor
+  if (career.aktiver_sponsor) {
+    updates.match_herausforderung = generateMatchHerausforderung(career.spieler_avg ?? 60);
+  } else {
+    updates.match_herausforderung = null;
+  }
 
   await saveCareer(updates);
   return { career: await getOrCreateCareer(), messages: msgs };
@@ -1026,6 +1152,10 @@ export async function processResult(
   updates.turnier_runden_log = runden_log;
 
   msgs.push(`📊 Ergebnis eingetragen: ${legs_won} : ${legs_lost}`);
+
+  // Phase 2: Detect tournament win for articles + follower bonus
+  const istTurnierSieg = win && career.hat_tourcard && neuerBaum.length === 1;
+  const aktuellRundenName = getRundenInfo(turnier_baum, career.hat_tourcard, career.aktuelles_turnier_index).name;
 
   let turnier_sieger: string | undefined;
   if (!win && career.hat_tourcard) {
@@ -1204,6 +1334,35 @@ export async function processResult(
 
   updates.achievements = achievements;
 
+  // Phase 2: Social follower updates
+  let followerZuwachs = win ? 50 : 5;
+  followerZuwachs += my_180s * 15;
+  if (my_hf >= 150) followerZuwachs += 200;
+  else if (my_hf >= 120) followerZuwachs += 100;
+  else if (my_hf >= 100) followerZuwachs += 60;
+  const neueSerie = updates.aktuelle_serie ?? 0;
+  if (neueSerie === 3) followerZuwachs += 100;
+  if (neueSerie === 5) followerZuwachs += 200;
+  if (istTurnierSieg) followerZuwachs += 500;
+  updates.social_follower = (career.social_follower ?? 0) + followerZuwachs;
+
+  // Phase 2: Zeitungsartikel generieren und in Feed prependen
+  const turniername = career.hat_tourcard
+    ? KALENDER[career.aktuelles_turnier_index]?.name ?? ""
+    : `Q-School`;
+  const artikel = generateZeitungsartikel(
+    career.spieler_name, gegner_name, win, legs_won, legs_lost,
+    my_avg, my_180s, my_hf, turniername, aktuellRundenName,
+    neueSerie, istTurnierSieg
+  );
+  if (artikel) {
+    const feed = [...((career.nachrichten_feed ?? []) as any[])];
+    updates.nachrichten_feed = [
+      { ...artikel, datum: new Date().toISOString(), id: Date.now().toString() },
+      ...feed,
+    ].slice(0, 20);
+  }
+
   await saveCareer(updates);
   return { career: await getOrCreateCareer(), messages: msgs };
 }
@@ -1312,6 +1471,12 @@ export function buildCareerState(career: any) {
       const h2hRec = (career.h2h as any)[career.gegner_name ?? ""] ?? { siege: 0, niederlagen: 0 };
       return h2hRec.niederlagen >= 3 && h2hRec.niederlagen > h2hRec.siege;
     })(),
+    // Phase 2: Social & News
+    social_follower: career.social_follower ?? 0,
+    nachrichten_feed: ((career.nachrichten_feed ?? []) as any[]).slice(0, 20),
+    gegner_social_post: career.turnier_laeuft && career.gegner_name
+      ? generateSocialPost(career.gegner_name, career.spieler_name, career)
+      : null,
   };
 }
 

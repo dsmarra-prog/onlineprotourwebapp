@@ -5,9 +5,16 @@ import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Trophy, Banknote, Target, TrendingUp, Medal, PlayCircle,
-  AlertCircle, ChevronRight, Zap,
+  AlertCircle, ChevronRight, Zap, Users, Newspaper,
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
+
+function formatFollower(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toString();
+}
 
 function avgToLevel(avg: number): number {
   return Math.max(1, Math.min(11, Math.round(avg / 10) - 1));
@@ -307,10 +314,21 @@ export default function Dashboard() {
                     <span className="text-muted-foreground">Siege</span>
                     <span className="font-bold">{career.stats_siege} / {career.stats_spiele} ({career.quote}%)</span>
                   </div>
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-center border-b border-border pb-3">
                     <span className="text-muted-foreground">Höchstes Finish</span>
                     <span className={`font-bold ${career.stats_highest_finish >= 170 ? 'text-yellow-400' : career.stats_highest_finish >= 100 ? 'text-primary' : ''}`}>
                       {career.stats_highest_finish || "–"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5" /> Follower
+                    </span>
+                    <span className={`font-bold font-mono ${
+                      (career as any).social_follower >= 10000 ? "text-primary" :
+                      (career as any).social_follower >= 1000 ? "text-green-400" : ""
+                    }`}>
+                      {formatFollower((career as any).social_follower ?? 0)}
                     </span>
                   </div>
                 </div>
@@ -367,6 +385,50 @@ export default function Dashboard() {
                 ))}
               </div>
             </div>
+
+            {/* Pressenachrichten / Nachrichten-Feed */}
+            {((career as any).nachrichten_feed?.length ?? 0) > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-card border border-border rounded-2xl p-6"
+              >
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="p-3 bg-primary/10 rounded-xl">
+                    <Newspaper className="w-5 h-5 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-display font-bold">Pressenachrichten</h3>
+                  <span className="ml-auto text-xs text-muted-foreground bg-secondary px-2.5 py-1 rounded-full">
+                    {(career as any).nachrichten_feed.length} Artikel
+                  </span>
+                </div>
+                <div className="space-y-3">
+                  {(career as any).nachrichten_feed.slice(0, 5).map((item: any, i: number) => (
+                    <motion.div
+                      key={item.id ?? i}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      className={`rounded-xl p-4 border transition-colors ${
+                        item.wichtigkeit === "hoch"
+                          ? "bg-primary/5 border-primary/30 shadow-[0_0_8px_rgba(0,210,255,0.04)]"
+                          : "bg-secondary/20 border-border/50"
+                      }`}
+                    >
+                      <h4 className={`font-bold text-sm leading-snug mb-1.5 ${item.wichtigkeit === "hoch" ? "text-white" : "text-white/85"}`}>
+                        {item.titel}
+                      </h4>
+                      <p className="text-xs text-muted-foreground leading-relaxed">{item.inhalt}</p>
+                      <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground/50 font-mono uppercase tracking-wide">
+                        <span>{item.quelle}</span>
+                        <span>·</span>
+                        <span>{item.autor}</span>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
           </div>
 
           <div className="space-y-6">

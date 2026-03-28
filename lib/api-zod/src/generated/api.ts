@@ -103,6 +103,9 @@ export const GetCareerResponse = zod.object({
   aktuelle_serie: zod.number().optional(),
   match_herausforderung: zod.record(zod.any()).nullable().optional(),
   ist_angstgegner: zod.boolean().optional(),
+  social_follower: zod.number().optional(),
+  nachrichten_feed: zod.array(zod.any()).optional(),
+  gegner_social_post: zod.record(zod.any()).nullable().optional(),
 });
 
 /**
@@ -195,6 +198,9 @@ export const StartMatchResponse = zod.object({
   aktuelle_serie: zod.number().optional(),
   match_herausforderung: zod.record(zod.any()).nullable().optional(),
   ist_angstgegner: zod.boolean().optional(),
+  social_follower: zod.number().optional(),
+  nachrichten_feed: zod.array(zod.any()).optional(),
+  gegner_social_post: zod.record(zod.any()).nullable().optional(),
   }),
   messages: zod.array(zod.string()),
 });
@@ -298,6 +304,9 @@ export const SubmitResultResponse = zod.object({
   aktuelle_serie: zod.number().optional(),
   match_herausforderung: zod.record(zod.any()).nullable().optional(),
   ist_angstgegner: zod.boolean().optional(),
+  social_follower: zod.number().optional(),
+  nachrichten_feed: zod.array(zod.any()).optional(),
+  gegner_social_post: zod.record(zod.any()).nullable().optional(),
   }),
   messages: zod.array(zod.string()),
 });
@@ -392,6 +401,9 @@ export const PullAutodartsResponse = zod.object({
   aktuelle_serie: zod.number().optional(),
   match_herausforderung: zod.record(zod.any()).nullable().optional(),
   ist_angstgegner: zod.boolean().optional(),
+  social_follower: zod.number().optional(),
+  nachrichten_feed: zod.array(zod.any()).optional(),
+  gegner_social_post: zod.record(zod.any()).nullable().optional(),
   }),
   messages: zod.array(zod.string()),
 });
@@ -486,6 +498,9 @@ export const ResetCareerResponse = zod.object({
   aktuelle_serie: zod.number().optional(),
   match_herausforderung: zod.record(zod.any()).nullable().optional(),
   ist_angstgegner: zod.boolean().optional(),
+  social_follower: zod.number().optional(),
+  nachrichten_feed: zod.array(zod.any()).optional(),
+  gegner_social_post: zod.record(zod.any()).nullable().optional(),
   }),
   messages: zod.array(zod.string()),
 });
@@ -586,6 +601,9 @@ export const SetPlayerNameResponse = zod.object({
   aktuelle_serie: zod.number().optional(),
   match_herausforderung: zod.record(zod.any()).nullable().optional(),
   ist_angstgegner: zod.boolean().optional(),
+  social_follower: zod.number().optional(),
+  nachrichten_feed: zod.array(zod.any()).optional(),
+  gegner_social_post: zod.record(zod.any()).nullable().optional(),
   }),
   messages: zod.array(zod.string()),
 });
@@ -751,6 +769,9 @@ export const BuyEquipmentResponse = zod.object({
   aktuelle_serie: zod.number().optional(),
   match_herausforderung: zod.record(zod.any()).nullable().optional(),
   ist_angstgegner: zod.boolean().optional(),
+  social_follower: zod.number().optional(),
+  nachrichten_feed: zod.array(zod.any()).optional(),
+  gegner_social_post: zod.record(zod.any()).nullable().optional(),
   }),
   messages: zod.array(zod.string()),
 });
