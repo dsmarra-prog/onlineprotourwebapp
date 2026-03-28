@@ -1,0 +1,19 @@
+packages:
+  "framer-motion": "For epic slide-in and smooth page transitions"
+  "react-hook-form": "For robust match result form handling"
+  "@hookform/resolvers": "Zod validation integration for forms"
+  "lucide-react": "For beautiful sports and UI icons"
+  "clsx": "For conditional class names"
+  "tailwind-merge": "For merging tailwind classes safely"
+
+images:
+  - path: "artifacts/darts-career/public/images/darts-bg.png"
+    description: "Dark, atmospheric professional darts board background with subtle neon cyan lighting and deep shadows, out of focus"
+    aspect_ratio: "16:9"
+  - path: "artifacts/darts-career/public/images/logo.png"
+    description: "Minimalist modern darts tournament logo, featuring a sleek dart hitting a bullseye, neon cyan line art on transparent background"
+    aspect_ratio: "1:1"
+
+notes:
+  - App relies on @workspace/api-client-react for TanStack Query hooks.
+  - Using dark mode professional theme with neon cyan accents.

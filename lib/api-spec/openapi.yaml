@@ -1,22 +1,22 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: PDC Darts Career Mode API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: career
+    description: Career management
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +24,78 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /career:
+    get:
+      operationId: getCareer
+      tags: [career]
+      summary: Get full career state
+      responses:
+        "200":
+          description: Career state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CareerState"
+
+  /career/start:
+    post:
+      operationId: startMatch
+      tags: [career]
+      summary: Start the next tournament match
+      responses:
+        "200":
+          description: Updated career state with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CareerResponse"
+
+  /career/result:
+    post:
+      operationId: submitResult
+      tags: [career]
+      summary: Submit match result
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MatchResult"
+      responses:
+        "200":
+          description: Updated career state with messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CareerResponse"
+
+  /career/autodarts:
+    post:
+      operationId: pullAutodarts
+      tags: [career]
+      summary: Pull latest match result from Autodarts API
+      responses:
+        "200":
+          description: Result pulled from Autodarts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CareerResponse"
+
+  /career/reset:
+    post:
+      operationId: resetCareer
+      tags: [career]
+      summary: Reset career to beginning
+      responses:
+        "200":
+          description: Reset complete
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CareerResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +106,222 @@ components:
       required:
         - status
 
+    MatchResult:
+      type: object
+      properties:
+        legs_won:
+          type: integer
+        legs_lost:
+          type: integer
+        my_avg:
+          type: number
+        my_180s:
+          type: integer
+        my_hf:
+          type: integer
+        my_co_pct:
+          type: number
+      required:
+        - legs_won
+        - legs_lost
+
+    RoundInfo:
+      type: object
+      properties:
+        name:
+          type: string
+        first_to:
+          type: integer
+        format:
+          type: string
+      required:
+        - name
+        - first_to
+        - format
+
+    Matchup:
+      type: object
+      properties:
+        player1:
+          type: string
+        player2:
+          type: string
+      required:
+        - player1
+        - player2
+
+    OomEntry:
+      type: object
+      properties:
+        name:
+          type: string
+        geld:
+          type: integer
+      required:
+        - name
+        - geld
+
+    Achievement:
+      type: object
+      properties:
+        name:
+          type: string
+        desc:
+          type: string
+        unlocked:
+          type: boolean
+      required:
+        - name
+        - desc
+        - unlocked
+
+    Headline:
+      type: object
+      properties:
+        titel:
+          type: string
+        text:
+          type: string
+      required:
+        - titel
+        - text
+
+    Sponsor:
+      type: object
+      properties:
+        name:
+          type: string
+        ziel_typ:
+          type: string
+        ziel_wert:
+          type: integer
+        aktuell:
+          type: integer
+        turniere_zeit:
+          type: integer
+        belohnung:
+          type: integer
+        text:
+          type: string
+      required:
+        - name
+        - ziel_typ
+        - ziel_wert
+        - aktuell
+        - turniere_zeit
+        - belohnung
+        - text
+
+    CareerState:
+      type: object
+      properties:
+        spieler_name:
+          type: string
+        hat_tourcard:
+          type: boolean
+        q_school_punkte:
+          type: integer
+        order_of_merit_geld:
+          type: integer
+        bank_konto:
+          type: integer
+        saison_jahr:
+          type: integer
+        turnier_laeuft:
+          type: boolean
+        aktuelle_runde:
+          type: integer
+        gegner_name:
+          type: string
+        gegner_avg:
+          type: number
+        stats_spiele:
+          type: integer
+        stats_siege:
+          type: integer
+        stats_legs_won:
+          type: integer
+        stats_legs_lost:
+          type: integer
+        stats_180s:
+          type: integer
+        stats_highest_finish:
+          type: integer
+        achievements:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Achievement"
+        aktiver_sponsor:
+          $ref: "#/components/schemas/Sponsor"
+          nullable: true
+        letzte_schlagzeile:
+          $ref: "#/components/schemas/Headline"
+          nullable: true
+        platz:
+          type: integer
+        turnier_name:
+          type: string
+        quote:
+          type: number
+        gesamt_avg:
+          type: number
+        gesamt_co:
+          type: number
+        oom:
+          type: array
+          items:
+            $ref: "#/components/schemas/OomEntry"
+        runden_info:
+          $ref: "#/components/schemas/RoundInfo"
+        matchups:
+          type: array
+          items:
+            $ref: "#/components/schemas/Matchup"
+        h2h_siege:
+          type: integer
+        h2h_niederlagen:
+          type: integer
+        walk_on_video:
+          type: string
+          nullable: true
+      required:
+        - spieler_name
+        - hat_tourcard
+        - q_school_punkte
+        - order_of_merit_geld
+        - bank_konto
+        - saison_jahr
+        - turnier_laeuft
+        - aktuelle_runde
+        - gegner_name
+        - gegner_avg
+        - stats_spiele
+        - stats_siege
+        - stats_legs_won
+        - stats_legs_lost
+        - stats_180s
+        - stats_highest_finish
+        - achievements
+        - platz
+        - turnier_name
+        - quote
+        - gesamt_avg
+        - gesamt_co
+        - oom
+        - runden_info
+        - matchups
+        - h2h_siege
+        - h2h_niederlagen
+
+    CareerResponse:
+      type: object
+      properties:
+        career:
+          $ref: "#/components/schemas/CareerState"
+        messages:
+          type: array
+          items:
+            type: string
+      required:
+        - career
+        - messages

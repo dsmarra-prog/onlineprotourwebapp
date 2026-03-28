@@ -48,6 +48,17 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 - `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
 - `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
 
+## Artifacts
+
+### `artifacts/darts-career` (`@workspace/darts-career`)
+
+React + Vite frontend for the PDC Darts Career Mode game. All UI in German.
+
+- Pages: `src/pages/dashboard.tsx` (career overview), `src/pages/match.tsx` (live match view)
+- Hooks: `src/hooks/use-career.ts` (API integration)
+- Served at `/` (root preview path)
+- Dark theme, neon cyan accent color scheme
+
 ## Packages
 
 ### `artifacts/api-server` (`@workspace/api-server`)

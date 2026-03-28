@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "PDC Karriere Modus"
+version = "1.0.0"
+id = "artifacts/darts-career"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21861
+
+[services.development]
+run = "pnpm --filter @workspace/darts-career run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/darts-career", "run", "build" ]
+publicDir = "artifacts/darts-career/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21861"
+BASE_PATH = "/"
