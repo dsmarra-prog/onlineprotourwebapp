@@ -280,22 +280,36 @@ function ConnectInstructions({ command, copied, onCopy }: {
   return (
     <div className="space-y-3">
       <p className="text-xs font-semibold text-foreground">So verbindest du deinen Account:</p>
-      <ol className="text-xs text-muted-foreground space-y-2">
+      <ol className="text-xs text-muted-foreground space-y-2.5">
         <li className="flex gap-2">
           <span className="text-primary font-bold shrink-0">1.</span>
           <span>Öffne <span className="font-mono text-foreground">play.autodarts.io</span> im Browser und logge dich ein</span>
         </li>
         <li className="flex gap-2">
           <span className="text-primary font-bold shrink-0">2.</span>
-          <span>Drücke <span className="font-mono bg-muted px-1 rounded">F12</span> → Tab <span className="font-mono bg-muted px-1 rounded">Konsole</span></span>
+          <span>
+            Drücke die Taste <span className="font-mono bg-muted px-1 rounded">F12</span> auf deiner Tastatur — ein graues Panel öffnet sich am Rand des Browsers
+          </span>
         </li>
         <li className="flex gap-2">
           <span className="text-primary font-bold shrink-0">3.</span>
-          <span>Füge den kopierten Befehl ein und drücke <span className="font-mono bg-muted px-1 rounded">Enter</span></span>
+          <span>
+            Klicke oben im Panel auf den Reiter <span className="font-mono bg-muted px-1 rounded">Console</span> (auf Deutsch: <span className="font-mono bg-muted px-1 rounded">Konsole</span>)
+          </span>
         </li>
         <li className="flex gap-2">
           <span className="text-primary font-bold shrink-0">4.</span>
-          <span>Gib deinen Online Pro Tour PIN ein — fertig!</span>
+          <span>
+            Unten siehst du eine Eingabezeile die mit <span className="font-mono bg-muted px-1 rounded">&gt;</span> beginnt — klicke dort hinein
+          </span>
+        </li>
+        <li className="flex gap-2">
+          <span className="text-primary font-bold shrink-0">5.</span>
+          <span>Füge den kopierten Befehl mit <span className="font-mono bg-muted px-1 rounded">Strg+V</span> ein und drücke <span className="font-mono bg-muted px-1 rounded">Enter</span></span>
+        </li>
+        <li className="flex gap-2">
+          <span className="text-primary font-bold shrink-0">6.</span>
+          <span>Ein Fenster fragt nach deinem PIN — eingeben und bestätigen. Fertig!</span>
         </li>
       </ol>
 
