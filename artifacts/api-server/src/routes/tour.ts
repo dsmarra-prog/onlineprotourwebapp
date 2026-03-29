@@ -906,7 +906,7 @@ async function getAutodartAccessToken(): Promise<string | null> {
 // Autodarts uses two relevant endpoints:
 // 1. as/v0/matches/filter — recently COMPLETED matches for the authed user
 // 2. gs/v0/lobbies        — currently ACTIVE lobbies/games (all visible lobbies)
-const AD_MATCHES_URL = "https://api.autodarts.io/as/v0/matches/filter?size=20&page=0&sort=-finished_at";
+const AD_MATCHES_URL = "https://api.autodarts.io/as/v0/matches/filter?size=50&page=0&sort=-finished_at";
 const AD_LOBBIES_URL = "https://api.autodarts.io/gs/v0/lobbies";
 
 function parseAdItems(data: any): any[] {
