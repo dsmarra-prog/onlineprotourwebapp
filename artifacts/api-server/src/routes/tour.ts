@@ -947,7 +947,10 @@ async function fetchAutodartMatches(accessToken: string): Promise<{ completed: a
 
 function findAdMatch(matches: any[], username1: string, username2: string): any | null {
   return matches.find((m: any) => {
-    const names = (m.players || []).map((p: any) => (p.name ?? p.displayName ?? "").toLowerCase());
+    // Autodarts uses p.name on completed matches, p.user.name on lobby objects
+    const names = (m.players || []).map((p: any) =>
+      (p.name ?? p.user?.name ?? p.displayName ?? "").toLowerCase()
+    );
     return names.includes(username1.toLowerCase()) && names.includes(username2.toLowerCase());
   }) ?? null;
 }
@@ -965,7 +968,7 @@ function isMatchComplete(adMatch: any, winLegs: number): boolean {
 function getMatchScore(adMatch: any, username1: string, username2: string) {
   const players: any[] = adMatch.players || [];
   const scores: any[] = adMatch.scores || [];           // scores[player.index] = { legs, sets }
-  const normalize = (p: any) => (p.name ?? p.displayName ?? "").toLowerCase();
+  const normalize = (p: any) => (p.name ?? p.user?.name ?? p.displayName ?? "").toLowerCase();
   const p1 = players.find((p) => normalize(p) === username1.toLowerCase());
   const p2 = players.find((p) => normalize(p) === username2.toLowerCase());
   const s1 = p1 !== undefined ? (scores[p1.index] ?? {}) : {};
