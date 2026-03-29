@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Settings, CheckCircle, Loader2, Target, KeyRound, RefreshCw, ShieldCheck, LogOut,
   User, Link2, Link2Off, ChevronDown, Wifi, WifiOff, Copy, Check, ExternalLink,
+  Terminal, ClipboardPaste,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,7 +42,28 @@ export default function EinstellungenPage() {
   const [disconnectPin, setDisconnectPin] = useState("");
   const [connectPin, setConnectPin] = useState("");
   const [connectStep, setConnectStep] = useState<"form" | "script">("form");
+  const [connectMode, setConnectMode] = useState<"auto" | "manual">("auto");
+  const [manualToken, setManualToken] = useState("");
   const [copied, setCopied] = useState(false);
+
+  const manualConnectMut = useMutation({
+    mutationFn: () =>
+      apiFetch<{ ok: boolean; message?: string; error?: string }>(
+        `/tour/players/${currentPlayer!.id}/autodarts-connect`,
+        { method: "POST", body: JSON.stringify({ token: manualToken.trim(), pin: connectPin }) }
+      ),
+    onSuccess: (data) => {
+      if (data.ok) {
+        toast({ title: "Verbunden!", description: data.message ?? "Autodarts erfolgreich verbunden." });
+        setConnectStep("form");
+        setManualToken("");
+        queryClient.invalidateQueries({ queryKey: ["autodarts-status", currentPlayer?.id] });
+      } else {
+        toast({ title: "Fehler", description: data.error, variant: "destructive" });
+      }
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
 
   const { data: adStatus, isLoading: statusLoading } = useQuery({
     queryKey: ["autodarts-status", currentPlayer?.id],
@@ -199,8 +221,12 @@ export default function EinstellungenPage() {
                 <ConnectFlow
                   pin={connectPin} onPinChange={setConnectPin}
                   step={connectStep} onStart={handleStartConnect}
-                  onBack={() => setConnectStep("form")}
+                  onBack={() => { setConnectStep("form"); setConnectMode("auto"); setManualToken(""); }}
                   script={connectScript} copied={copied} onCopy={handleCopyScript}
+                  mode={connectMode} onModeChange={setConnectMode}
+                  manualToken={manualToken} onManualTokenChange={setManualToken}
+                  onManualSubmit={() => manualConnectMut.mutate()}
+                  manualPending={manualConnectMut.isPending}
                 />
               </div>
             </>
@@ -213,8 +239,12 @@ export default function EinstellungenPage() {
               <ConnectFlow
                 pin={connectPin} onPinChange={setConnectPin}
                 step={connectStep} onStart={handleStartConnect}
-                onBack={() => setConnectStep("form")}
+                onBack={() => { setConnectStep("form"); setConnectMode("auto"); setManualToken(""); }}
                 script={connectScript} copied={copied} onCopy={handleCopyScript}
+                mode={connectMode} onModeChange={setConnectMode}
+                manualToken={manualToken} onManualTokenChange={setManualToken}
+                onManualSubmit={() => manualConnectMut.mutate()}
+                manualPending={manualConnectMut.isPending}
               />
             </>
           )}
@@ -303,6 +333,7 @@ export default function EinstellungenPage() {
 
 function ConnectFlow({
   pin, onPinChange, step, onStart, onBack, script, copied, onCopy,
+  mode, onModeChange, manualToken, onManualTokenChange, onManualSubmit, manualPending,
 }: {
   pin: string;
   onPinChange: (v: string) => void;
@@ -312,6 +343,12 @@ function ConnectFlow({
   script: string;
   copied: boolean;
   onCopy: () => void;
+  mode: "auto" | "manual";
+  onModeChange: (m: "auto" | "manual") => void;
+  manualToken: string;
+  onManualTokenChange: (v: string) => void;
+  onManualSubmit: () => void;
+  manualPending: boolean;
 }) {
   if (step === "form") {
     return (
@@ -342,45 +379,121 @@ function ConnectFlow({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
-        <CheckCircle className="w-4 h-4 text-primary shrink-0" />
-        <p className="text-xs text-muted-foreground">
-          play.autodarts.io wurde in einem neuen Tab geöffnet. Folge den Schritten:
-        </p>
+      {/* Mode tabs */}
+      <div className="flex gap-1 p-1 bg-muted rounded-lg">
+        <button
+          onClick={() => onModeChange("auto")}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            mode === "auto"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Terminal className="w-3.5 h-3.5" /> Console-Script
+        </button>
+        <button
+          onClick={() => onModeChange("manual")}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+            mode === "manual"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <ClipboardPaste className="w-3.5 h-3.5" /> Manuell einfügen
+        </button>
       </div>
 
-      <ol className="text-xs text-muted-foreground space-y-2">
-        <li className="flex gap-2">
-          <span className="text-primary font-bold shrink-0">1.</span>
-          <span>Stelle sicher, dass du auf <span className="font-mono text-foreground">play.autodarts.io</span> eingeloggt bist</span>
-        </li>
-        <li className="flex gap-2">
-          <span className="text-primary font-bold shrink-0">2.</span>
-          <span>Drücke <span className="font-mono bg-muted px-1 rounded">F12</span> → Reiter <span className="font-mono bg-muted px-1 rounded">Console</span></span>
-        </li>
-        <li className="flex gap-2">
-          <span className="text-primary font-bold shrink-0">3.</span>
-          <span>Kopiere den Befehl unten, füge ihn ein und drücke <span className="font-mono bg-muted px-1 rounded">Enter</span></span>
-        </li>
-        <li className="flex gap-2">
-          <span className="text-primary font-bold shrink-0">4.</span>
-          <span>
-            Falls die Konsole sagt <span className="font-mono bg-muted px-1 rounded text-primary">⏳ Warte auf Token</span> — klicke einmal auf eine Lobby oder navigiere kurz auf der Seite. Du wirst dann <span className="text-foreground font-medium">automatisch zurückgeleitet</span>.
-          </span>
-        </li>
-      </ol>
+      {mode === "auto" ? (
+        <>
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
+            <CheckCircle className="w-4 h-4 text-primary shrink-0" />
+            <p className="text-xs text-muted-foreground">
+              play.autodarts.io wurde geöffnet. Folge den Schritten:
+            </p>
+          </div>
 
-      <button
-        onClick={onCopy}
-        className="w-full flex items-center justify-between gap-2 p-3 rounded-lg bg-muted/50 hover:bg-muted border border-border hover:border-primary/30 transition-colors"
-      >
-        <span className="font-mono text-xs text-muted-foreground truncate text-left">
-          {script.slice(0, 55)}…
-        </span>
-        <span className="shrink-0 flex items-center gap-1.5 text-xs font-semibold text-primary">
-          {copied ? <><Check className="w-4 h-4" /> Kopiert!</> : <><Copy className="w-4 h-4" /> Kopieren</>}
-        </span>
-      </button>
+          <ol className="text-xs text-muted-foreground space-y-2">
+            <li className="flex gap-2">
+              <span className="text-primary font-bold shrink-0">1.</span>
+              <span>Einloggen auf <span className="font-mono text-foreground">play.autodarts.io</span></span>
+            </li>
+            <li className="flex gap-2">
+              <span className="text-primary font-bold shrink-0">2.</span>
+              <span><span className="font-mono bg-muted px-1 rounded">F12</span> → Reiter <span className="font-mono bg-muted px-1 rounded">Console</span></span>
+            </li>
+            <li className="flex gap-2">
+              <span className="text-primary font-bold shrink-0">3.</span>
+              <span>Befehl einfügen und <span className="font-mono bg-muted px-1 rounded">Enter</span> drücken</span>
+            </li>
+            <li className="flex gap-2">
+              <span className="text-primary font-bold shrink-0">4.</span>
+              <span>Du wirst automatisch zurückgeleitet. Falls nicht: <span className="text-foreground">Manuell einfügen</span> oben wählen.</span>
+            </li>
+          </ol>
+
+          <button
+            onClick={onCopy}
+            className="w-full flex items-center justify-between gap-2 p-3 rounded-lg bg-muted/50 hover:bg-muted border border-border hover:border-primary/30 transition-colors"
+          >
+            <span className="font-mono text-xs text-muted-foreground truncate text-left">
+              {script.slice(0, 55)}…
+            </span>
+            <span className="shrink-0 flex items-center gap-1.5 text-xs font-semibold text-primary">
+              {copied ? <><Check className="w-4 h-4" /> Kopiert!</> : <><Copy className="w-4 h-4" /> Kopieren</>}
+            </span>
+          </button>
+        </>
+      ) : (
+        <>
+          <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 space-y-2">
+            <p className="text-xs font-semibold text-amber-400">Token aus dem Netzwerk-Tab kopieren</p>
+            <ol className="text-xs text-muted-foreground space-y-1.5">
+              <li className="flex gap-2">
+                <span className="text-amber-400 font-bold shrink-0">1.</span>
+                <span>Öffne <span className="font-mono text-foreground">play.autodarts.io</span> und logge dich ein</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-amber-400 font-bold shrink-0">2.</span>
+                <span><span className="font-mono bg-muted px-1 rounded">F12</span> → Reiter <span className="font-mono bg-muted px-1 rounded">Network</span> (Netzwerk)</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-amber-400 font-bold shrink-0">3.</span>
+                <span>Seite neu laden (<span className="font-mono bg-muted px-1 rounded">F5</span>), dann im Filter <span className="font-mono bg-muted px-1 rounded">token</span> eingeben</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-amber-400 font-bold shrink-0">4.</span>
+                <span>POST-Request zu <span className="font-mono text-foreground">login.autodarts.io</span> anklicken → Tab <span className="font-mono bg-muted px-1 rounded">Response</span></span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-amber-400 font-bold shrink-0">5.</span>
+                <span>Den Wert von <span className="font-mono bg-muted px-1 rounded text-foreground">refresh_token</span> kopieren und unten einfügen</span>
+              </li>
+            </ol>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs">refresh_token einfügen</Label>
+            <Textarea
+              value={manualToken}
+              onChange={(e) => onManualTokenChange(e.target.value)}
+              placeholder="eyJhbGciO..."
+              className="font-mono text-xs h-20 resize-none"
+            />
+          </div>
+
+          <Button
+            className="w-full"
+            disabled={manualToken.trim().length < 20 || manualPending}
+            onClick={onManualSubmit}
+          >
+            {manualPending ? (
+              <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Wird verbunden...</>
+            ) : (
+              <><Link2 className="w-4 h-4 mr-2" /> Jetzt verbinden</>
+            )}
+          </Button>
+        </>
+      )}
 
       <button onClick={onBack} className="text-xs text-muted-foreground underline">
         ← Zurück
