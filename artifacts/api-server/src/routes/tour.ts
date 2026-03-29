@@ -13,6 +13,15 @@ import {
 } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import crypto from "crypto";
+import {
+  notifyRegistration,
+  notifyTournamentStart,
+  notifyMatchResult,
+  notifyTournamentComplete,
+  notifyOomUpdate,
+  getDiscordSettings,
+  saveDiscordSettings,
+} from "../discord.js";
 
 const router: IRouter = Router();
 
@@ -376,15 +385,20 @@ async function advanceWinner(tournamentId: number, currentRunde: string, matchNr
   }
 }
 
-async function checkTournamentComplete(tournamentId: number) {
+async function checkTournamentComplete(tournamentId: number): Promise<boolean> {
   const matches = await db.select().from(tourMatchesTable)
     .where(eq(tourMatchesTable.tournament_id, tournamentId));
   const final = matches.find((m) => m.runde === "F");
   if (final?.winner_id) {
-    await db.update(tourTournamentsTable)
-      .set({ status: "abgeschlossen" })
-      .where(eq(tourTournamentsTable.id, tournamentId));
+    const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
+    if (t[0]?.status !== "abgeschlossen") {
+      await db.update(tourTournamentsTable)
+        .set({ status: "abgeschlossen" })
+        .where(eq(tourTournamentsTable.id, tournamentId));
+      return true;
+    }
   }
+  return false;
 }
 
 // ─── Spielplan Routes ─────────────────────────────────────────────────────────
@@ -619,6 +633,7 @@ router.post("/tour/oom/seed", async (_req, res) => {
       return res.json({ ok: true, message: "OOM bereits befüllt", count: existing.length });
     }
     await db.insert(tourOomStandingsTable).values(OOM_SEED_DATA);
+    notifyOomUpdate("pro").catch(() => {});
     res.json({ ok: true, inserted: OOM_SEED_DATA.length });
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -753,7 +768,75 @@ router.post("/tour/dev-oom/update", async (req, res) => {
       last_updated: s.last_updated ?? new Date().toLocaleDateString("de-DE"),
     }));
     await db.insert(tourDevOomStandingsTable).values(rows);
+    notifyOomUpdate("dev").catch(() => {});
     res.json({ ok: true, inserted: rows.length });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// ─── Discord Settings Admin Endpoints ────────────────────────────────────────
+
+// GET /tour/admin/discord-settings
+router.get("/tour/admin/discord-settings", async (_req, res) => {
+  try {
+    const settings = await getDiscordSettings();
+    res.json({
+      webhook_url: settings.webhookUrl ? settings.webhookUrl.replace(/\/[^/]+$/, "/***") : "",
+      bot_token_set: !!(settings.botToken && settings.botToken.length > 10),
+      channel_id: settings.channelId ?? "",
+    });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/admin/discord-settings
+router.post("/tour/admin/discord-settings", async (req, res) => {
+  try {
+    const { admin_pin, webhook_url, bot_token, channel_id } = req.body;
+
+    const anyT = await db.select().from(tourTournamentsTable).limit(1);
+    if (!anyT[0] || !verifyPin(String(admin_pin), anyT[0].admin_pin)) {
+      return res.status(403).json({ error: "Falscher Admin-PIN" });
+    }
+
+    await saveDiscordSettings({
+      webhookUrl: webhook_url ?? "",
+      botToken: bot_token ?? "",
+      channelId: channel_id ?? "",
+    });
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/admin/discord-test - send a test message
+router.post("/tour/admin/discord-test", async (req, res) => {
+  try {
+    const { admin_pin } = req.body;
+    const anyT = await db.select().from(tourTournamentsTable).limit(1);
+    if (!anyT[0] || !verifyPin(String(admin_pin), anyT[0].admin_pin)) {
+      return res.status(403).json({ error: "Falscher Admin-PIN" });
+    }
+    const settings = await getDiscordSettings();
+    if (!settings.webhookUrl) return res.status(400).json({ error: "Kein Webhook-URL konfiguriert" });
+
+    await fetch(settings.webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        embeds: [{
+          color: 0xC8982E,
+          title: "✅ Discord-Verbindung erfolgreich!",
+          description: "Der **Online Pro Tour** Discord-Bot ist korrekt konfiguriert und bereit. Benachrichtigungen werden jetzt automatisch gesendet.",
+          timestamp: new Date().toISOString(),
+        }],
+      }),
+    });
+    res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
@@ -1067,6 +1150,17 @@ router.post("/tour/tournaments/:id/self-register", async (req, res) => {
     if (entries.length >= t[0].max_players) return res.status(400).json({ error: "Turnier ist voll" });
 
     await db.insert(tourEntriesTable).values({ tournament_id: tournamentId, player_id, seed: entries.length + 1 });
+
+    // Fire-and-forget Discord notification
+    notifyRegistration(
+      t[0].name,
+      tournamentId,
+      player[0].name,
+      player[0].autodarts_username ?? player[0].name,
+      entries.length + 1,
+      t[0].max_players,
+    ).catch(() => {});
+
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -1113,6 +1207,39 @@ router.post("/tour/tournaments/:id/start", async (req, res) => {
     const playerIds = entries.sort((a, b) => (a.seed ?? 0) - (b.seed ?? 0)).map((e) => e.player_id);
     await generateBracket(tournamentId, playerIds, t[0].legs_format);
 
+    // Fire-and-forget Discord notification + match threads
+    (async () => {
+      try {
+        const allMatches = await db.select().from(tourMatchesTable)
+          .where(eq(tourMatchesTable.tournament_id, tournamentId));
+        const firstRound = allMatches.length > 0
+          ? allMatches.reduce((acc, m) => {
+              const order = ["R64", "R32", "R16", "QF", "SF", "F"];
+              const aIdx = order.indexOf(acc);
+              const mIdx = order.indexOf(m.runde);
+              return mIdx < aIdx ? m.runde : acc;
+            }, "F")
+          : "R64";
+        const r1Matches = allMatches.filter((m) => m.runde === firstRound);
+
+        const playerMap = new Map<number, string>();
+        for (const entry of entries) {
+          const p = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, entry.player_id)).limit(1);
+          if (p[0]) playerMap.set(p[0].id, p[0].name);
+        }
+
+        const matchData = r1Matches.map((m) => ({
+          match_nr: m.match_nr,
+          runde: m.runde,
+          is_bye: m.is_bye ?? false,
+          player1_name: m.player1_id ? (playerMap.get(m.player1_id) ?? null) : null,
+          player2_name: m.player2_id ? (playerMap.get(m.player2_id) ?? null) : null,
+        }));
+
+        await notifyTournamentStart(t[0], matchData);
+      } catch { /* non-critical */ }
+    })();
+
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -1140,7 +1267,40 @@ router.post("/tour/matches/:matchId/result", async (req, res) => {
       .where(eq(tourMatchesTable.id, matchId));
 
     await advanceWinner(match[0].tournament_id, match[0].runde, match[0].match_nr, winner_id);
-    await checkTournamentComplete(match[0].tournament_id);
+    const wasComplete = await checkTournamentComplete(match[0].tournament_id);
+
+    // Fire-and-forget Discord notifications
+    (async () => {
+      try {
+        const [p1row, p2row, winnerRow] = await Promise.all([
+          match[0].player1_id
+            ? db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, match[0].player1_id)).limit(1)
+            : Promise.resolve([]),
+          match[0].player2_id
+            ? db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, match[0].player2_id)).limit(1)
+            : Promise.resolve([]),
+          db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, winner_id)).limit(1),
+        ]);
+        const p1Name = (p1row as any)[0]?.name ?? "Spieler 1";
+        const p2Name = (p2row as any)[0]?.name ?? "Spieler 2";
+        const winnerName = winnerRow[0]?.name ?? "Unbekannt";
+
+        await notifyMatchResult(
+          t[0].name,
+          match[0].runde,
+          p1Name,
+          p2Name,
+          score_p1 ?? 0,
+          score_p2 ?? 0,
+          winnerName,
+        );
+
+        if (wasComplete) {
+          const loserName = winner_id === match[0].player1_id ? p2Name : p1Name;
+          await notifyTournamentComplete(t[0].name, winnerName, loserName);
+        }
+      } catch { /* non-critical */ }
+    })();
 
     res.json({ ok: true });
   } catch (e) {

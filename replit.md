@@ -92,6 +92,11 @@ React + Vite frontend for the **Online Pro Tour Manager** — multi-player tourn
 - Nav: "Pro OOM" = `/oom`, "Dev OOM" = `/dev-oom` (Swords icon)
 - Spielplan page has "Turniere anlegen" admin button (POST seed-from-schedule with admin PIN)
 - DEV_OOM_SEED_DATA is empty by default; admin fills in actual data from onlineprotour.eu and it's inserted via POST /tour/dev-oom/seed
+- **Discord Integration**: `artifacts/api-server/src/discord.ts` — Webhook notifications + Bot API match threads
+  - Settings stored in `systemSettingsTable`: keys `discord_webhook_url`, `discord_bot_token`, `discord_channel_id`
+  - Admin endpoints: GET/POST `/api/tour/admin/discord-settings`, POST `/api/tour/admin/discord-test`
+  - Events hooked: self-register → registration notif, tournament start → start notif + R1 match threads, match result → result notif, tournament complete → winner notif, oom/dev-oom update → OOM notif
+  - Frontend: "Admin: Discord Integration" collapsible panel in Einstellungen page (`einstellungen.tsx`)
 
 ### `artifacts/darts-career` (`@workspace/darts-career`)
 

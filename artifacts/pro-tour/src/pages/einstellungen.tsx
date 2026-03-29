@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Settings, CheckCircle, Loader2, Target, KeyRound, RefreshCw, ShieldCheck, LogOut,
   User, Link2, Link2Off, ChevronDown, Wifi, WifiOff, Copy, Check, ExternalLink,
-  Terminal, ClipboardPaste,
+  Terminal, ClipboardPaste, MessageSquare, Bell, GitBranch, Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,47 @@ export default function EinstellungenPage() {
   // ── Admin token section ──────────────────────────────────────────────────
   const [tokenForm, setTokenForm] = useState({ pin: "", refresh_token: "" });
   const [tokenSectionOpen, setTokenSectionOpen] = useState(false);
+
+  // ── Discord settings ─────────────────────────────────────────────────────
+  const [discordOpen, setDiscordOpen] = useState(false);
+  const [discordForm, setDiscordForm] = useState({
+    admin_pin: "",
+    webhook_url: "",
+    bot_token: "",
+    channel_id: "",
+  });
+
+  const { data: discordStatus } = useQuery({
+    queryKey: ["discord-settings"],
+    queryFn: () => apiFetch<{ webhook_url: string; bot_token_set: boolean; channel_id: string }>(
+      "/tour/admin/discord-settings"
+    ),
+    staleTime: 60_000,
+  });
+
+  const discordSaveMut = useMutation({
+    mutationFn: () =>
+      apiFetch<{ ok: boolean }>("/tour/admin/discord-settings", {
+        method: "POST",
+        body: JSON.stringify(discordForm),
+      }),
+    onSuccess: () => {
+      toast({ title: "Discord gespeichert", description: "Einstellungen wurden aktualisiert." });
+      queryClient.invalidateQueries({ queryKey: ["discord-settings"] });
+      setDiscordForm((f) => ({ ...f, admin_pin: "", bot_token: "" }));
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const discordTestMut = useMutation({
+    mutationFn: () =>
+      apiFetch<{ ok: boolean }>("/tour/admin/discord-test", {
+        method: "POST",
+        body: JSON.stringify({ admin_pin: discordForm.admin_pin }),
+      }),
+    onSuccess: () => toast({ title: "Testnachricht gesendet!", description: "Schau in deinen Discord-Channel." }),
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
 
   const tokenMut = useMutation({
     mutationFn: () =>
@@ -269,6 +310,126 @@ export default function EinstellungenPage() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Admin: Discord Settings */}
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <button
+          className="w-full flex items-center justify-between p-4 text-left hover:bg-accent/30 transition-colors"
+          onClick={() => setDiscordOpen((o) => !o)}
+        >
+          <div className="flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-[#5865F2]" />
+            <span className="font-semibold text-sm">Admin: Discord Integration</span>
+            {discordStatus?.webhook_url && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-500/10 text-green-400 border border-green-500/20">
+                Aktiv
+              </span>
+            )}
+          </div>
+          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${discordOpen ? "rotate-180" : ""}`} />
+        </button>
+
+        {discordOpen && (
+          <div className="px-4 pb-4 space-y-5 border-t border-border pt-4">
+            <p className="text-xs text-muted-foreground">
+              Verbinde die Pro Tour mit deinem Discord-Server. Anmeldungen, Ergebnisse und OOM-Updates werden
+              automatisch in einen Channel gepostet. Optional: Match-Threads für Spielverabredungen.
+            </p>
+
+            {/* Status */}
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className={`flex items-center gap-1.5 p-2 rounded-lg border ${discordStatus?.webhook_url ? "bg-green-500/5 border-green-500/20 text-green-400" : "bg-muted border-border text-muted-foreground"}`}>
+                <Bell className="w-3.5 h-3.5 shrink-0" />
+                <span>{discordStatus?.webhook_url ? "Webhook aktiv" : "Webhook nicht gesetzt"}</span>
+              </div>
+              <div className={`flex items-center gap-1.5 p-2 rounded-lg border ${discordStatus?.bot_token_set ? "bg-green-500/5 border-green-500/20 text-green-400" : "bg-muted border-border text-muted-foreground"}`}>
+                <GitBranch className="w-3.5 h-3.5 shrink-0" />
+                <span>{discordStatus?.bot_token_set ? "Bot-Token aktiv" : "Kein Bot-Token"}</span>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="flex items-center gap-1.5 text-xs">
+                <ShieldCheck className="w-3 h-3" /> Admin-PIN
+              </Label>
+              <Input
+                type="password"
+                placeholder="Admin-PIN"
+                value={discordForm.admin_pin}
+                onChange={(e) => setDiscordForm((f) => ({ ...f, admin_pin: e.target.value }))}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Webhook-URL <span className="text-muted-foreground font-normal">(für Benachrichtigungen)</span></Label>
+              <Input
+                type="url"
+                placeholder="https://discord.com/api/webhooks/..."
+                value={discordForm.webhook_url}
+                onChange={(e) => setDiscordForm((f) => ({ ...f, webhook_url: e.target.value }))}
+                className="font-mono text-xs"
+              />
+              {discordStatus?.webhook_url && (
+                <p className="text-xs text-muted-foreground">Aktuell: <span className="font-mono">{discordStatus.webhook_url}</span></p>
+              )}
+              <p className="text-xs text-muted-foreground/60">
+                Discord-Server → Kanal-Einstellungen → Integrationen → Webhooks → Neuen Webhook erstellen
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Bot-Token <span className="text-muted-foreground font-normal">(optional, für Match-Threads)</span></Label>
+              <Input
+                type="password"
+                placeholder={discordStatus?.bot_token_set ? "••••••• (gesetzt)" : "MTI3..."}
+                value={discordForm.bot_token}
+                onChange={(e) => setDiscordForm((f) => ({ ...f, bot_token: e.target.value }))}
+                className="font-mono text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs">Channel-ID <span className="text-muted-foreground font-normal">(für Match-Threads)</span></Label>
+              <Input
+                placeholder={discordStatus?.channel_id || "123456789012345678"}
+                value={discordForm.channel_id}
+                onChange={(e) => setDiscordForm((f) => ({ ...f, channel_id: e.target.value }))}
+                className="font-mono text-xs"
+              />
+              <p className="text-xs text-muted-foreground/60">
+                Rechtsklick auf den Channel → "ID kopieren" (Entwicklermodus muss aktiv sein)
+              </p>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                disabled={discordForm.admin_pin.length < 4 || discordSaveMut.isPending}
+                onClick={() => discordSaveMut.mutate()}
+              >
+                {discordSaveMut.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                )}
+                Speichern
+              </Button>
+              <Button
+                variant="outline"
+                disabled={discordForm.admin_pin.length < 4 || !discordStatus?.webhook_url || discordTestMut.isPending}
+                onClick={() => discordTestMut.mutate()}
+                title="Testnachricht senden"
+              >
+                {discordTestMut.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Admin: Autodarts Global Token Update */}
