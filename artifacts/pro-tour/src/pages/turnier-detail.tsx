@@ -625,7 +625,7 @@ function MatchCard({
         <PlayerRow
           name={match.player1_name ?? "TBD"}
           score={isLive ? live.legs1 : match.score_p1}
-          avg={isLive && live.avg1 > 0 ? live.avg1 : null}
+          avg={isLive && live.avg1 > 0 ? live.avg1 : isComplete && match.avg_p1 ? match.avg_p1 : null}
           isWinner={match.winner_id === match.player1_id}
           isComplete={isComplete}
           isLive={isLive}
@@ -633,7 +633,7 @@ function MatchCard({
         <PlayerRow
           name={match.player2_name ?? "TBD"}
           score={isLive ? live.legs2 : match.score_p2}
-          avg={isLive && live.avg2 > 0 ? live.avg2 : null}
+          avg={isLive && live.avg2 > 0 ? live.avg2 : isComplete && match.avg_p2 ? match.avg_p2 : null}
           isWinner={match.winner_id === match.player2_id}
           isComplete={isComplete}
           isLive={isLive}

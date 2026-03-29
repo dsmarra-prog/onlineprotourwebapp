@@ -314,6 +314,8 @@ async function buildTournamentDetail(tournamentId: number) {
       winner_id: m.winner_id,
       score_p1: m.score_p1,
       score_p2: m.score_p2,
+      avg_p1: m.avg_p1 ?? null,
+      avg_p2: m.avg_p2 ?? null,
       status: m.status,
       is_bye: m.is_bye,
       autodarts_match_id: m.autodarts_match_id ?? null,
@@ -1010,15 +1012,36 @@ function isMatchComplete(adMatch: any, winLegs: number): boolean {
 function getMatchScore(adMatch: any, username1: string, username2: string) {
   const players: any[] = adMatch.players || [];
   const scores: any[] = adMatch.scores || [];           // scores[player.index] = { legs, sets }
+  const games: any[] = adMatch.games || [];             // as/v0 only: individual leg data with turns
   const normalize = (p: any) => (p.name ?? p.user?.name ?? p.displayName ?? "").toLowerCase();
   const p1 = players.find((p) => normalize(p) === username1.toLowerCase());
   const p2 = players.find((p) => normalize(p) === username2.toLowerCase());
+
+  // as/v0/matches has a games[] array with individual leg data.
+  // Use winnerPlayerId to count LEGS WON (scores[].legs = legs PLAYED, not won).
+  // Also compute match-specific 3-dart average from turns[].points.
+  if (games.length > 0 && p1 && p2) {
+    const legs1 = games.filter((g: any) => g.winnerPlayerId === p1.id).length;
+    const legs2 = games.filter((g: any) => g.winnerPlayerId === p2.id).length;
+    const computeMatchAvg = (pid: string) => {
+      let total = 0;
+      let turns = 0;
+      for (const g of games) {
+        for (const t of (g.turns || [])) {
+          if (t.playerId === pid && !t.busted) { total += t.points; turns++; }
+        }
+      }
+      return turns > 0 ? Math.round((total / turns) * 10) / 10 : 0;
+    };
+    return { legs1, legs2, avg1: computeMatchAvg(p1.id), avg2: computeMatchAvg(p2.id) };
+  }
+
+  // gs/v0/matches: no games array → use scores[player.index].legs and account averages
   const s1 = p1 !== undefined ? (scores[p1.index] ?? {}) : {};
   const s2 = p2 !== undefined ? (scores[p2.index] ?? {}) : {};
   return {
     legs1: s1.legs ?? p1?.legs ?? 0,
     legs2: s2.legs ?? p2?.legs ?? 0,
-    // average lives on user.average (overall), not per-match in this endpoint
     avg1: p1?.user?.average ?? p1?.average ?? 0,
     avg2: p2?.user?.average ?? p2?.average ?? 0,
   };
@@ -1052,6 +1075,7 @@ router.get("/tour/autodarts-debug", async (_req, res) => {
 });
 
 // POST /tour/tournaments/:id/autodarts-sync — auto-detect results for all pending matches
+
 router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
   try {
     const tournamentId = parseInt(req.params.id);
@@ -1139,12 +1163,14 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
               const complete = isMatchComplete(directMatch, winLegs);
               if (complete) {
                 const winnerId = score.legs1 >= winLegs ? match.player1_id! : match.player2_id!;
+                const a1 = Math.round(score.avg1 * 10) / 10;
+                const a2 = Math.round(score.avg2 * 10) / 10;
                 await db.update(tourMatchesTable)
-                  .set({ winner_id: winnerId, score_p1: score.legs1, score_p2: score.legs2, status: "abgeschlossen", autodarts_match_id: directMatch.id })
+                  .set({ winner_id: winnerId, score_p1: score.legs1, score_p2: score.legs2, avg_p1: a1, avg_p2: a2, status: "abgeschlossen", autodarts_match_id: directMatch.id })
                   .where(eq(tourMatchesTable.id, match.id));
                 await advanceWinner(tournamentId, match.runde, match.match_nr, winnerId);
                 await checkTournamentComplete(tournamentId);
-                results.push({ match_id: match.id, status: "auto_completed", winner_id: winnerId, legs1: score.legs1, legs2: score.legs2, avg1: Math.round(score.avg1 * 10) / 10, avg2: Math.round(score.avg2 * 10) / 10, autodarts_id: directMatch.id });
+                results.push({ match_id: match.id, status: "auto_completed", winner_id: winnerId, legs1: score.legs1, legs2: score.legs2, avg1: a1, avg2: a2, autodarts_id: directMatch.id });
                 synced++;
                 continue;
               } else {

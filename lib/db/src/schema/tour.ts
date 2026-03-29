@@ -64,6 +64,8 @@ export const tourMatchesTable = pgTable("tour_matches", {
   winner_id: integer("winner_id"),
   score_p1: integer("score_p1"),
   score_p2: integer("score_p2"),
+  avg_p1: real("avg_p1"),
+  avg_p2: real("avg_p2"),
   status: text("status").notNull().default("ausstehend"),
   is_bye: boolean("is_bye").notNull().default(false),
   autodarts_match_id: text("autodarts_match_id"),

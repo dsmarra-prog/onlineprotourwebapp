@@ -63,6 +63,8 @@ export type TourMatch = {
   winner_id: number | null;
   score_p1: number | null;
   score_p2: number | null;
+  avg_p1: number | null;
+  avg_p2: number | null;
   status: string;
   is_bye: boolean;
   autodarts_match_id: string | null;
