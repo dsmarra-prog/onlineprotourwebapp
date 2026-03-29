@@ -631,6 +631,7 @@ function MatchCard({
   onResult: () => void;
   onLiveClick: () => void;
 }) {
+  const { currentPlayer } = usePlayer();
   const persistedLobbyUrl = match.status !== "abgeschlossen" && match.autodarts_match_id
     ? `https://play.autodarts.io/lobbies/${match.autodarts_match_id}`
     : null;
@@ -642,7 +643,10 @@ function MatchCard({
     e.stopPropagation();
     setCreatingLobby(true);
     try {
-      const data = await apiFetch(`/tour/matches/${match.id}/create-lobby`, { method: "POST" });
+      const data = await apiFetch(`/tour/matches/${match.id}/create-lobby`, {
+        method: "POST",
+        body: JSON.stringify({ player_id: currentPlayer?.id }),
+      });
       if (data.joinUrl) setLocalLobbyUrl(data.joinUrl);
     } catch {
       // ignore

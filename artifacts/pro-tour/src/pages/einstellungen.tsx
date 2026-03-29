@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Settings, CheckCircle, Loader2, Target, KeyRound, RefreshCw, ShieldCheck, LogOut, User,
+  Settings, CheckCircle, Loader2, Target, KeyRound, RefreshCw, ShieldCheck, LogOut,
+  User, Link2, Link2Off, Copy, Check, ChevronDown, Wifi, WifiOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,9 @@ import { usePlayer } from "@/context/PlayerContext";
 export default function EinstellungenPage() {
   const { toast } = useToast();
   const { currentPlayer, logout } = usePlayer();
+  const queryClient = useQueryClient();
+
+  // ── Admin token section ──────────────────────────────────────────────────
   const [tokenForm, setTokenForm] = useState({ pin: "", refresh_token: "" });
   const [tokenSectionOpen, setTokenSectionOpen] = useState(false);
 
@@ -32,6 +36,45 @@ export default function EinstellungenPage() {
   });
 
   const canUpdateToken = tokenForm.pin.length >= 4 && tokenForm.refresh_token.trim().length > 20;
+
+  // ── Player Autodarts connection ──────────────────────────────────────────
+  const [copied, setCopied] = useState(false);
+  const [disconnectPin, setDisconnectPin] = useState("");
+
+  const { data: adStatus, isLoading: statusLoading } = useQuery({
+    queryKey: ["autodarts-status", currentPlayer?.id],
+    queryFn: () => apiFetch<{ connected: boolean }>(`/tour/players/${currentPlayer!.id}/autodarts-status`),
+    enabled: !!currentPlayer,
+    staleTime: 30_000,
+  });
+
+  const disconnectMut = useMutation({
+    mutationFn: () =>
+      apiFetch<{ ok: boolean }>(`/tour/players/${currentPlayer!.id}/autodarts-disconnect`, {
+        method: "POST",
+        body: JSON.stringify({ pin: disconnectPin }),
+      }),
+    onSuccess: () => {
+      toast({ title: "Getrennt", description: "Autodarts-Verbindung wurde entfernt." });
+      setDisconnectPin("");
+      queryClient.invalidateQueries({ queryKey: ["autodarts-status", currentPlayer?.id] });
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  // The console command that the player runs on play.autodarts.io
+  const connectCommand = currentPlayer
+    ? `(async()=>{let t=null;try{t=window.__keycloak?.refreshToken||window.keycloak?.refreshToken}catch{}if(!t){for(const k of Object.keys(localStorage)){try{const v=JSON.parse(localStorage.getItem(k));if(v?.refresh_token){t=v.refresh_token;break}}catch{}}}if(!t){alert('Token nicht gefunden – bitte neu einloggen und nochmal versuchen');return}const r=await fetch('${window.location.origin}/api/tour/players/${currentPlayer.id}/autodarts-connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:t,pin:prompt('Dein Online Pro Tour PIN:')})});const d=await r.json();alert(d.ok?'✅ Autodarts erfolgreich verbunden!':'❌ '+d.error)})();`
+    : "";
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(connectCommand).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const isConnected = adStatus?.connected ?? false;
 
   return (
     <div className="space-y-6 max-w-md">
@@ -72,30 +115,104 @@ export default function EinstellungenPage() {
         </Button>
       </div>
 
+      {/* Autodarts Account verbinden */}
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="p-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {statusLoading ? (
+              <Loader2 className="w-4 h-4 text-primary animate-spin" />
+            ) : isConnected ? (
+              <Wifi className="w-4 h-4 text-green-400" />
+            ) : (
+              <WifiOff className="w-4 h-4 text-muted-foreground" />
+            )}
+            <span className="font-semibold text-sm">Autodarts verbinden</span>
+          </div>
+          {!statusLoading && (
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              isConnected
+                ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                : "bg-muted text-muted-foreground border border-border"
+            }`}>
+              {isConnected ? "Verbunden" : "Nicht verbunden"}
+            </span>
+          )}
+        </div>
+
+        <div className="border-t border-border px-4 pb-4 pt-4 space-y-4">
+          {isConnected ? (
+            <>
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/5 border border-green-500/20">
+                <Link2 className="w-4 h-4 text-green-400 shrink-0" />
+                <p className="text-xs text-muted-foreground">
+                  Dein Autodarts-Account ist verbunden. Du kannst Lobbys für deine Matches selbst erstellen.
+                </p>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Um die Verbindung zu trennen, gib deinen PIN ein:
+              </p>
+              <div className="flex gap-2">
+                <Input
+                  type="password"
+                  placeholder="PIN"
+                  value={disconnectPin}
+                  onChange={(e) => setDisconnectPin(e.target.value)}
+                  className="max-w-[120px]"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                  disabled={disconnectPin.length < 4 || disconnectMut.isPending}
+                  onClick={() => disconnectMut.mutate()}
+                >
+                  {disconnectMut.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <><Link2Off className="w-4 h-4 mr-1.5" /> Trennen</>
+                  )}
+                </Button>
+              </div>
+
+              <p className="text-xs text-muted-foreground border-t border-border pt-3">
+                Token abgelaufen? Führe einfach die Anleitung unten nochmal durch um ihn zu erneuern.
+              </p>
+              <ConnectInstructions command={connectCommand} copied={copied} onCopy={handleCopy} />
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Verbinde deinen Autodarts-Account, um Lobby-Links für deine Matches selbst zu erstellen —
+                auch wenn der Admin nicht online ist.
+              </p>
+              <ConnectInstructions command={connectCommand} copied={copied} onCopy={handleCopy} />
+            </>
+          )}
+        </div>
+      </div>
+
       {/* How it works */}
       <div className="bg-card border border-border rounded-xl p-4">
         <h3 className="font-semibold text-sm mb-3">Wie funktioniert's?</h3>
         <div className="space-y-3 text-sm text-muted-foreground">
-          <div className="flex gap-3">
-            <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">1</div>
-            <p>Öffne ein Turnier und klicke auf "Jetzt anmelden" um dich selbst einzutragen</p>
-          </div>
-          <div className="flex gap-3">
-            <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">2</div>
-            <p>Bestätige die Anmeldung mit deinem PIN</p>
-          </div>
-          <div className="flex gap-3">
-            <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">3</div>
-            <p>Spiele deine Matches über Autodarts — die Ergebnisse werden automatisch erkannt</p>
-          </div>
-          <div className="flex gap-3">
-            <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">4</div>
-            <p>Sammle Preisgelder in der Order of Merit Rangliste</p>
-          </div>
+          {[
+            "Öffne ein Turnier und klicke auf \"Jetzt anmelden\" um dich selbst einzutragen",
+            "Bestätige die Anmeldung mit deinem PIN",
+            "Erstelle eine Autodarts-Lobby direkt aus dem Turnier heraus",
+            "Spiele deine Matches — die Ergebnisse werden automatisch erkannt",
+          ].map((step, i) => (
+            <div key={i} className="flex gap-3">
+              <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+                {i + 1}
+              </div>
+              <p>{step}</p>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Admin: Autodarts Token Update */}
+      {/* Admin: Autodarts Global Token Update */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">
         <button
           className="w-full flex items-center justify-between p-4 text-left hover:bg-accent/30 transition-colors"
@@ -103,22 +220,17 @@ export default function EinstellungenPage() {
         >
           <div className="flex items-center gap-2">
             <KeyRound className="w-4 h-4 text-primary" />
-            <span className="font-semibold text-sm">Admin: Autodarts Token</span>
+            <span className="font-semibold text-sm">Admin: Globaler Autodarts Token</span>
           </div>
-          <RefreshCw className={`w-4 h-4 text-muted-foreground transition-transform ${tokenSectionOpen ? "rotate-180" : ""}`} />
+          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${tokenSectionOpen ? "rotate-180" : ""}`} />
         </button>
 
         {tokenSectionOpen && (
           <div className="px-4 pb-4 space-y-4 border-t border-border pt-4">
             <p className="text-xs text-muted-foreground">
-              Falls die Lobby-Erstellung nicht funktioniert, muss der Autodarts-Token erneuert werden.
+              Der globale Token ist der Fallback für alle Spieler ohne eigene Verbindung.
+              Nur nötig falls kein Spieler seinen Account verbunden hat.
             </p>
-            <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside">
-              <li>Öffne <span className="text-foreground font-mono">play.autodarts.io</span> im Browser (eingeloggt)</li>
-              <li>Öffne die Entwicklerkonsole (<span className="font-mono">F12</span>) → Tab <span className="font-mono">Application</span></li>
-              <li>Links: <span className="font-mono">Local Storage → https://play.autodarts.io</span></li>
-              <li>Network-Tab → Filter <span className="font-mono">token</span> → POST an <span className="font-mono">openid-connect/token</span> → Response → <span className="font-mono">refresh_token</span> kopieren</li>
-            </ol>
 
             <div className="space-y-1">
               <Label className="flex items-center gap-1.5">
@@ -156,6 +268,57 @@ export default function EinstellungenPage() {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function ConnectInstructions({ command, copied, onCopy }: {
+  command: string;
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-semibold text-foreground">So verbindest du deinen Account:</p>
+      <ol className="text-xs text-muted-foreground space-y-2">
+        <li className="flex gap-2">
+          <span className="text-primary font-bold shrink-0">1.</span>
+          <span>Öffne <span className="font-mono text-foreground">play.autodarts.io</span> im Browser und logge dich ein</span>
+        </li>
+        <li className="flex gap-2">
+          <span className="text-primary font-bold shrink-0">2.</span>
+          <span>Drücke <span className="font-mono bg-muted px-1 rounded">F12</span> → Tab <span className="font-mono bg-muted px-1 rounded">Konsole</span></span>
+        </li>
+        <li className="flex gap-2">
+          <span className="text-primary font-bold shrink-0">3.</span>
+          <span>Füge den kopierten Befehl ein und drücke <span className="font-mono bg-muted px-1 rounded">Enter</span></span>
+        </li>
+        <li className="flex gap-2">
+          <span className="text-primary font-bold shrink-0">4.</span>
+          <span>Gib deinen Online Pro Tour PIN ein — fertig!</span>
+        </li>
+      </ol>
+
+      <button
+        onClick={onCopy}
+        className="w-full flex items-center justify-between gap-2 p-3 rounded-lg bg-muted/50 hover:bg-muted border border-border hover:border-primary/30 transition-colors group"
+      >
+        <span className="font-mono text-xs text-muted-foreground truncate text-left">
+          {command.slice(0, 60)}…
+        </span>
+        <span className="shrink-0 flex items-center gap-1.5 text-xs font-semibold text-primary">
+          {copied ? (
+            <><Check className="w-4 h-4" /> Kopiert!</>
+          ) : (
+            <><Copy className="w-4 h-4" /> Kopieren</>
+          )}
+        </span>
+      </button>
+
+      <p className="text-xs text-muted-foreground/60 italic">
+        Der Befehl liest deinen Autodarts-Token automatisch aus und sendet ihn sicher an die Pro Tour.
+        Dein Passwort wird dabei nie übertragen.
+      </p>
     </div>
   );
 }

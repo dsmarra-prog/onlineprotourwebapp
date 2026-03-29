@@ -1393,7 +1393,88 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
   }
 });
 
-// POST /tour/matches/:matchId/create-lobby — create a public Autodarts lobby for a tournament match
+// POST /tour/players/:id/autodarts-connect — player stores own Autodarts refresh token
+router.post("/tour/players/:id/autodarts-connect", async (req, res) => {
+  try {
+    const playerId = parseInt(req.params.id);
+    const { pin, token } = req.body;
+    if (!pin || !token) return res.status(400).json({ error: "pin und token erforderlich" });
+
+    const pinHash = crypto.createHash("sha256").update(String(pin)).digest("hex");
+    const player = await db.select().from(tourPlayersTable)
+      .where(eq(tourPlayersTable.id, playerId)).limit(1);
+    if (!player[0]) return res.status(404).json({ error: "Spieler nicht gefunden" });
+    if (player[0].pin_hash !== pinHash) return res.status(403).json({ error: "Ungültige PIN" });
+
+    // Verify the token actually works by fetching an access token
+    const verifyRes = await fetch(
+      "https://login.autodarts.io/realms/autodarts/protocol/openid-connect/token",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          client_id: "autodarts-play",
+          refresh_token: token,
+        }),
+      }
+    );
+    if (!verifyRes.ok) return res.status(400).json({ error: "Autodarts-Token ungültig oder abgelaufen" });
+    const tokenData: any = await verifyRes.json();
+
+    // Store the latest refresh token (Autodarts rotates tokens on each refresh)
+    const latestRefreshToken = tokenData.refresh_token ?? token;
+    await db.update(tourPlayersTable)
+      .set({ autodarts_refresh_token: latestRefreshToken })
+      .where(eq(tourPlayersTable.id, playerId));
+
+    // Invalidate any cached access token for this player
+    playerTokenCache.delete(playerId);
+
+    res.json({ ok: true, message: "Autodarts-Account erfolgreich verbunden" });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/players/:id/autodarts-disconnect — remove player's stored token
+router.post("/tour/players/:id/autodarts-disconnect", async (req, res) => {
+  try {
+    const playerId = parseInt(req.params.id);
+    const { pin } = req.body;
+    if (!pin) return res.status(400).json({ error: "pin erforderlich" });
+    const pinHash = crypto.createHash("sha256").update(String(pin)).digest("hex");
+    const player = await db.select().from(tourPlayersTable)
+      .where(eq(tourPlayersTable.id, playerId)).limit(1);
+    if (!player[0]) return res.status(404).json({ error: "Spieler nicht gefunden" });
+    if (player[0].pin_hash !== pinHash) return res.status(403).json({ error: "Ungültige PIN" });
+
+    await db.update(tourPlayersTable)
+      .set({ autodarts_refresh_token: null })
+      .where(eq(tourPlayersTable.id, playerId));
+    playerTokenCache.delete(playerId);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /tour/players/:id/autodarts-status — check if player has a connected token
+router.get("/tour/players/:id/autodarts-status", async (req, res) => {
+  try {
+    const playerId = parseInt(req.params.id);
+    const rows = await db.select({ tok: tourPlayersTable.autodarts_refresh_token })
+      .from(tourPlayersTable).where(eq(tourPlayersTable.id, playerId)).limit(1);
+    if (!rows[0]) return res.status(404).json({ error: "Spieler nicht gefunden" });
+    res.json({ connected: !!rows[0].tok });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/matches/:matchId/create-lobby — create an Autodarts lobby for a tournament match.
+// Pass optional { player_id } in the body to prefer that player's own Autodarts token;
+// falls back through match players, then the global admin token.
 router.post("/tour/matches/:matchId/create-lobby", async (req, res) => {
   try {
     const matchId = parseInt(req.params.matchId);
@@ -1407,7 +1488,21 @@ router.post("/tour/matches/:matchId/create-lobby", async (req, res) => {
 
     const winLegs = Math.ceil(tournament[0].legs_format / 2);
 
-    const accessToken = await getAutodartAccessToken();
+    // Token priority: requesting player → player1 → player2 → global admin
+    const requestingPlayerId: number | undefined = req.body?.player_id ? parseInt(req.body.player_id) : undefined;
+    const candidateIds = [
+      requestingPlayerId,
+      match[0].player1_id ?? undefined,
+      match[0].player2_id ?? undefined,
+    ].filter((id): id is number => typeof id === "number");
+
+    let accessToken: string | null = null;
+    for (const id of candidateIds) {
+      accessToken = await getPlayerAccessToken(id);
+      if (accessToken) break;
+    }
+    // Final fallback: global admin token
+    if (!accessToken) accessToken = await getAutodartAccessToken();
     if (!accessToken) return res.status(503).json({ error: "Kein Autodarts-Token konfiguriert" });
 
     const lobbyBody = {
