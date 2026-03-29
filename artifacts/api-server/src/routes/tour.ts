@@ -314,6 +314,7 @@ async function buildTournamentDetail(tournamentId: number) {
       score_p2: m.score_p2,
       status: m.status,
       is_bye: m.is_bye,
+      autodarts_match_id: m.autodarts_match_id ?? null,
     })),
     rounds,
   };

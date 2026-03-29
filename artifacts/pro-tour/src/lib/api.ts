@@ -65,6 +65,7 @@ export type TourMatch = {
   score_p2: number | null;
   status: string;
   is_bye: boolean;
+  autodarts_match_id: string | null;
 };
 
 export type TourTournamentDetail = {

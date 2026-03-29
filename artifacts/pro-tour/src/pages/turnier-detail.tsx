@@ -372,7 +372,12 @@ function MatchCard({
   liveStatus?: SyncMatchStatus;
   onResult: () => void;
 }) {
-  const [lobbyUrl, setLobbyUrl] = useState<string | null>(null);
+  // Use persisted lobby ID from DB so both players see the same link
+  const persistedLobbyUrl = match.status !== "abgeschlossen" && match.autodarts_match_id
+    ? `https://play.autodarts.io/lobbies/${match.autodarts_match_id}`
+    : null;
+  const [localLobbyUrl, setLocalLobbyUrl] = useState<string | null>(null);
+  const lobbyUrl = persistedLobbyUrl ?? localLobbyUrl;
   const [creatingLobby, setCreatingLobby] = useState(false);
 
   const createLobby = async (e: React.MouseEvent) => {
@@ -380,7 +385,7 @@ function MatchCard({
     setCreatingLobby(true);
     try {
       const data = await apiFetch(`/tour/matches/${match.id}/create-lobby`, { method: "POST" });
-      if (data.joinUrl) setLobbyUrl(data.joinUrl);
+      if (data.joinUrl) setLocalLobbyUrl(data.joinUrl);
     } catch {
       // ignore
     } finally {
@@ -464,7 +469,7 @@ function MatchCard({
         <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground/60">
           <CheckCircle2 className="w-3 h-3 text-primary" />
           <span>Abgeschlossen</span>
-          {(match as any).autodarts_match_id && <span className="ml-auto text-[10px]">via Autodarts</span>}
+          {match.autodarts_match_id && <span className="ml-auto text-[10px]">via Autodarts</span>}
         </div>
       )}
       {/* Lobby button / join URL — only for scheduled matches with both players */}
