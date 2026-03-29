@@ -1049,6 +1049,14 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
     // legsFormat → winning legs
     const winLegs = Math.ceil(tournament[0].legs_format / 2);
 
+    // Only consider Autodarts matches that finished AFTER this tournament was created.
+    // This prevents old matches (e.g. from test sessions) from contaminating new tournaments.
+    const tournamentCreatedAt = new Date(tournament[0].created_at).getTime();
+    const validCompleted = adCompleted.filter((m: any) => {
+      const finishedAt = m.finishedAt ? new Date(m.finishedAt).getTime() : 0;
+      return finishedAt > tournamentCreatedAt && (m.targetLegs ?? 0) >= winLegs;
+    });
+
     // Resolve player names from DB
     const playerIds = [...new Set(pendingMatches.flatMap((m) => [m.player1_id!, m.player2_id!]))];
     const playerMap: Record<number, string> = {};
@@ -1070,13 +1078,9 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
       // → Always use completed match for score; lobby is just "in progress" signal
       // Only accept Autodarts matches whose targetLegs >= winLegs (filters out short test games)
       // adLiveMatch: lobby signals "game in progress" – no format filter needed (score comes from completed)
-      // adCompletedMatch: only accept matches where targetLegs matches the tournament format
-      //   e.g. First-to-1 test games are ignored for a Best-of-5 tournament (winLegs=3)
+      // adCompletedMatch: only matches after tournament creation + correct targetLegs (via validCompleted)
       const adLiveMatch = findAdMatch(adLive, u1, u2);
-      const adCompletedMatch = findAdMatch(
-        adCompleted.filter((m) => (m.targetLegs ?? 0) >= winLegs),
-        u1, u2
-      );
+      const adCompletedMatch = findAdMatch(validCompleted, u1, u2);
 
       if (!adLiveMatch && !adCompletedMatch) {
         results.push({ match_id: match.id, status: "not_found" });
