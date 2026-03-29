@@ -494,6 +494,54 @@ function getBotAvg(name: string, botRangliste: any[], botForm: Record<string, nu
   return Math.round((Math.max(15, Math.min(125, base)) + formBonus) * 10) / 10;
 }
 
+// Simulates remaining tournament bracket and returns prize money per bot name.
+// Called once per tournament end to make the bot_rangliste geld feel alive.
+function simulateBotPreisverteilung(
+  turnier_baum: any[],   // bracket at the START of the player's last round
+  neuerBaum: any[],      // survivors after the player's last round
+  playerName: string,
+  currentRound: number,
+  turnierTyp: string
+): Record<string, number> {
+  const pm = PRIZE_MONEY[turnierTyp] ?? PRIZE_MONEY["ProTour"];
+  const payouts: Record<string, number> = {};
+
+  // Bots that lost in this round (were in the bracket, not in neuerBaum, and not the player)
+  for (const bot of turnier_baum) {
+    if (bot.name === playerName) continue;
+    if (!neuerBaum.find((n: any) => n.name === bot.name)) {
+      payouts[bot.name] = (payouts[bot.name] ?? 0) + pm.rd_exit(currentRound);
+    }
+  }
+
+  // Simulate remaining rounds, tracking which round each bot exits
+  let sim = neuerBaum.filter((b: any) => b.name !== playerName);
+  let roundNum = currentRound + 1;
+  while (sim.length > 1) {
+    const next: any[] = [];
+    for (let i = 0; i < sim.length; i += 2) {
+      const b1 = sim[i];
+      const b2 = sim[i + 1];
+      if (!b2) { next.push(b1); continue; }
+      const p1 = Math.max(0.1, Math.min(0.9, 0.5 + (b1.avg - b2.avg) * 0.02));
+      if (Math.random() < p1) {
+        payouts[b2.name] = (payouts[b2.name] ?? 0) + pm.rd_exit(roundNum);
+        next.push(b1);
+      } else {
+        payouts[b1.name] = (payouts[b1.name] ?? 0) + pm.rd_exit(roundNum);
+        next.push(b2);
+      }
+    }
+    sim = next;
+    roundNum++;
+  }
+  // Tournament winner gets full prize
+  if (sim.length === 1) {
+    payouts[sim[0].name] = (payouts[sim[0].name] ?? 0) + pm.win;
+  }
+  return payouts;
+}
+
 // Helper: get avg from level for named bots (not using name pattern)
 function getBotAvgForLevel(level: number, formBonus: number = 0): number {
   const [min, max] = AUTODARTS_LEVEL_RANGES[level] ?? [55, 75];
@@ -993,6 +1041,14 @@ function nextTurnier(career: any): { msgs: string[]; updates: any } {
     if (expired > 0) {
       msgs.push(`📅 Neue Saison ${saison_jahr}! £${expired.toLocaleString("en-GB")} Order-of-Merit-Geld aus Saison ${saison_jahr - 2} ist abgelaufen.`);
     }
+
+    // Apply 50% decay to all bot_rangliste geld (simulates rolling 2-year OoM window)
+    // Bots' older earnings fade out, keeping the ranking dynamic each season
+    const currentBots = (updates.bot_rangliste ?? career.bot_rangliste) as any[];
+    updates.bot_rangliste = currentBots.map((bot: any) => ({
+      ...bot,
+      geld: Math.round(bot.geld * 0.5),
+    }));
   }
 
   // Track ranking progression
@@ -1676,6 +1732,17 @@ export async function processResult(
         turnier_verlauf.unshift({ name: t.name, typ: t.typ, runde: "Finale", ergebnis: "Sieg", preisgeld: geld, saison: career.saison_jahr, avg: my_avg });
         updates.turnier_verlauf = turnier_verlauf.slice(0, 100);
 
+        // Distribute prize money to all bots in the bracket (player won = no remaining sim needed)
+        // Bots that lost in this round (the final) get runner-up prize
+        {
+          const t2 = KALENDER[career.aktuelles_turnier_index];
+          const payouts = simulateBotPreisverteilung(turnier_baum, neuerBaum, career.spieler_name, career.aktuelle_runde, t2.typ);
+          const updatedBots = (career.bot_rangliste as any[]).map((bot: any) => {
+            const bonus = payouts[bot.name] ?? 0;
+            return bonus > 0 ? { ...bot, geld: bot.geld + bonus } : bot;
+          });
+          updates.bot_rangliste = updatedBots;
+        }
         updates.turnier_laeuft = false;
         updates.aktuelle_runde = 0;
         updates.turnier_baum = [];
@@ -1706,6 +1773,13 @@ export async function processResult(
       const turnier_verlauf: any[] = [...((career.turnier_verlauf ?? []) as any[])];
       turnier_verlauf.unshift({ name: t.name, typ: t.typ, runde: rundenName, ergebnis: "Niederlage", preisgeld: trostGeld, saison: career.saison_jahr, avg: my_avg });
       updates.turnier_verlauf = turnier_verlauf.slice(0, 100);
+
+      // Distribute prize money to remaining bots by simulating the rest of the bracket
+      const botPayouts = simulateBotPreisverteilung(turnier_baum, neuerBaum, career.spieler_name, career.aktuelle_runde, t.typ);
+      updates.bot_rangliste = (career.bot_rangliste as any[]).map((bot: any) => {
+        const bonus = botPayouts[bot.name] ?? 0;
+        return bonus > 0 ? { ...bot, geld: bot.geld + bonus } : bot;
+      });
     } else {
       msgs.push("❌ Niederlage. Q-School Tag beendet.");
     }
