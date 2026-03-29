@@ -2,54 +2,112 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import {
   tourPlayersTable,
+  tourScheduleTable,
   tourTournamentsTable,
   tourMatchesTable,
   tourEntriesTable,
+  tourBonusPointsTable,
 } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import crypto from "crypto";
 
 const router: IRouter = Router();
 
-// ─── OOM Points by Tournament Type and Round ───────────────────────────────
+// ─── Real OOM Points System (onlineprotour.eu) ──────────────────────────────
+// kategorie: 'pc' | 'm1' | 'm2' | 'dev_cup' | 'dev_major'
 const OOM_POINTS: Record<string, Record<string, number>> = {
-  players_championship: {
-    Sieger: 10000,
-    Finale: 6000,
-    Halbfinale: 3000,
-    Viertelfinale: 1500,
-    "Letzte 16": 750,
-    "Letzte 32": 375,
-    "Letzte 64": 200,
+  pc: {
+    Sieger: 1000,
+    Finale: 600,
+    Halbfinale: 400,
+    Viertelfinale: 250,
+    Achtelfinale: 150,
+    "Letzte 32": 75,
+    Teilnahme: 25,
   },
-  european_tour: {
-    Sieger: 25000,
-    Finale: 15000,
-    Halbfinale: 8000,
-    Viertelfinale: 4000,
-    "Letzte 16": 2000,
-    "Letzte 32": 1000,
-    "Letzte 64": 500,
+  m1: {
+    Sieger: 1500,
+    Finale: 900,
+    Halbfinale: 600,
+    Viertelfinale: 375,
+    Achtelfinale: 225,
+    "Letzte 32": 125,
+    Teilnahme: 50,
   },
-  world_series: {
-    Sieger: 25000,
-    Finale: 15000,
-    Halbfinale: 8000,
-    Viertelfinale: 4000,
-    "Letzte 16": 2000,
-    "Letzte 32": 1000,
-    "Letzte 64": 500,
+  m2: {
+    Sieger: 2000,
+    Finale: 1200,
+    Halbfinale: 800,
+    Viertelfinale: 500,
+    Achtelfinale: 300,
+    "Letzte 32": 150,
+    Teilnahme: 100,
   },
-  major: {
-    Sieger: 100000,
-    Finale: 60000,
-    Halbfinale: 35000,
-    Viertelfinale: 20000,
-    "Letzte 16": 10000,
-    "Letzte 32": 5000,
-    "Letzte 64": 2500,
+  dev_cup: {
+    Sieger: 500,
+    Finale: 300,
+    Halbfinale: 200,
+    Viertelfinale: 125,
+    Achtelfinale: 75,
+    "Letzte 32": 40,
+    Teilnahme: 15,
+  },
+  dev_major: {
+    Sieger: 750,
+    Finale: 450,
+    Halbfinale: 300,
+    Viertelfinale: 188,
+    Achtelfinale: 113,
+    "Letzte 32": 60,
+    Teilnahme: 25,
   },
 };
+
+const BONUS_POINTS: Record<string, number> = {
+  "9darter": 500,
+  bigfish: 100,
+};
+
+// ─── Season 1 Schedule Data ─────────────────────────────────────────────────
+const SEASON1_SCHEDULE = [
+  // Phase 1 – Sprint Phase (alle abgeschlossen)
+  { phase: "Phase 1 – Saisonstart (Sprint Phase)", phase_order: 1, tour_type: "pro", kategorie: "pc", event_name: "Players Championship 1", datum: "18.01.2026", tag: "SO", uhrzeit: "19:00", mode: "Bo5", qualification: null, status: "abgeschlossen", external_id: 5 },
+  { phase: "Phase 1 – Saisonstart (Sprint Phase)", phase_order: 1, tour_type: "pro", kategorie: "pc", event_name: "Players Championship 2", datum: "22.01.2026", tag: "DO", uhrzeit: "20:00", mode: "Bo5", qualification: null, status: "abgeschlossen", external_id: 6 },
+  { phase: "Phase 1 – Saisonstart (Sprint Phase)", phase_order: 1, tour_type: "pro", kategorie: "pc", event_name: "Players Championship 3", datum: "25.01.2026", tag: "SO", uhrzeit: "19:00", mode: "Bo5", qualification: null, status: "abgeschlossen", external_id: 7 },
+  { phase: "Phase 1 – Saisonstart (Sprint Phase)", phase_order: 1, tour_type: "pro", kategorie: "pc", event_name: "Players Championship 4", datum: "29.01.2026", tag: "DO", uhrzeit: "20:00", mode: "Bo5", qualification: null, status: "abgeschlossen", external_id: 8 },
+  // Dev Tour Start (alle abgeschlossen)
+  { phase: "Development Tour – Start", phase_order: 2, tour_type: "development", kategorie: "dev_cup", event_name: "Development Cup 1", datum: "01.02.2026", tag: "SO", uhrzeit: "19:00", mode: "Bo3", qualification: null, status: "abgeschlossen", external_id: 9 },
+  { phase: "Development Tour – Start", phase_order: 2, tour_type: "development", kategorie: "dev_cup", event_name: "Development Cup 2", datum: "05.02.2026", tag: "DO", uhrzeit: "20:00", mode: "Bo3", qualification: null, status: "abgeschlossen", external_id: 10 },
+  // Phase 1 Fortsetzung (alle abgeschlossen)
+  { phase: "Phase 1 – Fortsetzung & Endspurt", phase_order: 3, tour_type: "pro", kategorie: "pc", event_name: "Players Championship 5", datum: "08.02.2026", tag: "SO", uhrzeit: "19:00", mode: "Bo5", qualification: null, status: "abgeschlossen", external_id: 11 },
+  { phase: "Phase 1 – Fortsetzung & Endspurt", phase_order: 3, tour_type: "pro", kategorie: "pc", event_name: "Players Championship 6", datum: "19.02.2026", tag: "DO", uhrzeit: "20:00", mode: "Bo5", qualification: null, status: "abgeschlossen", external_id: 12 },
+  { phase: "Phase 1 – Fortsetzung & Endspurt", phase_order: 3, tour_type: "pro", kategorie: "pc", event_name: "Players Championship 7", datum: "01.03.2026", tag: "SO", uhrzeit: "19:00", mode: "Bo5", qualification: null, status: "abgeschlossen", external_id: 13 },
+  // Dev Tour Fortsetzung (alle abgeschlossen)
+  { phase: "Development Tour – Fortsetzung", phase_order: 4, tour_type: "development", kategorie: "dev_cup", event_name: "Development Cup 3", datum: "15.02.2026", tag: "SO", uhrzeit: "20:00", mode: "Bo3", qualification: null, status: "abgeschlossen", external_id: 14 },
+  { phase: "Development Tour – Fortsetzung", phase_order: 4, tour_type: "development", kategorie: "dev_cup", event_name: "Development Cup 4", datum: "22.02.2026", tag: "SO", uhrzeit: "19:00", mode: "Bo3", qualification: null, status: "abgeschlossen", external_id: 16 },
+  { phase: "Development Tour – Fortsetzung", phase_order: 4, tour_type: "development", kategorie: "dev_cup", event_name: "Development Cup 5", datum: "05.03.2026", tag: "DO", uhrzeit: "20:00", mode: "Bo3", qualification: null, status: "abgeschlossen", external_id: 15 },
+  { phase: "Development Tour – Fortsetzung", phase_order: 4, tour_type: "development", kategorie: "dev_cup", event_name: "Development Cup 6", datum: "21.03.2026", tag: "SA", uhrzeit: "19:00", mode: "Bo3", qualification: null, status: "abgeschlossen", external_id: 29 },
+  // Major 1 – Spring Open (abgeschlossen)
+  { phase: "Major 1 – The Spring Open", phase_order: 5, tour_type: "pro", kategorie: "m1", event_name: "Spring Open 2026", datum: "15.03.2026", tag: "SO", uhrzeit: "17:00", mode: "Bo11", qualification: "Top 32 OoM", status: "abgeschlossen", external_id: 17 },
+  // Phase 2 – Tactical Phase
+  { phase: "Phase 2 – Tactical Phase", phase_order: 6, tour_type: "pro", kategorie: "pc", event_name: "Players Championship 8", datum: "26.03.2026", tag: "DO", uhrzeit: "20:00", mode: "Bo5", qualification: null, status: "abgeschlossen", external_id: 18 },
+  { phase: "Phase 2 – Tactical Phase", phase_order: 6, tour_type: "pro", kategorie: "pc", event_name: "Players Championship 9", datum: "05.04.2026", tag: "SO", uhrzeit: "18:00", mode: "Bo5", qualification: null, status: "upcoming", external_id: 19 },
+  // Dev Tour Pre Finals
+  { phase: "Development Tour – Pre Finals", phase_order: 7, tour_type: "development", kategorie: "dev_major", event_name: "April Major", datum: "02.04.2026", tag: "DO", uhrzeit: "18:00", mode: "Bo7", qualification: "Top 16 OoM", status: "upcoming", external_id: 30 },
+  // Major 2 – Grand Prix
+  { phase: "Major 2 – The Grand Prix (Double In/Out)", phase_order: 8, tour_type: "pro", kategorie: "m1", event_name: "Grand Prix (Di/Do)", datum: "12.04.2026", tag: "SO", uhrzeit: "17:00", mode: "Sets", qualification: "Top 32 OoM", status: "upcoming", external_id: 20 },
+  // Haupttour Späte Saison
+  { phase: "Haupttour – Späte Saison", phase_order: 9, tour_type: "pro", kategorie: "pc", event_name: "Players Championship 10", datum: "16.04.2026", tag: "DO", uhrzeit: "20:00", mode: "Bo5", qualification: null, status: "upcoming", external_id: 21 },
+  { phase: "Haupttour – Späte Saison", phase_order: 9, tour_type: "pro", kategorie: "pc", event_name: "Players Championship 11", datum: "26.04.2026", tag: "SO", uhrzeit: "18:00", mode: "Bo5", qualification: null, status: "upcoming", external_id: 22 },
+  // Dev Tour Pre Finals cont.
+  { phase: "Development Tour – Pre Finals", phase_order: 7, tour_type: "development", kategorie: "dev_major", event_name: "May Major", datum: "03.05.2026", tag: "SO", uhrzeit: "18:00", mode: "Bo7", qualification: "Top 16 OoM", status: "upcoming", external_id: 23 },
+  // Major 3 – Home Matchplay
+  { phase: "Major 3 – Home Matchplay", phase_order: 10, tour_type: "pro", kategorie: "m2", event_name: "Home Matchplay", datum: "10.05.2026", tag: "SO", uhrzeit: "17:00", mode: "Sets", qualification: "Top 32 OoM", status: "upcoming", external_id: 25 },
+  // Dev Tour Finals
+  { phase: "Development Tour – Grand Final", phase_order: 11, tour_type: "development", kategorie: "dev_major", event_name: "Grand Final", datum: "24.05.2026", tag: "SO", uhrzeit: "18:00", mode: "Bo7", qualification: "Top 16 OoM", status: "upcoming", external_id: 24 },
+];
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function hashPin(pin: string): string {
   return crypto.createHash("sha256").update(pin).digest("hex");
@@ -59,39 +117,16 @@ function verifyPin(pin: string, hash: string): boolean {
   return hashPin(pin) === hash;
 }
 
-// Map runde label → OOM round key
-function roundToOomKey(runde: string, totalRounds: number): string {
+function roundToOomKey(runde: string): string {
   const map: Record<string, string> = {
     F: "Finale",
     SF: "Halbfinale",
     QF: "Viertelfinale",
-    R16: "Letzte 16",
+    R16: "Achtelfinale",
     R32: "Letzte 32",
-    R64: "Letzte 64",
+    R64: "Teilnahme",
   };
-  return map[runde] || runde;
-}
-
-// Build round labels from player count
-function buildRoundLabels(playerCount: number): string[] {
-  const rounds: string[] = [];
-  let n = playerCount;
-  while (n > 2) {
-    rounds.push(n <= 4 ? (n === 4 ? "QF" : "SF") : `R${n}`);
-    n = Math.ceil(n / 2);
-  }
-  rounds.push("SF");
-  rounds.push("F");
-  // Deduplicate
-  const labels: string[] = [];
-  const seen = new Set<string>();
-  for (const r of ["R64", "R32", "R16", "QF", "SF", "F"]) {
-    if (playerCount >= (r === "R64" ? 33 : r === "R32" ? 17 : r === "R16" ? 9 : r === "QF" ? 5 : r === "SF" ? 3 : 2)) {
-      if (!seen.has(r)) { seen.add(r); labels.push(r); }
-    }
-  }
-  labels.push("F");
-  return labels;
+  return map[runde] ?? "Teilnahme";
 }
 
 function getRoundsForSize(size: number): string[] {
@@ -104,26 +139,19 @@ function getRoundsForSize(size: number): string[] {
 }
 
 function getRoundSize(runde: string): number {
-  const map: Record<string, number> = {
-    R64: 64, R32: 32, R16: 16, QF: 8, SF: 4, F: 2,
-  };
-  return map[runde] || 2;
+  const map: Record<string, number> = { R64: 64, R32: 32, R16: 16, QF: 8, SF: 4, F: 2 };
+  return map[runde] ?? 2;
 }
 
-// ─── Build bracket for tournament ──────────────────────────────────────────
+// ─── Bracket Generation ───────────────────────────────────────────────────────
 async function generateBracket(tournamentId: number, playerIds: number[], legsFormat: number) {
   const entries = [...playerIds];
-  const maxPlayers = entries.length;
-  const rounds = getRoundsForSize(maxPlayers);
+  const rounds = getRoundsForSize(entries.length);
 
-  // Pad to next power of 2 for byes
   let bracketSize = 2;
   while (bracketSize < entries.length) bracketSize *= 2;
 
-  // Seed-based bracket (top seed vs bottom seed)
   const seeded = [...entries, ...Array(bracketSize - entries.length).fill(null)];
-
-  // First round matches
   const firstRound = rounds[0];
   const matchCount = bracketSize / 2;
   const matches = [];
@@ -132,7 +160,6 @@ async function generateBracket(tournamentId: number, playerIds: number[], legsFo
     const p1 = seeded[i * 2] ?? null;
     const p2 = seeded[i * 2 + 1] ?? null;
     const isBye = p1 !== null && p2 === null;
-
     matches.push({
       tournament_id: tournamentId,
       runde: firstRound,
@@ -147,13 +174,11 @@ async function generateBracket(tournamentId: number, playerIds: number[], legsFo
     });
   }
 
-  // Generate empty matches for subsequent rounds
   for (let ri = 1; ri < rounds.length; ri++) {
     const prevRound = rounds[ri - 1];
     const prevSize = getRoundSize(prevRound);
     const thisRound = rounds[ri];
-    const thisCount = prevSize / 4; // halved
-
+    const thisCount = prevSize / 4;
     for (let i = 0; i < Math.max(1, thisCount); i++) {
       matches.push({
         tournament_id: tournamentId,
@@ -171,8 +196,6 @@ async function generateBracket(tournamentId: number, playerIds: number[], legsFo
   }
 
   await db.insert(tourMatchesTable).values(matches as any);
-
-  // Advance byes immediately
   await propagateByes(tournamentId);
 }
 
@@ -182,9 +205,10 @@ async function propagateByes(tournamentId: number) {
     .from(tourMatchesTable)
     .where(eq(tourMatchesTable.tournament_id, tournamentId));
 
-  const rounds = [...new Set(matches.map((m) => m.runde))];
   const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
-  rounds.sort((a, b) => roundOrder.indexOf(a) - roundOrder.indexOf(b));
+  const rounds = [...new Set(matches.map((m) => m.runde))].sort(
+    (a, b) => roundOrder.indexOf(a) - roundOrder.indexOf(b)
+  );
 
   for (let ri = 0; ri < rounds.length - 1; ri++) {
     const currentRound = rounds[ri];
@@ -199,8 +223,7 @@ async function propagateByes(tournamentId: number) {
       if (feeders.length >= 2) {
         const [f1, f2] = feeders.sort((a, b) => a.match_nr - b.match_nr);
         if (f1.winner_id && f2.winner_id && !nextMatch.player1_id && !nextMatch.player2_id) {
-          await db
-            .update(tourMatchesTable)
+          await db.update(tourMatchesTable)
             .set({ player1_id: f1.winner_id, player2_id: f2.winner_id })
             .where(eq(tourMatchesTable.id, nextMatch.id));
         }
@@ -209,13 +232,11 @@ async function propagateByes(tournamentId: number) {
         if (f.winner_id) {
           const isP1Slot = f.match_nr % 2 === 1;
           if (isP1Slot && !nextMatch.player1_id) {
-            await db
-              .update(tourMatchesTable)
+            await db.update(tourMatchesTable)
               .set({ player1_id: f.winner_id })
               .where(eq(tourMatchesTable.id, nextMatch.id));
           } else if (!isP1Slot && !nextMatch.player2_id) {
-            await db
-              .update(tourMatchesTable)
+            await db.update(tourMatchesTable)
               .set({ player2_id: f.winner_id })
               .where(eq(tourMatchesTable.id, nextMatch.id));
           }
@@ -225,7 +246,6 @@ async function propagateByes(tournamentId: number) {
   }
 }
 
-// Build tournament detail response
 async function buildTournamentDetail(tournamentId: number) {
   const tournament = await db
     .select()
@@ -245,28 +265,17 @@ async function buildTournamentDetail(tournamentId: number) {
     .from(tourMatchesTable)
     .where(eq(tourMatchesTable.tournament_id, tournamentId));
 
-  const playerIds = [...new Set([
-    ...entries.map((e) => e.player_id),
-    ...matches.flatMap((m) => [m.player1_id, m.player2_id, m.winner_id].filter(Boolean)),
-  ])];
+  const playerIds = [
+    ...new Set([
+      ...entries.map((e) => e.player_id),
+      ...matches.flatMap((m) => [m.player1_id, m.player2_id, m.winner_id].filter(Boolean) as number[]),
+    ]),
+  ];
 
-  const players =
-    playerIds.length > 0
-      ? await db.select().from(tourPlayersTable).where(
-          // Use inArray equivalent with raw comparison
-          (table: any) => table
-        )
-      : [];
-
-  // Fetch players individually to avoid inArray import issues
   const playerMap: Record<number, any> = {};
   for (const pid of playerIds) {
     if (pid) {
-      const p = await db
-        .select()
-        .from(tourPlayersTable)
-        .where(eq(tourPlayersTable.id, pid))
-        .limit(1);
+      const p = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, pid)).limit(1);
       if (p[0]) playerMap[pid] = p[0];
     }
   }
@@ -278,6 +287,7 @@ async function buildTournamentDetail(tournamentId: number) {
       id: tournament[0].id,
       name: tournament[0].name,
       typ: tournament[0].typ,
+      tour_type: tournament[0].tour_type,
       datum: tournament[0].datum,
       status: tournament[0].status,
       legs_format: tournament[0].legs_format,
@@ -296,8 +306,8 @@ async function buildTournamentDetail(tournamentId: number) {
       match_nr: m.match_nr,
       player1_id: m.player1_id,
       player2_id: m.player2_id,
-      player1_name: m.player1_id ? playerMap[m.player1_id]?.name : null,
-      player2_name: m.player2_id ? playerMap[m.player2_id]?.name : null,
+      player1_name: m.player1_id ? playerMap[m.player1_id]?.name ?? null : null,
+      player2_name: m.player2_id ? playerMap[m.player2_id]?.name ?? null : null,
       winner_id: m.winner_id,
       score_p1: m.score_p1,
       score_p2: m.score_p2,
@@ -308,387 +318,9 @@ async function buildTournamentDetail(tournamentId: number) {
   };
 }
 
-// ─── Routes ────────────────────────────────────────────────────────────────
-
-// GET /tour/players
-router.get("/tour/players", async (_req, res) => {
-  try {
-    const players = await db
-      .select()
-      .from(tourPlayersTable)
-      .orderBy(tourPlayersTable.name);
-    res.json(
-      players.map((p) => ({
-        id: p.id,
-        name: p.name,
-        autodarts_username: p.autodarts_username,
-        created_at: p.created_at,
-        oom_points: 0,
-        oom_rank: 0,
-      }))
-    );
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-// POST /tour/players/register
-router.post("/tour/players/register", async (req, res) => {
-  try {
-    const { name, autodarts_username, pin } = req.body;
-    if (!name || !autodarts_username || !pin) {
-      return res.status(400).json({ error: "name, autodarts_username und pin erforderlich" });
-    }
-
-    const existing = await db
-      .select()
-      .from(tourPlayersTable)
-      .where(eq(tourPlayersTable.autodarts_username, autodarts_username))
-      .limit(1);
-    if (existing[0]) {
-      return res.status(409).json({ error: "Autodarts-Benutzername bereits registriert" });
-    }
-
-    const [player] = await db
-      .insert(tourPlayersTable)
-      .values({ name, autodarts_username, pin_hash: hashPin(pin) })
-      .returning();
-
-    res.json({
-      id: player.id,
-      name: player.name,
-      autodarts_username: player.autodarts_username,
-      created_at: player.created_at,
-      oom_points: 0,
-      oom_rank: 0,
-    });
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-// GET /tour/players/:id
-router.get("/tour/players/:id", async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const player = await db
-      .select()
-      .from(tourPlayersTable)
-      .where(eq(tourPlayersTable.id, id))
-      .limit(1);
-
-    if (!player[0]) return res.status(404).json({ error: "Spieler nicht gefunden" });
-
-    // Get all tournament results for OOM
-    const allMatches = await db.select().from(tourMatchesTable);
-    const allTournaments = await db
-      .select()
-      .from(tourTournamentsTable)
-      .where(eq(tourTournamentsTable.status, "abgeschlossen"));
-
-    const results: any[] = [];
-    let totalWins = 0;
-    let totalLosses = 0;
-
-    for (const t of allTournaments) {
-      const matches = allMatches.filter((m) => m.tournament_id === t.id);
-      const playerMatches = matches.filter(
-        (m) => m.player1_id === id || m.player2_id === id
-      );
-
-      if (playerMatches.length === 0) continue;
-
-      const won = playerMatches.filter((m) => m.winner_id === id).length;
-      const lost = playerMatches.filter((m) => m.winner_id !== null && m.winner_id !== id).length;
-      totalWins += won;
-      totalLosses += lost;
-
-      // Find best round reached
-      const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
-      const playerRounds = playerMatches
-        .filter((m) => m.winner_id !== null)
-        .map((m) => m.runde);
-
-      if (playerRounds.length === 0) continue;
-
-      // Find the deepest round they reached (last round they played)
-      const lastRound = playerMatches
-        .sort((a, b) => roundOrder.indexOf(b.runde) - roundOrder.indexOf(a.runde))[0];
-
-      const isWinner = lastRound?.winner_id === id && lastRound?.runde === "F";
-      const roundKey = isWinner ? "Sieger" : roundToOomKey(lastRound?.runde ?? "R64", 0);
-      const points = OOM_POINTS[t.typ]?.[roundKey] ?? 0;
-
-      results.push({
-        tournament_id: t.id,
-        tournament_name: t.name,
-        tournament_type: t.typ,
-        best_round: isWinner ? "Sieger" : lastRound?.runde ?? "-",
-        points,
-      });
-    }
-
-    res.json({
-      player: {
-        id: player[0].id,
-        name: player[0].name,
-        autodarts_username: player[0].autodarts_username,
-        created_at: player[0].created_at,
-        oom_points: results.reduce((s, r) => s + r.points, 0),
-        oom_rank: 0,
-      },
-      tournament_results: results,
-      wins: totalWins,
-      losses: totalLosses,
-    });
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-// GET /tour/tournaments
-router.get("/tour/tournaments", async (_req, res) => {
-  try {
-    const tournaments = await db
-      .select()
-      .from(tourTournamentsTable)
-      .orderBy(desc(tourTournamentsTable.created_at));
-
-    const result = [];
-    for (const t of tournaments) {
-      const entries = await db
-        .select()
-        .from(tourEntriesTable)
-        .where(eq(tourEntriesTable.tournament_id, t.id));
-      result.push({
-        id: t.id,
-        name: t.name,
-        typ: t.typ,
-        datum: t.datum,
-        status: t.status,
-        legs_format: t.legs_format,
-        max_players: t.max_players,
-        player_count: entries.length,
-        winner_name: null,
-      });
-    }
-
-    res.json(result);
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-// POST /tour/tournaments
-router.post("/tour/tournaments", async (req, res) => {
-  try {
-    const { name, typ, datum, legs_format, max_players, admin_pin } = req.body;
-    if (!name || !typ || !datum || !admin_pin) {
-      return res.status(400).json({ error: "name, typ, datum und admin_pin erforderlich" });
-    }
-    const [t] = await db
-      .insert(tourTournamentsTable)
-      .values({
-        name,
-        typ,
-        datum: datum || new Date().toISOString().slice(0, 10),
-        legs_format: legs_format || 5,
-        max_players: max_players || 32,
-        admin_pin: hashPin(admin_pin),
-      })
-      .returning();
-    res.json({
-      id: t.id,
-      name: t.name,
-      typ: t.typ,
-      datum: t.datum,
-      status: t.status,
-      legs_format: t.legs_format,
-      max_players: t.max_players,
-      player_count: 0,
-      winner_name: null,
-    });
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-// GET /tour/tournaments/:id
-router.get("/tour/tournaments/:id", async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const detail = await buildTournamentDetail(id);
-    if (!detail) return res.status(404).json({ error: "Turnier nicht gefunden" });
-    res.json(detail);
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-// DELETE /tour/tournaments/:id
-router.delete("/tour/tournaments/:id", async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const { admin_pin } = req.body;
-
-    const tournament = await db
-      .select()
-      .from(tourTournamentsTable)
-      .where(eq(tourTournamentsTable.id, id))
-      .limit(1);
-
-    if (!tournament[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
-    if (!verifyPin(admin_pin, tournament[0].admin_pin)) {
-      return res.status(403).json({ error: "Falscher PIN" });
-    }
-
-    await db.delete(tourMatchesTable).where(eq(tourMatchesTable.tournament_id, id));
-    await db.delete(tourEntriesTable).where(eq(tourEntriesTable.tournament_id, id));
-    await db.delete(tourTournamentsTable).where(eq(tourTournamentsTable.id, id));
-
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-// POST /tour/tournaments/:id/entries
-router.post("/tour/tournaments/:id/entries", async (req, res) => {
-  try {
-    const tournamentId = parseInt(req.params.id);
-    const { player_id, seed } = req.body;
-
-    const existing = await db
-      .select()
-      .from(tourEntriesTable)
-      .where(
-        and(
-          eq(tourEntriesTable.tournament_id, tournamentId),
-          eq(tourEntriesTable.player_id, player_id)
-        )
-      )
-      .limit(1);
-
-    if (existing[0]) {
-      return res.status(409).json({ error: "Spieler bereits eingetragen" });
-    }
-
-    await db.insert(tourEntriesTable).values({ tournament_id: tournamentId, player_id, seed });
-
-    const detail = await buildTournamentDetail(tournamentId);
-    res.json(detail);
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-// DELETE /tour/tournaments/:id/entries
-router.delete("/tour/tournaments/:id/entries", async (req, res) => {
-  try {
-    const tournamentId = parseInt(req.params.id);
-    const { player_id } = req.body;
-
-    await db
-      .delete(tourEntriesTable)
-      .where(
-        and(
-          eq(tourEntriesTable.tournament_id, tournamentId),
-          eq(tourEntriesTable.player_id, player_id)
-        )
-      );
-
-    const detail = await buildTournamentDetail(tournamentId);
-    res.json(detail);
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-// POST /tour/tournaments/:id/start
-router.post("/tour/tournaments/:id/start", async (req, res) => {
-  try {
-    const id = parseInt(req.params.id);
-    const tournament = await db
-      .select()
-      .from(tourTournamentsTable)
-      .where(eq(tourTournamentsTable.id, id))
-      .limit(1);
-
-    if (!tournament[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
-    if (tournament[0].status !== "offen") {
-      return res.status(400).json({ error: "Turnier bereits gestartet" });
-    }
-
-    const entries = await db
-      .select()
-      .from(tourEntriesTable)
-      .where(eq(tourEntriesTable.tournament_id, id))
-      .orderBy(tourEntriesTable.seed);
-
-    if (entries.length < 2) {
-      return res.status(400).json({ error: "Mindestens 2 Spieler erforderlich" });
-    }
-
-    const playerIds = entries.map((e) => e.player_id);
-    await generateBracket(id, playerIds, tournament[0].legs_format);
-
-    await db
-      .update(tourTournamentsTable)
-      .set({ status: "laufend" })
-      .where(eq(tourTournamentsTable.id, id));
-
-    const detail = await buildTournamentDetail(id);
-    res.json(detail);
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-// POST /tour/matches/:matchId/result
-router.post("/tour/matches/:matchId/result", async (req, res) => {
-  try {
-    const matchId = parseInt(req.params.matchId);
-    const { winner_id, score_p1, score_p2, admin_pin } = req.body;
-
-    const match = await db
-      .select()
-      .from(tourMatchesTable)
-      .where(eq(tourMatchesTable.id, matchId))
-      .limit(1);
-
-    if (!match[0]) return res.status(404).json({ error: "Match nicht gefunden" });
-
-    const tournament = await db
-      .select()
-      .from(tourTournamentsTable)
-      .where(eq(tourTournamentsTable.id, match[0].tournament_id))
-      .limit(1);
-
-    if (admin_pin && !verifyPin(admin_pin, tournament[0]?.admin_pin ?? "")) {
-      return res.status(403).json({ error: "Falscher PIN" });
-    }
-
-    await db
-      .update(tourMatchesTable)
-      .set({ winner_id, score_p1, score_p2, status: "abgeschlossen" })
-      .where(eq(tourMatchesTable.id, matchId));
-
-    // Propagate winner to next round
-    await propagateWinner(match[0].tournament_id, matchId, winner_id, match[0].runde, match[0].match_nr);
-
-    // Check if tournament is complete
-    await checkTournamentComplete(match[0].tournament_id);
-
-    const detail = await buildTournamentDetail(match[0].tournament_id);
-    res.json(detail);
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-async function propagateWinner(tournamentId: number, matchId: number, winnerId: number, currentRound: string, matchNr: number) {
+async function advanceWinner(tournamentId: number, currentRunde: string, matchNr: number, winnerId: number) {
   const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
-  const currentIdx = roundOrder.indexOf(currentRound);
+  const currentIdx = roundOrder.indexOf(currentRunde);
   if (currentIdx === -1 || currentIdx >= roundOrder.length - 1) return;
 
   const nextRound = roundOrder[currentIdx + 1];
@@ -710,46 +342,337 @@ async function propagateWinner(tournamentId: number, matchId: number, winnerId: 
   if (!nextMatches[0]) return;
 
   if (isP1) {
-    await db
-      .update(tourMatchesTable)
+    await db.update(tourMatchesTable)
       .set({ player1_id: winnerId })
       .where(eq(tourMatchesTable.id, nextMatches[0].id));
   } else {
-    await db
-      .update(tourMatchesTable)
+    await db.update(tourMatchesTable)
       .set({ player2_id: winnerId })
       .where(eq(tourMatchesTable.id, nextMatches[0].id));
   }
 }
 
 async function checkTournamentComplete(tournamentId: number) {
-  const matches = await db
-    .select()
-    .from(tourMatchesTable)
+  const matches = await db.select().from(tourMatchesTable)
     .where(eq(tourMatchesTable.tournament_id, tournamentId));
-
   const final = matches.find((m) => m.runde === "F");
   if (final?.winner_id) {
-    await db
-      .update(tourTournamentsTable)
+    await db.update(tourTournamentsTable)
       .set({ status: "abgeschlossen" })
       .where(eq(tourTournamentsTable.id, tournamentId));
   }
 }
 
+// ─── Spielplan Routes ─────────────────────────────────────────────────────────
+
+// GET /tour/schedule - get all schedule entries
+router.get("/tour/schedule", async (_req, res) => {
+  try {
+    const entries = await db
+      .select()
+      .from(tourScheduleTable)
+      .orderBy(tourScheduleTable.phase_order, tourScheduleTable.datum);
+    res.json(entries);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/schedule/seed - populate Season 1 schedule (idempotent)
+router.post("/tour/schedule/seed", async (_req, res) => {
+  try {
+    const existing = await db.select().from(tourScheduleTable).limit(1);
+    if (existing.length > 0) {
+      return res.json({ ok: true, message: "Spielplan bereits befüllt" });
+    }
+    const rows = SEASON1_SCHEDULE.map((s) => ({ ...s, season: 1 }));
+    await db.insert(tourScheduleTable).values(rows);
+    res.json({ ok: true, inserted: rows.length });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// ─── Player Routes ────────────────────────────────────────────────────────────
+
+// GET /tour/players
+router.get("/tour/players", async (_req, res) => {
+  try {
+    const players = await db.select().from(tourPlayersTable).orderBy(tourPlayersTable.name);
+    const tournaments = await db.select().from(tourTournamentsTable)
+      .where(eq(tourTournamentsTable.status, "abgeschlossen"));
+    const allMatches = await db.select().from(tourMatchesTable);
+    const allBonus = await db.select().from(tourBonusPointsTable);
+
+    const result = players.map((p) => {
+      let totalPoints = 0;
+      for (const t of tournaments) {
+        const tMatches = allMatches.filter((m) => m.tournament_id === t.id);
+        const playerMatches = tMatches.filter(
+          (m) => (m.player1_id === p.id || m.player2_id === p.id) && m.status === "abgeschlossen" && !m.is_bye
+        );
+        if (playerMatches.length === 0) continue;
+        const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
+        const deepest = playerMatches.sort(
+          (a, b) => roundOrder.indexOf(b.runde) - roundOrder.indexOf(a.runde)
+        )[0];
+        const isWinner = deepest.runde === "F" && deepest.winner_id === p.id;
+        const roundKey = isWinner ? "Sieger" : roundToOomKey(deepest.runde);
+        totalPoints += OOM_POINTS[t.typ]?.[roundKey] ?? 0;
+      }
+      const bonusTotal = allBonus
+        .filter((b) => b.player_id === p.id)
+        .reduce((s, b) => s + b.points, 0);
+
+      return {
+        id: p.id,
+        name: p.name,
+        autodarts_username: p.autodarts_username,
+        created_at: p.created_at,
+        oom_points: totalPoints + bonusTotal,
+        oom_rank: 0,
+      };
+    });
+
+    result.sort((a, b) => b.oom_points - a.oom_points);
+    result.forEach((p, i) => { p.oom_rank = i + 1; });
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/players/register
+router.post("/tour/players/register", async (req, res) => {
+  try {
+    const { name, autodarts_username, pin } = req.body;
+    if (!name || !autodarts_username || !pin) {
+      return res.status(400).json({ error: "name, autodarts_username und pin erforderlich" });
+    }
+    const existing = await db.select().from(tourPlayersTable)
+      .where(eq(tourPlayersTable.autodarts_username, autodarts_username)).limit(1);
+    if (existing[0]) return res.status(409).json({ error: "Autodarts-Benutzername bereits registriert" });
+
+    const [player] = await db.insert(tourPlayersTable)
+      .values({ name, autodarts_username, pin_hash: hashPin(pin) })
+      .returning();
+
+    res.json({ id: player.id, name: player.name, autodarts_username: player.autodarts_username, created_at: player.created_at, oom_points: 0, oom_rank: 0 });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /tour/players/:id
+router.get("/tour/players/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const player = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, id)).limit(1);
+    if (!player[0]) return res.status(404).json({ error: "Spieler nicht gefunden" });
+
+    const entries = await db.select().from(tourEntriesTable).where(eq(tourEntriesTable.player_id, id));
+    const tournamentIds = entries.map((e) => e.tournament_id);
+    const tourResults: any[] = [];
+
+    for (const tid of tournamentIds) {
+      const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tid)).limit(1);
+      if (!t[0] || t[0].status !== "abgeschlossen") continue;
+
+      const tMatches = await db.select().from(tourMatchesTable)
+        .where(eq(tourMatchesTable.tournament_id, tid));
+      const playerMatches = tMatches.filter(
+        (m) => (m.player1_id === id || m.player2_id === id) && m.status === "abgeschlossen" && !m.is_bye
+      );
+      if (playerMatches.length === 0) continue;
+
+      const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
+      const deepest = playerMatches.sort(
+        (a, b) => roundOrder.indexOf(b.runde) - roundOrder.indexOf(a.runde)
+      )[0];
+      const isWinner = deepest.runde === "F" && deepest.winner_id === id;
+      const roundKey = isWinner ? "Sieger" : roundToOomKey(deepest.runde);
+      const pts = OOM_POINTS[t[0].typ]?.[roundKey] ?? 0;
+
+      tourResults.push({ tournament_id: tid, tournament_name: t[0].name, typ: t[0].typ, round: roundKey, points: pts });
+    }
+
+    const bonusRows = await db.select().from(tourBonusPointsTable).where(eq(tourBonusPointsTable.player_id, id));
+    const bonusTotal = bonusRows.reduce((s, b) => s + b.points, 0);
+    const totalPoints = tourResults.reduce((s, r) => s + r.points, 0) + bonusTotal;
+
+    res.json({
+      id: player[0].id,
+      name: player[0].name,
+      autodarts_username: player[0].autodarts_username,
+      created_at: player[0].created_at,
+      oom_points: totalPoints,
+      tournament_results: tourResults,
+      bonus_points: bonusRows,
+    });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// ─── Tournament Routes ────────────────────────────────────────────────────────
+
+// GET /tour/tournaments
+router.get("/tour/tournaments", async (_req, res) => {
+  try {
+    const tournaments = await db.select().from(tourTournamentsTable).orderBy(desc(tourTournamentsTable.created_at));
+    const enriched = await Promise.all(tournaments.map(async (t) => {
+      const entries = await db.select().from(tourEntriesTable).where(eq(tourEntriesTable.tournament_id, t.id));
+      return { ...t, player_count: entries.length };
+    }));
+    res.json(enriched);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/tournaments
+router.post("/tour/tournaments", async (req, res) => {
+  try {
+    const { name, typ, tour_type, datum, legs_format, max_players, admin_pin, schedule_id, phase } = req.body;
+    if (!name || !typ || !datum || !admin_pin) {
+      return res.status(400).json({ error: "name, typ, datum, admin_pin erforderlich" });
+    }
+
+    const [t] = await db.insert(tourTournamentsTable)
+      .values({
+        name,
+        typ: typ || "pc",
+        tour_type: tour_type || "pro",
+        phase: phase || null,
+        datum,
+        legs_format: legs_format ?? 5,
+        max_players: max_players ?? 32,
+        admin_pin: hashPin(String(admin_pin)),
+        schedule_id: schedule_id || null,
+      })
+      .returning();
+
+    res.json(t);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /tour/tournaments/:id
+router.get("/tour/tournaments/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const detail = await buildTournamentDetail(id);
+    if (!detail) return res.status(404).json({ error: "Turnier nicht gefunden" });
+    res.json(detail);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/tournaments/:id/entries
+router.post("/tour/tournaments/:id/entries", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const { player_id } = req.body;
+    if (!player_id) return res.status(400).json({ error: "player_id erforderlich" });
+
+    const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
+    if (!t[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
+    if (t[0].status !== "offen") return res.status(400).json({ error: "Turnier ist nicht mehr offen" });
+
+    const existing = await db.select().from(tourEntriesTable)
+      .where(and(eq(tourEntriesTable.tournament_id, tournamentId), eq(tourEntriesTable.player_id, player_id))).limit(1);
+    if (existing[0]) return res.status(409).json({ error: "Spieler bereits eingetragen" });
+
+    const entries = await db.select().from(tourEntriesTable).where(eq(tourEntriesTable.tournament_id, tournamentId));
+    if (entries.length >= t[0].max_players) return res.status(400).json({ error: "Turnier ist voll" });
+
+    await db.insert(tourEntriesTable).values({ tournament_id: tournamentId, player_id, seed: entries.length + 1 });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// DELETE /tour/tournaments/:id/entries/:playerId
+router.delete("/tour/tournaments/:id/entries/:playerId", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const playerId = parseInt(req.params.playerId);
+
+    const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
+    if (!t[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
+    if (t[0].status !== "offen") return res.status(400).json({ error: "Turnier ist bereits gestartet" });
+
+    await db.delete(tourEntriesTable)
+      .where(and(eq(tourEntriesTable.tournament_id, tournamentId), eq(tourEntriesTable.player_id, playerId)));
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/tournaments/:id/start
+router.post("/tour/tournaments/:id/start", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const { admin_pin } = req.body;
+
+    const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
+    if (!t[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
+    if (!verifyPin(String(admin_pin), t[0].admin_pin)) return res.status(403).json({ error: "Falscher Admin-PIN" });
+    if (t[0].status !== "offen") return res.status(400).json({ error: "Turnier bereits gestartet" });
+
+    const entries = await db.select().from(tourEntriesTable).where(eq(tourEntriesTable.tournament_id, tournamentId));
+    if (entries.length < 2) return res.status(400).json({ error: "Mindestens 2 Spieler erforderlich" });
+
+    await db.update(tourTournamentsTable).set({ status: "laufend" }).where(eq(tourTournamentsTable.id, tournamentId));
+    const playerIds = entries.sort((a, b) => (a.seed ?? 0) - (b.seed ?? 0)).map((e) => e.player_id);
+    await generateBracket(tournamentId, playerIds, t[0].legs_format);
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// ─── Match Routes ─────────────────────────────────────────────────────────────
+
+// POST /tour/matches/:matchId/result
+router.post("/tour/matches/:matchId/result", async (req, res) => {
+  try {
+    const matchId = parseInt(req.params.matchId);
+    const { winner_id, score_p1, score_p2, admin_pin } = req.body;
+
+    const match = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.id, matchId)).limit(1);
+    if (!match[0]) return res.status(404).json({ error: "Match nicht gefunden" });
+    if (match[0].status === "abgeschlossen") return res.status(400).json({ error: "Match bereits abgeschlossen" });
+
+    const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, match[0].tournament_id)).limit(1);
+    if (!t[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
+    if (!verifyPin(String(admin_pin), t[0].admin_pin)) return res.status(403).json({ error: "Falscher Admin-PIN" });
+
+    await db.update(tourMatchesTable)
+      .set({ winner_id, score_p1, score_p2, status: "abgeschlossen" })
+      .where(eq(tourMatchesTable.id, matchId));
+
+    await advanceWinner(match[0].tournament_id, match[0].runde, match[0].match_nr, winner_id);
+    await checkTournamentComplete(match[0].tournament_id);
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // POST /tour/matches/:matchId/autodarts
 router.post("/tour/matches/:matchId/autodarts", async (req, res) => {
   try {
     const matchId = parseInt(req.params.matchId);
-    const match = await db
-      .select()
-      .from(tourMatchesTable)
-      .where(eq(tourMatchesTable.id, matchId))
-      .limit(1);
-
+    const match = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.id, matchId)).limit(1);
     if (!match[0]) return res.status(404).json({ error: "Match nicht gefunden" });
 
-    // Get player autodarts usernames
     const p1 = match[0].player1_id
       ? await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, match[0].player1_id)).limit(1)
       : [];
@@ -761,38 +684,29 @@ router.post("/tour/matches/:matchId/autodarts", async (req, res) => {
       return res.json({ found: false, match_id: null, player1_legs: 0, player2_legs: 0, player1_avg: 0, player2_avg: 0 });
     }
 
-    // Try to get autodarts token from env
     const refreshToken = process.env.AUTODARTS_REFRESH_TOKEN;
     if (!refreshToken) {
       return res.json({ found: false, match_id: null, player1_legs: 0, player2_legs: 0, player1_avg: 0, player2_avg: 0 });
     }
 
     try {
-      // Get access token
       const tokenRes = await fetch("https://login.autodarts.io/realms/autodarts/protocol/openid-connect/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "refresh_token",
-          client_id: "autodarts-play",
-          refresh_token: refreshToken,
-        }),
+        body: new URLSearchParams({ grant_type: "refresh_token", client_id: "autodarts-play", refresh_token: refreshToken }),
       });
       if (!tokenRes.ok) throw new Error("Token fetch failed");
       const tokenData: any = await tokenRes.json();
       const accessToken = tokenData.access_token;
 
-      // Search for recent matches between the two players
-      const matchesRes = await fetch(
-        `https://api.autodarts.io/ms/v0/matches?limit=20`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
+      const matchesRes = await fetch("https://api.autodarts.io/ms/v0/matches?limit=20", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
       if (!matchesRes.ok) throw new Error("Matches fetch failed");
       const matchesData: any = await matchesRes.json();
-      const matches: any[] = matchesData.data || matchesData || [];
+      const adMatches: any[] = matchesData.data || matchesData || [];
 
-      // Find a match involving both players
-      const targetMatch = matches.find((m: any) => {
+      const targetMatch = adMatches.find((m: any) => {
         const usernames = (m.players || []).map((p: any) => p.name?.toLowerCase());
         return (
           usernames.includes(p1[0].autodarts_username.toLowerCase()) &&
@@ -824,15 +738,58 @@ router.post("/tour/matches/:matchId/autodarts", async (req, res) => {
   }
 });
 
+// ─── Bonus Points Routes ──────────────────────────────────────────────────────
+
+// POST /tour/bonus
+router.post("/tour/bonus", async (req, res) => {
+  try {
+    const { player_id, tournament_id, bonus_type, admin_pin } = req.body;
+    if (!player_id || !tournament_id || !bonus_type) {
+      return res.status(400).json({ error: "player_id, tournament_id, bonus_type erforderlich" });
+    }
+
+    const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournament_id)).limit(1);
+    if (!t[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
+    if (!verifyPin(String(admin_pin), t[0].admin_pin)) return res.status(403).json({ error: "Falscher Admin-PIN" });
+
+    const points = BONUS_POINTS[bonus_type];
+    if (!points) return res.status(400).json({ error: `Unbekannter Bonus-Typ: ${bonus_type}` });
+
+    const [bonus] = await db.insert(tourBonusPointsTable)
+      .values({ player_id, tournament_id, bonus_type, points })
+      .returning();
+
+    res.json(bonus);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /tour/bonus/:tournamentId
+router.get("/tour/bonus/:tournamentId", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.tournamentId);
+    const bonuses = await db.select().from(tourBonusPointsTable)
+      .where(eq(tourBonusPointsTable.tournament_id, tournamentId));
+    res.json(bonuses);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// ─── OOM Route ────────────────────────────────────────────────────────────────
+
 // GET /tour/oom
 router.get("/tour/oom", async (_req, res) => {
   try {
     const players = await db.select().from(tourPlayersTable);
-    const tournaments = await db
-      .select()
-      .from(tourTournamentsTable)
-      .where(eq(tourTournamentsTable.status, "abgeschlossen"));
+    const tournaments = await db.select().from(tourTournamentsTable)
+      .where(eq(tourTournamentsTable.status, "abgeschlossen"))
+      .orderBy(tourTournamentsTable.datum);
     const allMatches = await db.select().from(tourMatchesTable);
+    const allBonus = await db.select().from(tourBonusPointsTable);
+
+    const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
 
     const oomData = players.map((player) => {
       const results: any[] = [];
@@ -840,45 +797,49 @@ router.get("/tour/oom", async (_req, res) => {
       for (const t of tournaments) {
         const tMatches = allMatches.filter((m) => m.tournament_id === t.id);
         const playerMatches = tMatches.filter(
-          (m) => m.player1_id === player.id || m.player2_id === player.id
+          (m) => (m.player1_id === player.id || m.player2_id === player.id) && m.status === "abgeschlossen" && !m.is_bye
         );
         if (playerMatches.length === 0) continue;
 
-        const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
-        const playedMatches = playerMatches.filter((m) => m.status === "abgeschlossen" && !m.is_bye);
-        if (playedMatches.length === 0) continue;
-
-        const deepestMatch = playedMatches.sort(
+        const deepest = playerMatches.sort(
           (a, b) => roundOrder.indexOf(b.runde) - roundOrder.indexOf(a.runde)
         )[0];
 
-        const isWinner = deepestMatch.runde === "F" && deepestMatch.winner_id === player.id;
-        const roundKey = isWinner ? "Sieger" : roundToOomKey(deepestMatch.runde, 0);
+        const isWinner = deepest.runde === "F" && deepest.winner_id === player.id;
+        const roundKey = isWinner ? "Sieger" : roundToOomKey(deepest.runde);
         const points = OOM_POINTS[t.typ]?.[roundKey] ?? 0;
 
+        // Bonus points for this tournament
+        const bonusForTournament = allBonus
+          .filter((b) => b.player_id === player.id && b.tournament_id === t.id)
+          .reduce((s, b) => s + b.points, 0);
+
         results.push({
+          tournament_id: t.id,
           tournament_name: t.name,
           typ: t.typ,
           points,
-          round: isWinner ? "Sieger" : deepestMatch.runde,
+          bonus: bonusForTournament,
+          round: roundKey,
         });
       }
 
-      const totalPoints = results.reduce((s, r) => s + r.points, 0);
-      const bestResult = results.length > 0 ? results.sort((a, b) => b.points - a.points)[0].round : "-";
+      const totalPoints = results.reduce((s, r) => s + r.points + r.bonus, 0);
 
       return {
         player_id: player.id,
         player_name: player.name,
         autodarts_username: player.autodarts_username,
         total_points: totalPoints,
+        bonus_total: results.reduce((s, r) => s + r.bonus, 0),
         tournaments_played: results.length,
-        best_result: bestResult,
+        best_result: results.length > 0
+          ? results.sort((a, b) => b.points - a.points)[0].round
+          : "-",
         results,
       };
-    });
+    }).filter((p) => p.tournaments_played > 0);
 
-    // Sort by points and assign ranks
     oomData.sort((a, b) => b.total_points - a.total_points);
     const ranked = oomData.map((p, i) => ({ rank: i + 1, ...p }));
 
@@ -892,10 +853,8 @@ router.get("/tour/oom", async (_req, res) => {
 router.post("/tour/admin/verify", async (req, res) => {
   try {
     const { pin } = req.body;
-    // Admin PIN is the same across all tournaments — for quick setup, use env or first tournament
     const anyTournament = await db.select().from(tourTournamentsTable).limit(1);
     if (!anyTournament[0]) return res.json({ ok: false });
-
     const ok = verifyPin(pin, anyTournament[0].admin_pin);
     res.json({ ok });
   } catch (e) {

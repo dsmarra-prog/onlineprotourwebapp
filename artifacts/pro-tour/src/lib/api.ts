@@ -1,6 +1,6 @@
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, "") + "/api";
+const BASE = "/api";
 
-export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+export async function apiFetch<T = any>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { "Content-Type": "application/json", ...init?.headers },
     ...init,
@@ -21,16 +21,34 @@ export type TourPlayer = {
   oom_rank: number;
 };
 
+export type TourScheduleEntry = {
+  id: number;
+  season: number;
+  tour_type: "pro" | "development";
+  kategorie: "pc" | "m1" | "m2" | "dev_cup" | "dev_major";
+  phase: string;
+  phase_order: number;
+  event_name: string;
+  datum: string;
+  tag: string;
+  uhrzeit: string;
+  mode: string;
+  qualification: string | null;
+  status: "abgeschlossen" | "upcoming" | "laufend";
+  external_id: number | null;
+};
+
 export type TourTournament = {
   id: number;
   name: string;
-  typ: "players_championship" | "european_tour" | "world_series" | "major";
+  typ: "pc" | "m1" | "m2" | "dev_cup" | "dev_major";
+  tour_type: "pro" | "development";
+  phase: string | null;
   datum: string;
   status: "offen" | "laufend" | "abgeschlossen";
   legs_format: number;
   max_players: number;
   player_count: number;
-  winner_name: string | null;
 };
 
 export type TourMatch = {
@@ -50,7 +68,7 @@ export type TourMatch = {
 };
 
 export type TourTournamentDetail = {
-  tournament: Omit<TourTournament, "player_count" | "winner_name">;
+  tournament: Omit<TourTournament, "player_count">;
   players: Array<{
     player_id: number;
     seed: number | null;
@@ -67,40 +85,52 @@ export type TourOomEntry = {
   player_name: string;
   autodarts_username: string;
   total_points: number;
+  bonus_total: number;
   tournaments_played: number;
   best_result: string;
   results: Array<{
+    tournament_id: number;
     tournament_name: string;
     typ: string;
     points: number;
+    bonus: number;
     round: string;
   }>;
 };
 
 export type TourPlayerProfile = {
-  player: TourPlayer;
+  id: number;
+  name: string;
+  autodarts_username: string;
+  created_at: string;
+  oom_points: number;
   tournament_results: Array<{
     tournament_id: number;
     tournament_name: string;
-    tournament_type: string;
-    best_round: string;
+    typ: string;
+    round: string;
     points: number;
   }>;
-  wins: number;
-  losses: number;
+  bonus_points: Array<{
+    id: number;
+    bonus_type: string;
+    points: number;
+    tournament_id: number;
+  }>;
 };
 
 export const TYP_LABELS: Record<string, string> = {
-  players_championship: "Players Championship",
-  european_tour: "European Tour",
-  world_series: "World Series",
-  major: "Major",
+  pc: "Players Championship",
+  m1: "Major",
+  m2: "Grand Final",
+  dev_cup: "Development Cup",
+  dev_major: "Dev Major",
 };
 
 export const RUNDE_LABELS: Record<string, string> = {
-  R64: "Runde 64",
-  R32: "Runde 32",
-  R16: "Runde 16",
+  R64: "Letzte 64",
+  R32: "Letzte 32",
+  R16: "Achtelfinale",
   QF: "Viertelfinale",
   SF: "Halbfinale",
   F: "Finale",

@@ -22,7 +22,7 @@ export default function TourniereListe() {
 
   const [form, setForm] = useState({
     name: "",
-    typ: "players_championship",
+    typ: "pc",
     datum: new Date().toISOString().slice(0, 10),
     legs_format: "5",
     max_players: "32",
@@ -42,7 +42,7 @@ export default function TourniereListe() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tournaments"] });
       setOpen(false);
-      setForm({ name: "", typ: "players_championship", datum: new Date().toISOString().slice(0, 10), legs_format: "5", max_players: "32", admin_pin: "" });
+      setForm({ name: "", typ: "pc", datum: new Date().toISOString().slice(0, 10), legs_format: "5", max_players: "32", admin_pin: "" });
       toast({ title: "Turnier erstellt" });
     },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
@@ -84,10 +84,11 @@ export default function TourniereListe() {
                   <Select value={form.typ} onValueChange={(v) => setForm((f) => ({ ...f, typ: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="players_championship">Players Championship</SelectItem>
-                      <SelectItem value="european_tour">European Tour</SelectItem>
-                      <SelectItem value="world_series">World Series</SelectItem>
-                      <SelectItem value="major">Major</SelectItem>
+                      <SelectItem value="pc">Players Championship</SelectItem>
+                      <SelectItem value="m1">Major (Spring Open / Grand Prix)</SelectItem>
+                      <SelectItem value="m2">Grand Final / Home Matchplay</SelectItem>
+                      <SelectItem value="dev_cup">Development Cup</SelectItem>
+                      <SelectItem value="dev_major">Dev Major</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -163,10 +164,9 @@ export default function TourniereListe() {
                       <span className="flex items-center gap-1"><Users className="w-3 h-3" />{t.player_count}/{t.max_players}</span>
                     </div>
                   </div>
-                  {t.winner_name && (
+                  {t.status === "abgeschlossen" && (
                     <div className="text-right ml-4">
-                      <p className="text-xs text-muted-foreground">Sieger</p>
-                      <p className="text-sm font-bold text-yellow-400">{t.winner_name}</p>
+                      <p className="text-xs text-muted-foreground">Abgeschlossen</p>
                     </div>
                   )}
                 </div>

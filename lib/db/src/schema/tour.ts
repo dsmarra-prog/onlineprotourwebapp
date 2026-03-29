@@ -8,15 +8,35 @@ export const tourPlayersTable = pgTable("tour_players", {
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const tourScheduleTable = pgTable("tour_schedule", {
+  id: serial("id").primaryKey(),
+  season: integer("season").notNull().default(1),
+  tour_type: text("tour_type").notNull(), // 'pro' | 'development'
+  kategorie: text("kategorie").notNull(), // 'pc' | 'm1' | 'm2' | 'dev_cup' | 'dev_major'
+  phase: text("phase").notNull(),
+  phase_order: integer("phase_order").notNull(),
+  event_name: text("event_name").notNull(),
+  datum: text("datum").notNull(), // DD.MM.YYYY
+  tag: text("tag").notNull(),
+  uhrzeit: text("uhrzeit").notNull(),
+  mode: text("mode").notNull(),
+  qualification: text("qualification"),
+  status: text("status").notNull().default("upcoming"), // 'abgeschlossen' | 'upcoming' | 'laufend'
+  external_id: integer("external_id"),
+});
+
 export const tourTournamentsTable = pgTable("tour_tournaments", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  typ: text("typ").notNull(),
+  typ: text("typ").notNull(), // 'pc' | 'm1' | 'm2' | 'dev_cup' | 'dev_major'
+  tour_type: text("tour_type").notNull().default("pro"), // 'pro' | 'development'
+  phase: text("phase"),
   datum: text("datum").notNull(),
   status: text("status").notNull().default("offen"),
   legs_format: integer("legs_format").notNull().default(5),
   max_players: integer("max_players").notNull().default(32),
   admin_pin: text("admin_pin").notNull(),
+  schedule_id: integer("schedule_id"),
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -42,7 +62,18 @@ export const tourEntriesTable = pgTable("tour_entries", {
   seed: integer("seed"),
 });
 
+export const tourBonusPointsTable = pgTable("tour_bonus_points", {
+  id: serial("id").primaryKey(),
+  player_id: integer("player_id").notNull(),
+  tournament_id: integer("tournament_id").notNull(),
+  bonus_type: text("bonus_type").notNull(), // '9darter' | 'bigfish'
+  points: integer("points").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
 export type TourPlayer = typeof tourPlayersTable.$inferSelect;
+export type TourSchedule = typeof tourScheduleTable.$inferSelect;
 export type TourTournament = typeof tourTournamentsTable.$inferSelect;
 export type TourMatch = typeof tourMatchesTable.$inferSelect;
 export type TourEntry = typeof tourEntriesTable.$inferSelect;
+export type TourBonusPoints = typeof tourBonusPointsTable.$inferSelect;
