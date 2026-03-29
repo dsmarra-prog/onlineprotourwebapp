@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import {
   tourPlayersTable,
   tourScheduleTable,
+  tourOomStandingsTable,
   tourTournamentsTable,
   tourMatchesTable,
   tourEntriesTable,
@@ -388,6 +389,214 @@ router.post("/tour/schedule/seed", async (_req, res) => {
     const rows = SEASON1_SCHEDULE.map((s) => ({ ...s, season: 1 }));
     await db.insert(tourScheduleTable).values(rows);
     res.json({ ok: true, inserted: rows.length });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// ─── OOM Standings (imported from onlineprotour.eu) ──────────────────────────
+
+const OOM_SEED_DATA = [
+  { season: 1, rank: 1, autodarts_username: "sw4g89", total_points: 6500, bonus_points: 0, tournaments_played: 9, tournament_breakdown: "{\"PC1\":1000,\"PC2\":600,\"PC3\":400,\"PC4\":600,\"PC5\":150,\"PC6\":1000,\"PC7\":1000,\"Spring Open\":1500,\"PC8\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 2, autodarts_username: "prachtbursche180", total_points: 3900, bonus_points: 0, tournaments_played: 8, tournament_breakdown: "{\"PC1\":250,\"PC2\":1000,\"PC4\":1000,\"PC5\":1000,\"PC6\":25,\"PC7\":250,\"Spring Open\":225,\"PC8\":150}", last_updated: "26.03.2026" },
+  { season: 1, rank: 3, autodarts_username: "markusv22", total_points: 2800, bonus_points: 0, tournaments_played: 8, tournament_breakdown: "{\"PC1\":400,\"PC2\":250,\"PC3\":600,\"PC4\":25,\"PC5\":600,\"PC6\":150,\"PC7\":400,\"Spring Open\":375}", last_updated: "26.03.2026" },
+  { season: 1, rank: 4, autodarts_username: "releven91", total_points: 2350, bonus_points: 100, tournaments_played: 9, tournament_breakdown: "{\"PC1\":700,\"PC2\":150,\"PC3\":150,\"PC4\":250,\"PC5\":250,\"PC6\":250,\"PC7\":150,\"Spring Open\":375,\"PC8\":75}", last_updated: "26.03.2026" },
+  { season: 1, rank: 5, autodarts_username: "sircrytex", total_points: 2025, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC3\":1000,\"PC4\":400,\"PC5\":25,\"Spring Open\":600}", last_updated: "26.03.2026" },
+  { season: 1, rank: 6, autodarts_username: "smarradinho", total_points: 1950, bonus_points: 0, tournaments_played: 8, tournament_breakdown: "{\"PC1\":75,\"PC2\":150,\"PC3\":75,\"PC4\":250,\"PC6\":600,\"PC7\":25,\"Spring Open\":375,\"PC8\":400}", last_updated: "26.03.2026" },
+  { season: 1, rank: 7, autodarts_username: "captinhoook_28219", total_points: 1675, bonus_points: 0, tournaments_played: 8, tournament_breakdown: "{\"PC1\":400,\"PC2\":400,\"PC3\":150,\"PC5\":150,\"PC6\":25,\"PC7\":250,\"Spring Open\":50,\"PC8\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 8, autodarts_username: "mg_82", total_points: 1500, bonus_points: 0, tournaments_played: 6, tournament_breakdown: "{\"PC4\":400,\"PC5\":25,\"PC6\":400,\"PC7\":600,\"Spring Open\":50,\"PC8\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 9, autodarts_username: "jensonjdv2110", total_points: 1200, bonus_points: 0, tournaments_played: 6, tournament_breakdown: "{\"PC1\":150,\"PC3\":250,\"PC4\":25,\"PC5\":150,\"PC6\":250,\"Spring Open\":375}", last_updated: "26.03.2026" },
+  { season: 1, rank: 10, autodarts_username: "purcello87_18488", total_points: 1175, bonus_points: 0, tournaments_played: 3, tournament_breakdown: "{\"PC2\":25,\"Spring Open\":900,\"PC8\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 11, autodarts_username: "elitedragon94", total_points: 1150, bonus_points: 0, tournaments_played: 6, tournament_breakdown: "{\"PC3\":250,\"PC4\":150,\"PC6\":250,\"PC7\":25,\"Spring Open\":225,\"PC8\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 12, autodarts_username: "sulmi.", total_points: 1075, bonus_points: 0, tournaments_played: 6, tournament_breakdown: "{\"PC4\":250,\"PC5\":150,\"PC6\":150,\"PC7\":400,\"Spring Open\":50,\"PC8\":75}", last_updated: "26.03.2026" },
+  { season: 1, rank: 13, autodarts_username: "blackjackleo", total_points: 1000, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC8\":1000}", last_updated: "26.03.2026" },
+  { season: 1, rank: 14, autodarts_username: "babu9435", total_points: 950, bonus_points: 0, tournaments_played: 8, tournament_breakdown: "{\"PC1\":150,\"PC2\":150,\"PC3\":150,\"PC4\":75,\"PC6\":25,\"PC7\":150,\"Spring Open\":225,\"PC8\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 15, autodarts_username: "infernohunter1405", total_points: 950, bonus_points: 0, tournaments_played: 6, tournament_breakdown: "{\"PC3\":150,\"PC5\":250,\"PC6\":25,\"PC7\":150,\"Spring Open\":225,\"PC8\":150}", last_updated: "26.03.2026" },
+  { season: 1, rank: 16, autodarts_username: "schmitz1980", total_points: 925, bonus_points: 0, tournaments_played: 7, tournament_breakdown: "{\"PC1\":25,\"PC2\":75,\"PC3\":75,\"PC4\":150,\"PC5\":75,\"PC7\":400,\"Spring Open\":125}", last_updated: "26.03.2026" },
+  { season: 1, rank: 17, autodarts_username: "the_phili_buster", total_points: 875, bonus_points: 0, tournaments_played: 6, tournament_breakdown: "{\"PC1\":25,\"PC3\":25,\"PC5\":400,\"PC6\":75,\"PC7\":25,\"Spring Open\":325}", last_updated: "26.03.2026" },
+  { season: 1, rank: 18, autodarts_username: "dartspieler88_82773", total_points: 850, bonus_points: 0, tournaments_played: 7, tournament_breakdown: "{\"PC1\":75,\"PC2\":75,\"PC3\":25,\"PC4\":150,\"PC5\":75,\"PC7\":250,\"Spring Open\":200}", last_updated: "26.03.2026" },
+  { season: 1, rank: 19, autodarts_username: "seb_s180", total_points: 825, bonus_points: 0, tournaments_played: 6, tournament_breakdown: "{\"PC2\":400,\"PC3\":25,\"PC4\":25,\"PC5\":25,\"PC6\":25,\"Spring Open\":325}", last_updated: "26.03.2026" },
+  { season: 1, rank: 20, autodarts_username: "petrus_72", total_points: 800, bonus_points: 0, tournaments_played: 6, tournament_breakdown: "{\"PC1\":75,\"PC2\":25,\"PC4\":75,\"PC6\":400,\"PC7\":75,\"Spring Open\":150}", last_updated: "26.03.2026" },
+  { season: 1, rank: 21, autodarts_username: "flojo1988", total_points: 775, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC5\":150,\"PC6\":150,\"Spring Open\":425}", last_updated: "26.03.2026" },
+  { season: 1, rank: 22, autodarts_username: "juergen0770", total_points: 750, bonus_points: 0, tournaments_played: 7, tournament_breakdown: "{\"PC1\":150,\"PC2\":25,\"PC3\":400,\"PC4\":25,\"PC6\":75,\"PC7\":25,\"PC8\":50}", last_updated: "26.03.2026" },
+  { season: 1, rank: 23, autodarts_username: "thekingofbob", total_points: 750, bonus_points: 0, tournaments_played: 6, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC3\":25,\"PC5\":25,\"PC7\":25,\"Spring Open\":625}", last_updated: "26.03.2026" },
+  { season: 1, rank: 24, autodarts_username: "thopps1985", total_points: 725, bonus_points: 0, tournaments_played: 7, tournament_breakdown: "{\"PC1\":150,\"PC2\":150,\"PC3\":75,\"PC4\":25,\"PC5\":75,\"PC6\":75,\"Spring Open\":175}", last_updated: "26.03.2026" },
+  { season: 1, rank: 25, autodarts_username: "flibber180", total_points: 700, bonus_points: 0, tournaments_played: 7, tournament_breakdown: "{\"PC1\":250,\"PC2\":75,\"PC3\":25,\"PC4\":75,\"PC5\":25,\"PC6\":25,\"Spring Open\":225}", last_updated: "26.03.2026" },
+  { season: 1, rank: 26, autodarts_username: "boomshack_at", total_points: 675, bonus_points: 0, tournaments_played: 7, tournament_breakdown: "{\"PC1\":75,\"PC2\":75,\"PC3\":150,\"PC4\":25,\"PC5\":25,\"PC7\":75,\"Spring Open\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 27, autodarts_username: "mojofreaky", total_points: 675, bonus_points: 0, tournaments_played: 7, tournament_breakdown: "{\"PC1\":75,\"PC2\":250,\"PC3\":75,\"PC4\":75,\"PC5\":25,\"PC7\":25,\"Spring Open\":150}", last_updated: "26.03.2026" },
+  { season: 1, rank: 28, autodarts_username: "jonasdarts501", total_points: 650, bonus_points: 0, tournaments_played: 6, tournament_breakdown: "{\"PC1\":250,\"PC2\":25,\"PC3\":25,\"PC5\":25,\"PC7\":150,\"Spring Open\":175}", last_updated: "26.03.2026" },
+  { season: 1, rank: 29, autodarts_username: "tordart_97", total_points: 625, bonus_points: 0, tournaments_played: 6, tournament_breakdown: "{\"PC1\":75,\"PC2\":25,\"PC3\":25,\"PC4\":400,\"PC7\":25,\"Spring Open\":75}", last_updated: "26.03.2026" },
+  { season: 1, rank: 30, autodarts_username: "marco.darts", total_points: 600, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC1\":150,\"PC3\":75,\"PC5\":25,\"PC7\":25,\"Spring Open\":325}", last_updated: "26.03.2026" },
+  { season: 1, rank: 31, autodarts_username: "chefkoch1978", total_points: 575, bonus_points: 0, tournaments_played: 6, tournament_breakdown: "{\"PC1\":25,\"PC2\":75,\"PC3\":25,\"PC4\":25,\"PC5\":100,\"Spring Open\":325}", last_updated: "26.03.2026" },
+  { season: 1, rank: 32, autodarts_username: "sully180", total_points: 575, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC5\":25,\"PC6\":400,\"PC8\":100}", last_updated: "26.03.2026" },
+  { season: 1, rank: 33, autodarts_username: "einhornrider", total_points: 550, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC2\":150,\"PC4\":25,\"PC5\":25,\"PC6\":25,\"Spring Open\":325}", last_updated: "26.03.2026" },
+  { season: 1, rank: 34, autodarts_username: "freddy_pdh", total_points: 550, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC1\":25,\"PC5\":25,\"PC6\":75,\"PC7\":75,\"Spring Open\":350}", last_updated: "26.03.2026" },
+  { season: 1, rank: 35, autodarts_username: "lukaskle", total_points: 550, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC2\":75,\"PC3\":25,\"PC6\":25,\"PC7\":75,\"Spring Open\":350}", last_updated: "26.03.2026" },
+  { season: 1, rank: 36, autodarts_username: "eliasb2105", total_points: 525, bonus_points: 0, tournaments_played: 7, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC3\":25,\"PC4\":25,\"PC5\":25,\"PC6\":25,\"Spring Open\":375}", last_updated: "26.03.2026" },
+  { season: 1, rank: 37, autodarts_username: "f1tzyyy_", total_points: 525, bonus_points: 0, tournaments_played: 7, tournament_breakdown: "{\"PC1\":75,\"PC2\":25,\"PC3\":25,\"PC4\":25,\"PC5\":25,\"PC7\":25,\"Spring Open\":325}", last_updated: "26.03.2026" },
+  { season: 1, rank: 38, autodarts_username: "martinb2810", total_points: 525, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC1\":400,\"PC2\":25,\"PC3\":25,\"PC5\":25,\"Spring Open\":50}", last_updated: "26.03.2026" },
+  { season: 1, rank: 39, autodarts_username: "matze_3112", total_points: 525, bonus_points: 0, tournaments_played: 6, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC3\":150,\"PC4\":25,\"PC5\":25,\"Spring Open\":275}", last_updated: "26.03.2026" },
+  { season: 1, rank: 40, autodarts_username: "reini_md", total_points: 500, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC3\":75,\"PC5\":25,\"Spring Open\":350}", last_updated: "26.03.2026" },
+  { season: 1, rank: 41, autodarts_username: "djdrake2609", total_points: 475, bonus_points: 0, tournaments_played: 6, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC3\":25,\"PC4\":25,\"PC6\":25,\"Spring Open\":350}", last_updated: "26.03.2026" },
+  { season: 1, rank: 42, autodarts_username: "kraut0001", total_points: 475, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC1\":75,\"PC3\":25,\"PC5\":25,\"PC6\":25,\"Spring Open\":325}", last_updated: "26.03.2026" },
+  { season: 1, rank: 43, autodarts_username: "alex.de.wolf", total_points: 450, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC4\":150,\"PC5\":25,\"Spring Open\":225}", last_updated: "26.03.2026" },
+  { season: 1, rank: 44, autodarts_username: "amateurdarter", total_points: 450, bonus_points: 0, tournaments_played: 6, tournament_breakdown: "{\"PC1\":25,\"PC2\":150,\"PC3\":25,\"PC5\":25,\"PC6\":150,\"PC8\":75}", last_updated: "26.03.2026" },
+  { season: 1, rank: 45, autodarts_username: "bigzap", total_points: 450, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC1\":25,\"PC4\":75,\"PC5\":75,\"PC6\":25,\"Spring Open\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 46, autodarts_username: "bwl_babbel", total_points: 450, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC1\":150,\"PC2\":75,\"PC4\":75,\"PC5\":75,\"Spring Open\":75}", last_updated: "26.03.2026" },
+  { season: 1, rank: 47, autodarts_username: "dennis_0125", total_points: 450, bonus_points: 0, tournaments_played: 6, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC3\":25,\"PC4\":25,\"PC5\":25,\"Spring Open\":325}", last_updated: "26.03.2026" },
+  { season: 1, rank: 48, autodarts_username: "mr.t180", total_points: 450, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC2\":25,\"PC3\":75,\"PC4\":25,\"PC5\":25,\"Spring Open\":300}", last_updated: "26.03.2026" },
+  { season: 1, rank: 49, autodarts_username: "svenw_74", total_points: 450, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC1\":25,\"PC3\":25,\"PC4\":25,\"PC5\":150,\"Spring Open\":225}", last_updated: "26.03.2026" },
+  { season: 1, rank: 50, autodarts_username: "thomas_ka", total_points: 450, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC2\":25,\"PC3\":25,\"PC4\":150,\"PC5\":25,\"Spring Open\":225}", last_updated: "26.03.2026" },
+  { season: 1, rank: 51, autodarts_username: "gerry_d67", total_points: 425, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC1\":25,\"PC2\":75,\"PC4\":25,\"PC7\":25,\"Spring Open\":275}", last_updated: "26.03.2026" },
+  { season: 1, rank: 52, autodarts_username: "hotwings_88", total_points: 425, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC3\":25,\"PC6\":25,\"Spring Open\":325}", last_updated: "26.03.2026" },
+  { season: 1, rank: 53, autodarts_username: "ruhrgebietsdarter", total_points: 425, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC3\":25,\"PC4\":25,\"PC5\":25,\"PC6\":25,\"Spring Open\":325}", last_updated: "26.03.2026" },
+  { season: 1, rank: 54, autodarts_username: "waldenburger1", total_points: 425, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC1\":25,\"PC2\":75,\"PC4\":25,\"PC5\":25,\"Spring Open\":275}", last_updated: "26.03.2026" },
+  { season: 1, rank: 55, autodarts_username: "dh777", total_points: 400, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC2\":25,\"PC5\":25,\"PC6\":25,\"Spring Open\":325}", last_updated: "26.03.2026" },
+  { season: 1, rank: 56, autodarts_username: "mig_b", total_points: 400, bonus_points: 0, tournaments_played: 3, tournament_breakdown: "{\"PC5\":25,\"Spring Open\":375}", last_updated: "26.03.2026" },  
+  { season: 1, rank: 57, autodarts_username: "hoss.dc", total_points: 375, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC2\":25,\"PC3\":25,\"PC4\":25,\"Spring Open\":300}", last_updated: "26.03.2026" },
+  { season: 1, rank: 58, autodarts_username: "nixy_180", total_points: 375, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC3\":75,\"PC4\":25,\"Spring Open\":225}", last_updated: "26.03.2026" },
+  { season: 1, rank: 59, autodarts_username: "phils_dart_time", total_points: 375, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC2\":25,\"PC3\":25,\"PC6\":25,\"Spring Open\":300}", last_updated: "26.03.2026" },
+  { season: 1, rank: 60, autodarts_username: "swordfish22", total_points: 375, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC1\":25,\"PC4\":25,\"PC5\":25,\"Spring Open\":300}", last_updated: "26.03.2026" },
+  { season: 1, rank: 61, autodarts_username: "aronhilmarsson0", total_points: 350, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC7\":25,\"Spring Open\":275}", last_updated: "26.03.2026" },
+  { season: 1, rank: 62, autodarts_username: "double_troub2802", total_points: 350, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC1\":25,\"PC3\":25,\"PC4\":75,\"Spring Open\":225}", last_updated: "26.03.2026" },
+  { season: 1, rank: 63, autodarts_username: "ebbe_1999", total_points: 350, bonus_points: 0, tournaments_played: 3, tournament_breakdown: "{\"PC4\":25,\"PC5\":25,\"Spring Open\":300}", last_updated: "26.03.2026" },
+  { season: 1, rank: 64, autodarts_username: "hansi_darts", total_points: 350, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC3\":25,\"Spring Open\":275}", last_updated: "26.03.2026" },
+  { season: 1, rank: 65, autodarts_username: "j.b1984", total_points: 350, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC1\":25,\"PC3\":25,\"PC7\":25,\"Spring Open\":275}", last_updated: "26.03.2026" },
+  { season: 1, rank: 66, autodarts_username: "mr.bvb", total_points: 350, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC1\":75,\"PC3\":25,\"PC4\":25,\"Spring Open\":225}", last_updated: "26.03.2026" },
+  { season: 1, rank: 67, autodarts_username: "mrmeeseeks_", total_points: 350, bonus_points: 0, tournaments_played: 3, tournament_breakdown: "{\"PC1\":25,\"PC5\":25,\"Spring Open\":300}", last_updated: "26.03.2026" },
+  { season: 1, rank: 68, autodarts_username: "philibert8820", total_points: 350, bonus_points: 0, tournaments_played: 3, tournament_breakdown: "{\"PC3\":25,\"PC5\":25,\"Spring Open\":300}", last_updated: "26.03.2026" },
+  { season: 1, rank: 69, autodarts_username: "purdartist", total_points: 350, bonus_points: 0, tournaments_played: 3, tournament_breakdown: "{\"PC2\":25,\"PC6\":25,\"Spring Open\":300}", last_updated: "26.03.2026" },
+  { season: 1, rank: 70, autodarts_username: "sioux", total_points: 350, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC1\":25,\"PC3\":25,\"PC4\":25,\"Spring Open\":275}", last_updated: "26.03.2026" },
+  { season: 1, rank: 71, autodarts_username: "stefano_darts", total_points: 350, bonus_points: 0, tournaments_played: 3, tournament_breakdown: "{\"PC5\":25,\"PC6\":25,\"Spring Open\":300}", last_updated: "26.03.2026" },
+  { season: 1, rank: 72, autodarts_username: "wolfgangh_", total_points: 350, bonus_points: 0, tournaments_played: 3, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"Spring Open\":300}", last_updated: "26.03.2026" },
+  { season: 1, rank: 73, autodarts_username: "2fournought", total_points: 325, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC1\":25,\"PC3\":25,\"PC4\":25,\"Spring Open\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 74, autodarts_username: "andy_trv", total_points: 325, bonus_points: 0, tournaments_played: 5, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC3\":25,\"PC4\":25,\"Spring Open\":225}", last_updated: "26.03.2026" },
+  { season: 1, rank: 75, autodarts_username: "arni80", total_points: 325, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC1\":25,\"PC4\":25,\"PC5\":25,\"Spring Open\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 76, autodarts_username: "cyborg_dart", total_points: 325, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC3\":25,\"PC4\":25,\"PC6\":25,\"Spring Open\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 77, autodarts_username: "double_trouble_jc", total_points: 325, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC2\":25,\"PC3\":25,\"PC4\":25,\"Spring Open\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 78, autodarts_username: "durmdart", total_points: 325, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC2\":25,\"PC5\":25,\"PC6\":25,\"Spring Open\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 79, autodarts_username: "hammarby_ola", total_points: 325, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC2\":25,\"PC3\":25,\"PC4\":25,\"Spring Open\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 80, autodarts_username: "hasselblatt_66", total_points: 325, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC3\":25,\"Spring Open\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 81, autodarts_username: "jkl180darts", total_points: 325, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC5\":25,\"Spring Open\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 82, autodarts_username: "kapo_darts", total_points: 325, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC2\":25,\"PC3\":25,\"PC5\":25,\"Spring Open\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 83, autodarts_username: "mflorstedt", total_points: 325, bonus_points: 0, tournaments_played: 3, tournament_breakdown: "{\"PC2\":25,\"PC6\":25,\"Spring Open\":275}", last_updated: "26.03.2026" },
+  { season: 1, rank: 84, autodarts_username: "ole_180", total_points: 325, bonus_points: 0, tournaments_played: 3, tournament_breakdown: "{\"PC3\":25,\"PC7\":25,\"Spring Open\":275}", last_updated: "26.03.2026" },
+  { season: 1, rank: 85, autodarts_username: "peterp_52", total_points: 325, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC2\":25,\"PC3\":25,\"PC4\":25,\"Spring Open\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 86, autodarts_username: "phj1804", total_points: 325, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC4\":25,\"Spring Open\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 87, autodarts_username: "rainer.n", total_points: 325, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC1\":25,\"PC4\":25,\"PC5\":25,\"Spring Open\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 88, autodarts_username: "ridsi_", total_points: 325, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC4\":25,\"Spring Open\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 89, autodarts_username: "rubberduck_gaming", total_points: 325, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC3\":25,\"Spring Open\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 90, autodarts_username: "sven_1974", total_points: 325, bonus_points: 0, tournaments_played: 3, tournament_breakdown: "{\"PC3\":25,\"PC4\":25,\"Spring Open\":275}", last_updated: "26.03.2026" },
+  { season: 1, rank: 91, autodarts_username: "tommi82", total_points: 325, bonus_points: 0, tournaments_played: 3, tournament_breakdown: "{\"PC2\":25,\"PC5\":25,\"Spring Open\":275}", last_updated: "26.03.2026" },
+  { season: 1, rank: 92, autodarts_username: "uc_darts", total_points: 325, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC1\":25,\"PC4\":25,\"PC5\":25,\"Spring Open\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 93, autodarts_username: "ujw180", total_points: 325, bonus_points: 0, tournaments_played: 3, tournament_breakdown: "{\"PC2\":25,\"PC5\":25,\"Spring Open\":275}", last_updated: "26.03.2026" },
+  { season: 1, rank: 94, autodarts_username: "wuddelhase", total_points: 325, bonus_points: 0, tournaments_played: 3, tournament_breakdown: "{\"PC3\":25,\"PC6\":25,\"Spring Open\":275}", last_updated: "26.03.2026" },
+  { season: 1, rank: 95, autodarts_username: "andi_ddv", total_points: 300, bonus_points: 0, tournaments_played: 4, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"PC3\":25,\"Spring Open\":225}", last_updated: "26.03.2026" },
+  { season: 1, rank: 96, autodarts_username: "bmc_t3", total_points: 300, bonus_points: 0, tournaments_played: 3, tournament_breakdown: "{\"PC1\":25,\"PC3\":25,\"Spring Open\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 97, autodarts_username: "ebbe1999", total_points: 300, bonus_points: 0, tournaments_played: 3, tournament_breakdown: "{\"PC4\":25,\"PC5\":25,\"Spring Open\":250}", last_updated: "26.03.2026" },
+  { season: 1, rank: 98, autodarts_username: "chris180_1991", total_points: 275, bonus_points: 0, tournaments_played: 3, tournament_breakdown: "{\"PC1\":25,\"PC2\":25,\"Spring Open\":225}", last_updated: "26.03.2026" },
+  { season: 1, rank: 99, autodarts_username: "dirko306", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC8\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 100, autodarts_username: "drbongi", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC4\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 101, autodarts_username: "fanatikal_91", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC6\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 102, autodarts_username: "finnchr95", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC1\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 103, autodarts_username: "franzet._", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC3\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 104, autodarts_username: "gladbach131", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC4\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 105, autodarts_username: "luckyluke02171", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC3\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 106, autodarts_username: "manalexton", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC8\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 107, autodarts_username: "markt.1988", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC1\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 108, autodarts_username: "masterstev_68349", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC8\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 109, autodarts_username: "mira1860", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC6\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 110, autodarts_username: "nurrox", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC8\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 111, autodarts_username: "roevergaming", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC4\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 112, autodarts_username: "sc3ptiix", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC5\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 113, autodarts_username: "schalli1988", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC8\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 114, autodarts_username: "schegge_23", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC8\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 115, autodarts_username: "thehornet180", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC8\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 116, autodarts_username: "the_snipper", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC5\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 117, autodarts_username: "tuage_michel", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC1\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 118, autodarts_username: "x999jey", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC4\":25}", last_updated: "26.03.2026" },
+  { season: 1, rank: 119, autodarts_username: "zorax0681", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC4\":25}", last_updated: "26.03.2026" },
+];
+
+// GET /tour/oom - imported OOM standings
+router.get("/tour/oom", async (_req, res) => {
+  try {
+    const standings = await db
+      .select()
+      .from(tourOomStandingsTable)
+      .orderBy(tourOomStandingsTable.rank);
+
+    if (standings.length === 0) {
+      return res.json([]);
+    }
+
+    // Format for OOM page
+    const result = standings.map((s) => {
+      const breakdown = JSON.parse(s.tournament_breakdown || "{}");
+      const results = Object.entries(breakdown).map(([name, points]) => ({
+        tournament_name: name,
+        points: points as number,
+      }));
+
+      // Determine best result from breakdown
+      const maxPts = Math.max(0, ...results.map((r) => r.points));
+      const bestResult = ptsToBestRound(maxPts);
+
+      return {
+        rank: s.rank,
+        player_id: s.id,
+        player_name: s.autodarts_username,
+        autodarts_username: s.autodarts_username,
+        total_points: s.total_points,
+        bonus_total: s.bonus_points,
+        tournaments_played: s.tournaments_played,
+        best_result: bestResult,
+        last_updated: s.last_updated,
+        results: results.map((r) => ({
+          tournament_id: 0,
+          tournament_name: r.tournament_name,
+          typ: "pc",
+          points: r.points,
+          bonus: 0,
+          round: ptsToBestRound(r.points),
+        })),
+      };
+    });
+
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+function ptsToBestRound(pts: number): string {
+  if (pts >= 1500) return "Sieger";
+  if (pts >= 900) return "Finale";
+  if (pts >= 600) return "Sieger";
+  if (pts >= 400) return "Sieger";
+  if (pts >= 375) return "Halbfinale";
+  if (pts >= 300) return "Finale";
+  if (pts >= 250) return "Viertelfinale";
+  if (pts >= 225) return "Halbfinale";
+  if (pts >= 200) return "Halbfinale";
+  if (pts >= 150) return "Achtelfinale";
+  if (pts >= 125) return "Letzte 32";
+  if (pts >= 100) return "Teilnahme";
+  if (pts >= 75) return "Letzte 32";
+  if (pts >= 50) return "Teilnahme";
+  if (pts >= 25) return "Teilnahme";
+  return "Teilnahme";
+}
+
+// POST /tour/oom/seed - seed OOM standings (idempotent)
+router.post("/tour/oom/seed", async (_req, res) => {
+  try {
+    const existing = await db.select().from(tourOomStandingsTable).limit(1);
+    if (existing.length > 0) {
+      return res.json({ ok: true, message: "OOM bereits befüllt", count: existing.length });
+    }
+    await db.insert(tourOomStandingsTable).values(OOM_SEED_DATA);
+    res.json({ ok: true, inserted: OOM_SEED_DATA.length });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }

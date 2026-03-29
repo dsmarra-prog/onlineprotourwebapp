@@ -1,13 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
-import { BarChart3, Crown, Loader2, Trophy, Star } from "lucide-react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { BarChart3, Crown, Loader2, Trophy, Star, RefreshCw } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { useState } from "react";
 
 type OomResult = {
-  tournament_id: number;
   tournament_name: string;
-  typ: string;
   points: number;
   bonus: number;
   round: string;
@@ -22,81 +19,127 @@ type OomEntry = {
   bonus_total: number;
   tournaments_played: number;
   best_result: string;
+  last_updated?: string;
   results: OomResult[];
 };
 
-const ROUND_LABEL: Record<string, string> = {
-  Sieger: "🥇",
-  Finale: "🥈",
-  Halbfinale: "🥉",
-  Viertelfinale: "QF",
-  Achtelfinale: "AF",
-  "Letzte 32": "L32",
-  Teilnahme: "TN",
+const TYP_COLOR: Record<string, string> = {
+  "Spring Open": "text-yellow-400",
+  "Grand Prix": "text-yellow-400",
+  "Home Matchplay": "text-red-400",
 };
 
-const TYP_COLOR: Record<string, string> = {
-  pc: "text-primary",
-  m1: "text-yellow-400",
-  m2: "text-red-400",
-  dev_cup: "text-blue-400",
-  dev_major: "text-purple-400",
-};
+function getTournamentColor(name: string): string {
+  if (name.includes("Spring Open") || name.includes("Grand Prix") || name.includes("Home Matchplay")) {
+    return "text-yellow-400";
+  }
+  return "text-primary";
+}
+
+function ptsToBestRound(pts: number, tournamentName?: string): string {
+  const isMajor = tournamentName && (
+    tournamentName.includes("Spring Open") ||
+    tournamentName.includes("Grand Prix") ||
+    tournamentName.includes("Home Matchplay")
+  );
+  if (isMajor) {
+    if (pts >= 1500) return "Sieger";
+    if (pts >= 900) return "Finale";
+    if (pts >= 600) return "Halbfinale";
+    if (pts >= 375) return "Viertelfinale";
+    if (pts >= 225) return "Achtelfinale";
+    if (pts >= 125) return "Letzte 32";
+    return "Teilnahme";
+  }
+  if (pts >= 1000) return "Sieger";
+  if (pts >= 600) return "Finale";
+  if (pts >= 400) return "Halbfinale";
+  if (pts >= 250) return "Viertelfinale";
+  if (pts >= 150) return "Achtelfinale";
+  if (pts >= 75) return "Letzte 32";
+  return "Teilnahme";
+}
+
+function bestResultFromResults(results: OomResult[]): string {
+  const roundOrder = ["Sieger","Finale","Halbfinale","Viertelfinale","Achtelfinale","Letzte 32","Teilnahme"];
+  let best = "Teilnahme";
+  let bestIdx = 6;
+  for (const r of results) {
+    const round = ptsToBestRound(r.points, r.tournament_name);
+    const idx = roundOrder.indexOf(round);
+    if (idx !== -1 && idx < bestIdx) {
+      best = round;
+      bestIdx = idx;
+    }
+  }
+  return best;
+}
+
+// Tournament column order
+const TOUR_COL_ORDER = ["PC1","PC2","PC3","PC4","PC5","PC6","PC7","Spring Open","PC8","PC9","Grand Prix","Home Matchplay"];
+
+function sortTournamentCols(cols: string[]): string[] {
+  return [...cols].sort((a, b) => {
+    const ai = TOUR_COL_ORDER.indexOf(a);
+    const bi = TOUR_COL_ORDER.indexOf(b);
+    if (ai === -1 && bi === -1) return a.localeCompare(b);
+    if (ai === -1) return 1;
+    if (bi === -1) return -1;
+    return ai - bi;
+  });
+}
 
 export default function OomPage() {
-  const { data: oom, isLoading } = useQuery<OomEntry[]>({
+  const { data: oom, isLoading, refetch } = useQuery<OomEntry[]>({
     queryKey: ["oom"],
     queryFn: () => apiFetch("/tour/oom"),
   });
 
+  const seedMutation = useMutation({
+    mutationFn: () => apiFetch("/tour/oom/seed", { method: "POST" }),
+    onSuccess: () => refetch(),
+  });
+
   const [showDetail, setShowDetail] = useState(false);
 
-  // Collect all unique tournaments across all players (ordered)
-  const allTournaments = (() => {
+  // Collect all unique tournament names (ordered)
+  const allTournamentNames = (() => {
     if (!oom) return [];
-    const map = new Map<number, { id: number; name: string; typ: string }>();
+    const nameSet = new Set<string>();
     for (const entry of oom) {
       for (const r of entry.results) {
-        if (!map.has(r.tournament_id)) {
-          map.set(r.tournament_id, { id: r.tournament_id, name: r.tournament_name, typ: r.typ });
-        }
+        if (r.points > 0) nameSet.add(r.tournament_name);
       }
     }
-    return [...map.values()];
+    return sortTournamentCols([...nameSet]);
   })();
 
-  // Short label for tournament column headers
-  function shortName(name: string): string {
-    return name
-      .replace("Players Championship ", "PC")
-      .replace("Spring Open 2026", "M1")
-      .replace("Grand Prix (Di/Do)", "M2")
-      .replace("Home Matchplay", "HM")
-      .replace("Development Cup ", "DC")
-      .replace("Grand Final", "GF")
-      .replace("April Major", "AM")
-      .replace("May Major", "MM");
-  }
+  const lastUpdated = oom?.[0]?.last_updated;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <BarChart3 className="w-6 h-6 text-primary" /> Order of Merit
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
             Saison 2026 · Pro Tour Rangliste
+            {lastUpdated && (
+              <span className="ml-2 text-muted-foreground/60">· Stand {lastUpdated}</span>
+            )}
           </p>
         </div>
-        {oom && oom.length > 0 && allTournaments.length > 0 && (
-          <button
-            onClick={() => setShowDetail((v) => !v)}
-            className="text-xs text-primary border border-primary/30 px-3 py-1.5 rounded-lg hover:bg-primary/10 transition-colors"
-          >
-            {showDetail ? "Kompaktansicht" : "Detailansicht"}
-          </button>
-        )}
+        <div className="flex gap-2 flex-shrink-0">
+          {oom && oom.length > 0 && allTournamentNames.length > 0 && (
+            <button
+              onClick={() => setShowDetail((v) => !v)}
+              className="text-xs text-primary border border-primary/30 px-3 py-1.5 rounded-lg hover:bg-primary/10 transition-colors"
+            >
+              {showDetail ? "Kompaktansicht" : "Detailansicht"}
+            </button>
+          )}
+        </div>
       </div>
 
       {isLoading ? (
@@ -106,9 +149,17 @@ export default function OomPage() {
       ) : !oom?.length ? (
         <div className="text-center py-12 text-muted-foreground">
           <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-20" />
-          <p>Noch keine Daten. Spiele ein Turnier!</p>
+          <p className="mb-3">Keine OOM-Daten vorhanden.</p>
+          <button
+            onClick={() => seedMutation.mutate()}
+            disabled={seedMutation.isPending}
+            className="inline-flex items-center gap-2 text-xs text-primary border border-primary/40 px-4 py-2 rounded-lg hover:bg-primary/10 transition-colors"
+          >
+            <RefreshCw className={`w-3 h-3 ${seedMutation.isPending ? "animate-spin" : ""}`} />
+            OOM von onlineprotour.eu importieren
+          </button>
         </div>
-      ) : showDetail && allTournaments.length > 0 ? (
+      ) : showDetail && allTournamentNames.length > 0 ? (
         // ── Detailed view with per-tournament columns ──
         <div className="bg-card border border-border rounded-xl overflow-x-auto">
           <table className="w-full text-xs">
@@ -119,16 +170,16 @@ export default function OomPage() {
                 <th className="text-right p-2 font-semibold text-foreground">Gesamt</th>
                 <th className="text-right p-2">Bonus</th>
                 <th className="text-center p-2">T</th>
-                {allTournaments.map((t) => (
-                  <th key={t.id} className={`text-right p-2 ${TYP_COLOR[t.typ] ?? "text-primary"}`}>
-                    {shortName(t.name)}
+                {allTournamentNames.map((name) => (
+                  <th key={name} className={`text-right p-2 ${getTournamentColor(name)}`}>
+                    {name}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {oom.map((entry, i) => {
-                const resultMap = new Map(entry.results.map((r) => [r.tournament_id, r]));
+                const resultMap = new Map(entry.results.map((r) => [r.tournament_name, r]));
                 return (
                   <tr
                     key={entry.player_id}
@@ -138,10 +189,7 @@ export default function OomPage() {
                       <RankBadge rank={entry.rank} small />
                     </td>
                     <td className="p-2 sticky left-8 bg-card/90 backdrop-blur z-10">
-                      <Link href={`/spieler/${entry.player_id}`} className="hover:text-primary transition-colors">
-                        <div className="font-semibold">{entry.player_name}</div>
-                        <div className="text-muted-foreground text-[10px]">@{entry.autodarts_username}</div>
-                      </Link>
+                      <div className="font-semibold">{entry.autodarts_username}</div>
                     </td>
                     <td className="p-2 text-right font-bold text-primary">
                       {entry.total_points.toLocaleString("de-DE")}
@@ -152,11 +200,11 @@ export default function OomPage() {
                       ) : "—"}
                     </td>
                     <td className="p-2 text-center text-muted-foreground">{entry.tournaments_played}</td>
-                    {allTournaments.map((t) => {
-                      const r = resultMap.get(t.id);
+                    {allTournamentNames.map((name) => {
+                      const r = resultMap.get(name);
                       return (
-                        <td key={t.id} className="p-2 text-right">
-                          {r ? (
+                        <td key={name} className="p-2 text-right">
+                          {r && r.points > 0 ? (
                             <span className={`font-medium ${r.points >= 1000 ? "text-yellow-400" : r.points >= 400 ? "text-primary" : "text-muted-foreground"}`}>
                               {r.points}
                               {r.bonus > 0 && <span className="text-yellow-400">★</span>}
@@ -172,8 +220,9 @@ export default function OomPage() {
               })}
             </tbody>
           </table>
-          <div className="px-3 py-2 text-xs text-muted-foreground border-t border-border/40">
-            ★ = Bonus erhalten (9-Darter +500 / Big Fish 170 +100)
+          <div className="px-3 py-2 text-xs text-muted-foreground border-t border-border/40 flex items-center justify-between">
+            <span>★ = Bonus erhalten (9-Darter +500 / Big Fish 170 +100)</span>
+            <span className="text-muted-foreground/50">Quelle: onlineprotour.eu</span>
           </div>
         </div>
       ) : (
@@ -191,42 +240,45 @@ export default function OomPage() {
               </tr>
             </thead>
             <tbody>
-              {oom.map((entry, i) => (
-                <tr
-                  key={entry.player_id}
-                  className={`border-b border-border/50 hover:bg-accent/20 transition-colors ${i < 3 ? "bg-accent/10" : ""}`}
-                >
-                  <td className="p-3">
-                    <RankBadge rank={entry.rank} />
-                  </td>
-                  <td className="p-3">
-                    <Link href={`/spieler/${entry.player_id}`} className="hover:text-primary transition-colors">
-                      <div className="font-semibold text-sm">{entry.player_name}</div>
-                      <div className="text-xs text-muted-foreground">@{entry.autodarts_username}</div>
-                    </Link>
-                  </td>
-                  <td className="p-3 text-center text-sm text-muted-foreground">{entry.tournaments_played}</td>
-                  <td className="p-3 text-center">
-                    <ResultBadge result={entry.best_result} />
-                  </td>
-                  <td className="p-3 text-right text-xs">
-                    {entry.bonus_total > 0 ? (
-                      <span className="text-yellow-400 font-medium flex items-center justify-end gap-0.5">
-                        <Star className="w-3 h-3" />+{entry.bonus_total}
+              {oom.map((entry, i) => {
+                const best = bestResultFromResults(entry.results);
+                return (
+                  <tr
+                    key={entry.player_id}
+                    className={`border-b border-border/50 hover:bg-accent/20 transition-colors ${i < 3 ? "bg-accent/10" : ""}`}
+                  >
+                    <td className="p-3">
+                      <RankBadge rank={entry.rank} />
+                    </td>
+                    <td className="p-3">
+                      <div className="font-semibold text-sm">{entry.autodarts_username}</div>
+                    </td>
+                    <td className="p-3 text-center text-sm text-muted-foreground">{entry.tournaments_played}</td>
+                    <td className="p-3 text-center">
+                      <ResultBadge result={best} />
+                    </td>
+                    <td className="p-3 text-right text-xs">
+                      {entry.bonus_total > 0 ? (
+                        <span className="text-yellow-400 font-medium flex items-center justify-end gap-0.5">
+                          <Star className="w-3 h-3" />+{entry.bonus_total}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="p-3 text-right">
+                      <span className="font-bold text-primary text-sm">
+                        {entry.total_points.toLocaleString("de-DE")}
                       </span>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </td>
-                  <td className="p-3 text-right">
-                    <span className="font-bold text-primary text-sm">
-                      {entry.total_points.toLocaleString("de-DE")}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+          <div className="px-3 py-2 text-xs text-muted-foreground border-t border-border/40 text-right">
+            Quelle: onlineprotour.eu · Stand {lastUpdated}
+          </div>
         </div>
       )}
 
