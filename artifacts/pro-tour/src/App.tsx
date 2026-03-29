@@ -37,7 +37,11 @@ function NavBar() {
     <nav className="border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 flex items-center h-14 gap-1">
         <div className="flex items-center gap-2 mr-6">
-          <Target className="w-5 h-5 text-primary" />
+          <img
+            src="/pro-tour/opt-logo.png"
+            alt="OPT"
+            className="w-8 h-8 object-contain"
+          />
           <span className="font-bold text-sm text-primary tracking-wide uppercase">Online Pro Tour</span>
         </div>
         <div className="flex items-center gap-1 flex-1 overflow-x-auto">

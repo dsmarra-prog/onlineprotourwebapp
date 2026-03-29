@@ -75,12 +75,13 @@ export default function Portal() {
       <div className="relative w-full max-w-sm space-y-6">
         {/* Logo */}
         <div className="text-center space-y-2">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center">
-              <Target className="w-6 h-6 text-primary" />
-            </div>
+          <div className="flex items-center justify-center mb-2">
+            <img
+              src="/pro-tour/opt-logo.png"
+              alt="Online Pro Tour"
+              className="w-44 h-44 object-contain drop-shadow-2xl"
+            />
           </div>
-          <h1 className="text-2xl font-bold text-primary tracking-wide uppercase">Online Pro Tour</h1>
           <p className="text-muted-foreground text-sm">Echtzeit-Dart-Turnierplattform</p>
         </div>
 
