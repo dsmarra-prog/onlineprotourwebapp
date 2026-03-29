@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Layout } from "@/components/layout";
 import { useGetCareer, useCareerActions } from "@/hooks/use-career";
 import { useLocation } from "wouter";
@@ -8,7 +8,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Zap, Swords, MonitorPlay, Activity, RefreshCw, ChevronLeft,
-  CheckCircle2, TrendingUp, Trophy,
+  CheckCircle2, TrendingUp, Trophy, ExternalLink, Wifi, WifiOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -484,13 +484,100 @@ function GegnerProfil({ career }: { career: any }) {
   );
 }
 
+const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+
 export default function MatchView() {
-  const { data: career, isLoading } = useGetCareer();
+  const { data: career, isLoading, refetch: refetchCareer } = useGetCareer();
   const { submitResult, isSubmitting, pullAutodarts, isPulling } = useCareerActions();
   const [, setLocation] = useLocation();
   const [showDraw, setShowDraw] = useState(false);
   const [drawShown, setDrawShown] = useState(false);
   const { playMatchStart, playDrawAnimation } = useDartsSounds();
+
+  // Auto-Poll state
+  const [autoPollActive, setAutoPollActive] = useState(false);
+  const [pollCountdown, setPollCountdown] = useState(30);
+  const [pollStatus, setPollStatus] = useState<"idle" | "polling" | "found" | "error">("idle");
+  const pollSinceRef = useRef<string>(new Date().toISOString());
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Lobby state
+  const [lobby, setLobby] = useState<{ id: string; joinUrl: string; legs: number; isDoubleIn: boolean } | null>(null);
+  const [isCreatingLobby, setIsCreatingLobby] = useState(false);
+
+  const stopPoll = useCallback(() => {
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
+    pollIntervalRef.current = null;
+    countdownIntervalRef.current = null;
+    setAutoPollActive(false);
+    setPollCountdown(30);
+  }, []);
+
+  const doPoll = useCallback(async () => {
+    setPollStatus("polling");
+    try {
+      const resp = await fetch(`${BASE}/api/career/autodarts/poll?since=${encodeURIComponent(pollSinceRef.current)}`);
+      const data = await resp.json();
+      if (data.found) {
+        stopPoll();
+        setPollStatus("found");
+        refetchCareer();
+        data.messages?.forEach((msg: string) => {
+          const ev = new CustomEvent("career-toast", { detail: msg });
+          window.dispatchEvent(ev);
+        });
+      } else {
+        setPollStatus("idle");
+      }
+    } catch {
+      setPollStatus("error");
+    }
+  }, [stopPoll, refetchCareer]);
+
+  const startAutoPoll = useCallback(() => {
+    pollSinceRef.current = new Date().toISOString();
+    setAutoPollActive(true);
+    setPollStatus("idle");
+    setPollCountdown(30);
+
+    countdownIntervalRef.current = setInterval(() => {
+      setPollCountdown(prev => {
+        if (prev <= 1) return 30;
+        return prev - 1;
+      });
+    }, 1000);
+
+    pollIntervalRef.current = setInterval(() => {
+      doPoll();
+      setPollCountdown(30);
+    }, 30_000);
+  }, [doPoll]);
+
+  useEffect(() => () => stopPoll(), [stopPoll]);
+
+  const createLobby = async () => {
+    setIsCreatingLobby(true);
+    try {
+      const resp = await fetch(`${BASE}/api/career/autodarts/lobby`, { method: "POST" });
+      const data = await resp.json();
+      if (data.lobby) {
+        setLobby(data.lobby);
+        startAutoPoll();
+      }
+    } catch {}
+    setIsCreatingLobby(false);
+  };
+
+  const closeLobby = async () => {
+    if (lobby) {
+      await fetch(`${BASE}/api/career/autodarts/lobby/${lobby.id}`, { method: "DELETE" });
+      setLobby(null);
+    }
+    stopPoll();
+    setPollStatus("idle");
+  };
 
   const form = useForm<MatchFormValues>({
     resolver: zodResolver(matchSchema),
@@ -803,23 +890,98 @@ export default function MatchView() {
 
           {/* Result Section */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-card border border-border rounded-2xl p-6 flex flex-col justify-center items-center text-center">
-              <Activity className="w-12 h-12 text-primary mb-4 opacity-80" />
-              <h3 className="text-xl font-bold mb-2">Autodarts Integration</h3>
-              <p className="text-muted-foreground text-sm mb-6">
-                Match auf dem Board beendet? Ergebnis direkt über Autodarts importieren.
-              </p>
-              <Button
-                onClick={() => pullAutodarts()}
-                disabled={isPulling}
-                size="lg"
-                className="w-full bg-accent hover:bg-accent/90 text-black font-bold shadow-lg shadow-accent/20"
-              >
-                {isPulling
-                  ? <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
-                  : <RefreshCw className="w-5 h-5 mr-2" />}
-                Von Autodarts abrufen
-              </Button>
+            <div className="bg-card border border-border rounded-2xl p-6 flex flex-col gap-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Activity className="w-5 h-5 text-primary" />
+                <h3 className="text-xl font-bold">Autodarts Integration</h3>
+              </div>
+
+              {/* Lobby Card */}
+              {!lobby ? (
+                <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 flex flex-col gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    Erstelle eine private Lobby mit den richtigen Turniereinstellungen — Autodarts öffnet sie direkt.
+                  </p>
+                  <div className="flex gap-2 text-xs text-muted-foreground/70">
+                    <span className="bg-secondary px-2 py-0.5 rounded">501</span>
+                    <span className="bg-secondary px-2 py-0.5 rounded">Best of {career.hat_tourcard ? "5" : "3"}</span>
+                    {(career as any).turnier_modus === "double_in_out" && (
+                      <span className="bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded">Double-In</span>
+                    )}
+                    <span className="bg-secondary px-2 py-0.5 rounded">Privat</span>
+                  </div>
+                  <Button
+                    onClick={createLobby}
+                    disabled={isCreatingLobby}
+                    className="w-full bg-primary hover:bg-primary/90 text-black font-bold"
+                  >
+                    {isCreatingLobby
+                      ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      : <MonitorPlay className="w-4 h-4 mr-2" />}
+                    Autodarts Lobby erstellen
+                  </Button>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-primary/50 bg-primary/10 p-4 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold text-primary flex items-center gap-1.5">
+                      <Wifi className="w-4 h-4" /> Lobby aktiv
+                    </span>
+                    <button onClick={closeLobby} className="text-xs text-muted-foreground hover:text-white">✕ Schließen</button>
+                  </div>
+                  <a
+                    href={lobby.joinUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-primary text-black font-bold text-sm hover:bg-primary/90 transition-colors"
+                  >
+                    <ExternalLink className="w-4 h-4" /> In Autodarts öffnen
+                  </a>
+                  <div className="text-xs text-muted-foreground text-center">
+                    Lobby-ID: <span className="font-mono">{lobby.id.substring(0, 8)}…</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Auto-Poll Status */}
+              {autoPollActive ? (
+                <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm">
+                    {pollStatus === "polling"
+                      ? <RefreshCw className="w-4 h-4 text-green-400 animate-spin" />
+                      : <Wifi className="w-4 h-4 text-green-400 animate-pulse" />}
+                    <span className="text-green-300">Auto-Import aktiv</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Nächste Prüfung: <span className="font-mono text-white">{pollCountdown}s</span></span>
+                    <button onClick={stopPoll} className="text-xs text-muted-foreground hover:text-white">Stop</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => { startAutoPoll(); }}
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 text-xs"
+                    disabled={autoPollActive}
+                  >
+                    <Wifi className="w-3 h-3 mr-1" /> Auto-Import starten
+                  </Button>
+                  <Button
+                    onClick={() => pullAutodarts()}
+                    disabled={isPulling}
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 text-xs"
+                  >
+                    {isPulling
+                      ? <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                      : <RefreshCw className="w-3 h-3 mr-1" />}
+                    Jetzt abrufen
+                  </Button>
+                </div>
+              )}
             </div>
 
             <div className="bg-card border border-border rounded-2xl p-6">

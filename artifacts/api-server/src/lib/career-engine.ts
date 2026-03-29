@@ -1934,41 +1934,101 @@ export async function buyEquipment(id: string) {
   return { career: buildCareerState(await getOrCreateCareer()), messages: [`✅ ${item.name} gekauft! Bonus aktiv.`] };
 }
 
-const AUTODARTS_API_URL = "https://api.autodarts.io/as/v0/matches/filter?size=10&page=0&sort=-finished_at";
-const AUTODARTS_BEARER_TOKEN = "Bearer eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJkTmtvV253VjRRZEpTTlF2a1FGTTEyMm1RUU8zdVJ0R0ZHX3NwUUtwWUpZIn0.eyJleHAiOjE3NzQ2OTMwMDQsImlhdCI6MTc3NDY5MjcwNCwiYXV0aF90aW1lIjoxNzc0NjgyODM2LCJqdGkiOiI1MzkzMWY4Yi1lMzNkLTQ3YzUtOTMzZS1mNjQxZDVlM2JlZTIiLCJpc3MiOiJodHRwczovL2xvZ2luLmF1dG9kYXJ0cy5pby9yZWFsbXMvYXV0b2RhcnRzIiwiYXVkIjoiYWNjb3VudCIsInN1YiI6IjFkNWI4MzEwLTA2MDMtNGM4YS1hOWMzLWM2YmI5ZmQ3ZWU0MSIsInR5cCI6IkJlYXJlciIsImF6cCI6ImF1dG9kYXJ0cy1wbGF5Iiwibm9uY2UiOiI3OGQ3YTNkOS00NTM5LTRhYjEtYTk4YS02NGJjYjAyOWNkNzAiLCJzZXNzaW9uX3N0YXRlIjoiMjFhM2ZiZTAtY2ZiNi00MzQxLWE3ZjAtMTk4ODJjMTJlOGQwIiwiYWNyIjoiMSIsImFsbG93ZWQtb3JpZ2lucyI6WyJodHRwczovL2F1dG9kYXJ0cy5pbyIsImh0dHBzOi8vcGxheS5hdXRvZGFydHMuaW8iXSwicmVhbG1fYWNjZXNzIjp7InJvbGVzIjpbImRlZmF1bHQtcm9sZXMtYXV0b2RhcnRzIiwib2ZmbGluZV9hY2Nlc3MiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwicmVzb3VyY2VfYWNjZXNzIjp7ImFjY291bnQiOnsicm9sZXMiOlsibWFuYWdlLWFjY291bnQiLCJtYW5hZ2UtYWNjb3VudC1saW5rcyIsInZpZXctcHJvZmlsZSJdfX0sInNjb3BlIjoib3BlbmlkIGVtYWlsIHByb2ZpbGUiLCJzaWQiOiIyMWEzZmJlMC1jZmI2LTQzNDEtYTdmMC0xOTg4MmMxMmU4ZDAiLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwibmFtZSI6IkRlbm5pcyBTbWFycmEiLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJzbWFycmFkaW5obyIsImdpdmVuX25hbWUiOiJEZW5uaXMiLCJmYW1pbHlfbmFtZSI6IlNtYXJyYSIsImVtYWlsIjoiZC5zbWFycmFAZ29vZ2xlbWFpbC5jb20ifQ.zELEPyAcNWIgB1QTE7HOxs-ycFbXwoDj5EjYyJvntUYmE1HZUV8sNIO1s7cNmDkNsme9Ft2GOvCgIGRl2QaHhXStBFPnnjky5HI4qyUWNKh0t438U2Yi5L6uHyyQDpYvi_wYt8aekpMPOt3BZaxeOobga74TETcLaZPSV8rblqr4OMVYPDBTt7an74TpKbf0ADNJ9L5QHzo6TRSwYvPo8ksXdSs43bbdu0yuuGZGDI2q3nim2GT9SnpQL4-1hR646lrM_OeC4_fTKOGAsCrzuJ8esvvK4SHZ5YtawM1YEird4Kai8JdfYD_6QcAVjNg_SJzT4xyxPUKVd-Oo5pYV-g";
+// ── Autodarts Token Management ────────────────────────────────────────────────
+const AUTODARTS_TOKEN_URL = "https://login.autodarts.io/realms/autodarts/protocol/openid-connect/token";
+const AUTODARTS_CLIENT_ID = "autodarts-play";
+const AUTODARTS_MATCHES_URL = "https://api.autodarts.io/as/v0/matches/filter?size=10&page=0&sort=-finished_at";
+const AUTODARTS_LOBBIES_URL = "https://api.autodarts.io/gs/v0/lobbies";
+
+let _cachedToken: string | null = null;
+let _tokenExpiresAt: number = 0;
+
+async function getAutodartsToken(): Promise<string> {
+  const now = Date.now();
+  if (_cachedToken && now < _tokenExpiresAt - 30_000) return _cachedToken;
+
+  const refreshToken = process.env.AUTODARTS_REFRESH_TOKEN;
+  if (!refreshToken) throw new Error("AUTODARTS_REFRESH_TOKEN nicht konfiguriert");
+
+  const resp = await fetch(AUTODARTS_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: AUTODARTS_CLIENT_ID,
+      refresh_token: refreshToken,
+    }),
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Token-Refresh fehlgeschlagen (${resp.status}): ${text}`);
+  }
+  const data = await resp.json();
+  _cachedToken = data.access_token as string;
+  _tokenExpiresAt = now + (data.expires_in ?? 300) * 1000;
+  return _cachedToken;
+}
+
+async function autodartsGet(url: string): Promise<any> {
+  const token = await getAutodartsToken();
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
+  if (!resp.ok) throw new Error(`Autodarts API Fehler ${resp.status}`);
+  return resp.json();
+}
+
+async function autodartsPost(url: string, body: object): Promise<any> {
+  const token = await getAutodartsToken();
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Autodarts API POST Fehler ${resp.status}: ${text}`);
+  }
+  return resp.json();
+}
+
+async function autodartsDelete(url: string): Promise<void> {
+  const token = await getAutodartsToken();
+  await fetch(url, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+}
+
+function parseAutodartsMatches(data: any): any[] {
+  if (Array.isArray(data)) return data;
+  if (data.items) return data.items;
+  if (data.matches) return data.matches;
+  return [];
+}
+
+function extractPlayerStats(career: any, players: any[]): { spieler: any; gegner: any } | null {
+  let spieler: any = null;
+  let gegner: any = null;
+  for (const p of players) {
+    if (p.name?.toLowerCase() === career.spieler_name.toLowerCase()) spieler = p;
+    else gegner = p;
+  }
+  if (!spieler || !gegner) return null;
+  return { spieler, gegner };
+}
 
 export async function pullFromAutodarts() {
   const career = await getOrCreateCareer();
   try {
-    const response = await fetch(AUTODARTS_API_URL, {
-      headers: { Authorization: AUTODARTS_BEARER_TOKEN, Accept: "application/json" },
-    });
-    if (!response.ok) {
-      return { career: buildCareerState(career), messages: [`❌ Verbindungsfehler zu Autodarts (Code ${response.status}). Token abgelaufen?`] };
-    }
-    const data = await response.json();
-    let matches: any[];
-    if (Array.isArray(data)) matches = data;
-    else if (data.items) matches = data.items;
-    else if (data.matches) matches = data.matches;
-    else matches = [];
+    const data = await autodartsGet(AUTODARTS_MATCHES_URL);
+    const matches = parseAutodartsMatches(data);
 
     if (!matches.length) return { career: buildCareerState(career), messages: ["❌ Keine Matches im Autodarts-Profil gefunden."] };
 
     const letztes_match = matches[0];
     const players = letztes_match.players ?? [];
-    let spieler_daten: any = null;
-    let gegner_daten: any = null;
+    const pair = extractPlayerStats(career, players);
 
-    for (const p of players) {
-      if (p.name?.toLowerCase() === career.spieler_name.toLowerCase()) spieler_daten = p;
-      else gegner_daten = p;
-    }
-
-    if (spieler_daten && gegner_daten) {
-      const stats = spieler_daten.stats ?? {};
-      const legs_won = spieler_daten.legs ?? 0;
-      const legs_lost = gegner_daten.legs ?? 0;
+    if (pair) {
+      const stats = pair.spieler.stats ?? {};
+      const legs_won = pair.spieler.legs ?? 0;
+      const legs_lost = pair.gegner.legs ?? 0;
       const my_avg = parseFloat(stats.average ?? 0);
       const my_180s = parseInt(stats["180s"] ?? 0);
       const my_hf = parseInt(stats.highestFinish ?? 0);
@@ -1981,6 +2041,85 @@ export async function pullFromAutodarts() {
   } catch (e: any) {
     return { career: buildCareerState(career), messages: [`Fehler beim Abrufen der Daten: ${e.message}`] };
   }
+}
+
+export async function pollAutodartsForNewMatch(since: string) {
+  const career = await getOrCreateCareer();
+  try {
+    const sinceMs = new Date(since).getTime();
+    const data = await autodartsGet(AUTODARTS_MATCHES_URL);
+    const matches = parseAutodartsMatches(data);
+
+    const newMatch = matches.find((m: any) => {
+      const finished = m.finishedAt ?? m.createdAt;
+      return finished && new Date(finished).getTime() > sinceMs;
+    });
+
+    if (!newMatch) {
+      return { found: false, career: buildCareerState(career), messages: [] };
+    }
+
+    const players = newMatch.players ?? [];
+    const pair = extractPlayerStats(career, players);
+
+    if (!pair) {
+      return { found: false, career: buildCareerState(career), messages: ["❌ Dein Spielername im neuen Match nicht gefunden."] };
+    }
+
+    const stats = pair.spieler.stats ?? {};
+    const legs_won = pair.spieler.legs ?? 0;
+    const legs_lost = pair.gegner.legs ?? 0;
+    const my_avg = parseFloat(stats.average ?? 0);
+    const my_180s = parseInt(stats["180s"] ?? 0);
+    const my_hf = parseInt(stats.highestFinish ?? 0);
+    const my_co_pct = parseFloat(stats.checkoutPercentage ?? 0);
+    const result = await processResult(legs_won, legs_lost, my_avg, my_180s, my_hf, my_co_pct);
+    result.messages.push("✅ Match automatisch von Autodarts importiert!");
+    return { found: true, ...result };
+  } catch (e: any) {
+    return { found: false, career: buildCareerState(career), messages: [`Poll-Fehler: ${e.message}`] };
+  }
+}
+
+export async function createAutodartsLobby() {
+  const career = await getOrCreateCareer();
+  const currentT = KALENDER[career.aktuelles_turnier_index ?? 0];
+
+  const isDoubleIn = (currentT as any)?.modus === "double_in_out";
+  const legs = career.hat_tourcard ? 5 : 3;
+
+  const lobbyBody = {
+    variant: "X01",
+    settings: {
+      inMode: isDoubleIn ? "Double" : "Straight",
+      outMode: "Double",
+      bullMode: "25/50",
+      maxRounds: 50,
+      baseScore: 501,
+    },
+    bullOffMode: "Normal",
+    legs,
+    hasReferee: false,
+    isPrivate: true,
+  };
+
+  try {
+    const lobby = await autodartsPost(AUTODARTS_LOBBIES_URL, lobbyBody);
+    const joinUrl = `https://play.autodarts.io/lobbies/${lobby.id}`;
+    return {
+      career: buildCareerState(career),
+      lobby: { id: lobby.id, joinUrl, legs, isDoubleIn },
+      messages: [`✅ Private Lobby erstellt! Öffne Autodarts und tritt bei.`],
+    };
+  } catch (e: any) {
+    return { career: buildCareerState(career), lobby: null, messages: [`❌ Lobby-Erstellung fehlgeschlagen: ${e.message}`] };
+  }
+}
+
+export async function deleteAutodartsLobby(lobbyId: string): Promise<void> {
+  try {
+    await autodartsDelete(`${AUTODARTS_LOBBIES_URL}/${lobbyId}`);
+  } catch {}
 }
 
 export async function resetCareer() {

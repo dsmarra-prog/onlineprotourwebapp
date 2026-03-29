@@ -4,6 +4,9 @@ import {
   startMatch,
   processResult,
   pullFromAutodarts,
+  pollAutodartsForNewMatch,
+  createAutodartsLobby,
+  deleteAutodartsLobby,
   resetCareer,
   buildCareerState,
   buildCalendar,
@@ -59,6 +62,37 @@ router.post("/career/autodarts", async (req, res) => {
     res.json({ career: buildCareerState(result.career), messages: result.messages });
   } catch (err) {
     req.log.error({ err }, "Error pulling from Autodarts");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/career/autodarts/poll", async (req, res) => {
+  try {
+    const since = typeof req.query.since === "string" ? req.query.since : new Date(Date.now() - 60_000).toISOString();
+    const result = await pollAutodartsForNewMatch(since);
+    res.json(result);
+  } catch (err) {
+    req.log.error({ err }, "Error polling Autodarts");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/career/autodarts/lobby", async (req, res) => {
+  try {
+    const result = await createAutodartsLobby();
+    res.json(result);
+  } catch (err) {
+    req.log.error({ err }, "Error creating Autodarts lobby");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/career/autodarts/lobby/:id", async (req, res) => {
+  try {
+    await deleteAutodartsLobby(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err }, "Error deleting Autodarts lobby");
     res.status(500).json({ error: "Internal server error" });
   }
 });
