@@ -1000,7 +1000,56 @@ async function getAutodartAccessToken(): Promise<string | null> {
   return refreshPromise;
 }
 
-// Autodarts uses two relevant endpoints:
+// ─── Per-player token cache ──────────────────────────────────────────────────
+// Each player can store their own Autodarts refresh token. We cache per-player
+// access tokens exactly like the global token, keyed by player DB id.
+const playerTokenCache = new Map<number, { value: string; expiresAt: number }>();
+const playerRefreshPromises = new Map<number, Promise<string | null>>();
+
+async function getPlayerAccessToken(playerId: number): Promise<string | null> {
+  const cached = playerTokenCache.get(playerId);
+  if (cached && Date.now() < cached.expiresAt) return cached.value;
+  if (playerRefreshPromises.has(playerId)) return playerRefreshPromises.get(playerId)!;
+
+  const rows = await db.select({ tok: tourPlayersTable.autodarts_refresh_token })
+    .from(tourPlayersTable).where(eq(tourPlayersTable.id, playerId)).limit(1);
+  const refreshToken = rows[0]?.tok;
+  if (!refreshToken) return null;
+
+  const p = (async () => {
+    try {
+      const r = await fetch(
+        "https://login.autodarts.io/realms/autodarts/protocol/openid-connect/token",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            grant_type: "refresh_token",
+            client_id: "autodarts-play",
+            refresh_token: refreshToken,
+          }),
+        }
+      );
+      if (!r.ok) return null;
+      const d: any = await r.json();
+      if (d.refresh_token) {
+        await db.update(tourPlayersTable)
+          .set({ autodarts_refresh_token: d.refresh_token })
+          .where(eq(tourPlayersTable.id, playerId));
+      }
+      if (d.access_token) {
+        playerTokenCache.set(playerId, { value: d.access_token, expiresAt: Date.now() + 50_000 });
+        return d.access_token as string;
+      }
+      return null;
+    } catch { return null; }
+    finally { playerRefreshPromises.delete(playerId); }
+  })();
+  playerRefreshPromises.set(playerId, p);
+  return p;
+}
+
+// ─── Autodarts endpoints ──────────────────────────────────────────────────────
 // 1. as/v0/matches/filter — recently COMPLETED matches for the authed user
 // 2. gs/v0/lobbies        — currently ACTIVE lobbies/games (all visible lobbies)
 const AD_MATCHES_URL = "https://api.autodarts.io/as/v0/matches/filter?size=250&page=0&sort=-finished_at";

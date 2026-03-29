@@ -5,6 +5,7 @@ export const tourPlayersTable = pgTable("tour_players", {
   name: text("name").notNull(),
   autodarts_username: text("autodarts_username").notNull().unique(),
   pin_hash: text("pin_hash").notNull(),
+  autodarts_refresh_token: text("autodarts_refresh_token"),
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
