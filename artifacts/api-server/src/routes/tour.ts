@@ -1080,6 +1080,42 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
       const u2 = playerMap[match.player2_id!];
       if (!u1 || !u2) continue;
 
+      // --- Direct fetch for matches with a known lobby/match ID ---
+      // When we created the lobby, we stored its ID. After the match finishes,
+      // Autodarts makes it available at as/v0/matches/{id} — works for private lobbies too.
+      if (match.autodarts_match_id) {
+        try {
+          const directRes = await fetch(
+            `https://api.autodarts.io/as/v0/matches/${match.autodarts_match_id}`,
+            { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" } }
+          );
+          if (directRes.ok) {
+            const directMatch = await directRes.json();
+            if (directMatch?.id && directMatch.finishedAt && (directMatch.targetLegs ?? 0) >= winLegs) {
+              // Match found directly — use it regardless of public/private
+              const score = getMatchScore(directMatch, u1, u2);
+              const complete = isMatchComplete(directMatch, winLegs);
+              if (complete) {
+                const winnerId = score.legs1 >= winLegs ? match.player1_id! : match.player2_id!;
+                await db.update(tourMatchesTable)
+                  .set({ winner_id: winnerId, score_p1: score.legs1, score_p2: score.legs2, status: "abgeschlossen", autodarts_match_id: directMatch.id })
+                  .where(eq(tourMatchesTable.id, match.id));
+                await advanceWinner(tournamentId, match.runde, match.match_nr, winnerId);
+                await checkTournamentComplete(tournamentId);
+                results.push({ match_id: match.id, status: "auto_completed", winner_id: winnerId, legs1: score.legs1, legs2: score.legs2, avg1: Math.round(score.avg1 * 10) / 10, avg2: Math.round(score.avg2 * 10) / 10, autodarts_id: directMatch.id });
+                synced++;
+                continue;
+              } else {
+                // In progress
+                results.push({ match_id: match.id, status: "live", legs1: score.legs1, legs2: score.legs2, avg1: Math.round(score.avg1 * 10) / 10, avg2: Math.round(score.avg2 * 10) / 10, autodarts_id: directMatch.id });
+                continue;
+              }
+            }
+          }
+        } catch { /* fall through to global filter */ }
+      }
+
+      // --- Global filter fallback (for matches without a stored lobby ID) ---
       // Lobby = currently playing indicator (scores always undefined/0:0 from API)
       // Completed matches = accumulated leg score (the real running score)
       // → Always use completed match for score; lobby is just "in progress" signal
@@ -1181,7 +1217,7 @@ router.post("/tour/matches/:matchId/create-lobby", async (req, res) => {
       bullOffMode: "Normal",
       legs: winLegs,
       hasReferee: false,
-      isPrivate: false,   // Public so auto-sync can detect the result
+      isPrivate: true,    // Private — result fetched directly via stored lobby ID
     };
 
     const lobbyRes = await fetch("https://api.autodarts.io/gs/v0/lobbies", {
