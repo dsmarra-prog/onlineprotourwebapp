@@ -83,30 +83,142 @@ export const KALENDER = [
   { name: "PDC World Championship", typ: "Major", min_platz: 96, format: "sets" },
 ];
 
-// Real PDC prize structures — each tier entry = prize for losing in that round
-// index 0 = Last 128 exit, 1 = Last 64, 2 = Last 32, 3 = Last 16, 4 = QF, 5 = SF, 6 = Final (runner-up)
-const PRIZE_MONEY: Record<string, { win: number; rd_exit: (round: number) => number }> = {
-  ProTour: {
-    win: 15000,
-    rd_exit: (r) => ([0, 250, 500, 1000, 2000, 4000, 7500][r] ?? 7500),
-  },
-  Major: {
-    win: 500000,
-    rd_exit: (r) => ([0, 5000, 10000, 20000, 40000, 100000, 250000][r] ?? 250000),
-  },
-  EuropeanTour: {
-    win: 25000,
-    rd_exit: (r) => ([0, 500, 1000, 2000, 4000, 8000, 12500][r] ?? 12500),
-  },
-  WorldSeries: {
-    win: 40000,
-    rd_exit: (r) => ([0, 1000, 2000, 4000, 8000, 15000, 20000][r] ?? 20000),
-  },
-  PremierLeague: { win: 275000, rd_exit: () => 25000 },
+// ─── Echte PDC-Preisgelder ────────────────────────────────────────────────────
+// rd[r] = Preisgeld beim Ausscheiden in Runde r (0-indiziert ab Turnierbeginn)
+// Das letzte Element = Finalist-Preis; win = Siegerpreis
+
+const TURNIER_PREISE: Record<string, { win: number; rd: number[] }> = {
+  // ProTour Players Championships (128 Spieler)
+  ProTour:                      { win: 15_000,  rd: [0, 250, 500, 1_000, 2_000, 4_000, 7_500] },
+  // European Tour (64 Spieler)
+  EuropeanTour:                 { win: 25_000,  rd: [0, 750, 1_500, 3_000, 6_000, 12_500] },
+  // World Series of Darts (32 Spieler)
+  WorldSeries:                  { win: 40_000,  rd: [0, 1_500, 3_500, 8_000, 20_000] },
+  // Premier League – Nacht (8 Spieler, Gruppenphase)
+  PremierLeague:                { win: 275_000, rd: [25_000] },
+
+  // ── Majors (je nach Turniername individuell) ──────────────────────────────
+  // UK Open (128 Spieler, legs)
+  "UK Open":                    { win: 100_000, rd: [500, 1_000, 2_500, 5_000, 10_000, 20_000, 45_000] },
+  // World Matchplay (32 Spieler, legs)
+  "World Matchplay":            { win: 200_000, rd: [8_000, 15_000, 30_000, 60_000, 100_000] },
+  // World Grand Prix (32 Spieler, sets, double-in/out)
+  "World Grand Prix":           { win: 175_000, rd: [7_500, 15_000, 30_000, 60_000, 100_000] },
+  // European Championship (32 Spieler, sets)
+  "European Championship":      { win: 150_000, rd: [3_500, 7_000, 15_000, 32_500, 70_000] },
+  // Grand Slam of Darts (32 Spieler + Gruppenphase, sets)
+  "Grand Slam of Darts":        { win: 175_000, rd: [3_500, 7_000, 14_000, 30_000, 75_000] },
+  // Players Championship Finals (64 Spieler, legs)
+  "Players Championship Finals":{ win: 150_000, rd: [3_000, 7_000, 15_000, 30_000, 70_000, 100_000] },
+  // PDC World Championship (96 Spieler, sets)
+  "PDC World Championship":     { win: 500_000, rd: [5_000, 7_500, 12_500, 20_000, 50_000, 100_000, 200_000] },
 };
 
-// Premier League – Preisgeld nach Platzierung (4 Spieler)
-const PL_PRIZE_POSITIONS = [35000, 20000, 10000, 5000];
+// Premier League – Preisgeld nach Finalplatzierung (1. bis 4.)
+// Finale: 275.000 / 125.000 / 60.000 / 25.000 je Nacht (vereinfacht als Nacht-Anteil)
+const PL_PRIZE_POSITIONS = [275_000, 125_000, 60_000, 25_000];
+
+function getTurnierPreisgeld(t: { name: string; typ: string }, runde: number): number {
+  const table = TURNIER_PREISE[t.name] ?? TURNIER_PREISE[t.typ];
+  if (!table) return 0;
+  return table.rd[Math.min(runde, table.rd.length - 1)] ?? 0;
+}
+function getTurnierSiegerpreis(t: { name: string; typ: string }): number {
+  return (TURNIER_PREISE[t.name] ?? TURNIER_PREISE[t.typ])?.win ?? 15_000;
+}
+
+// ─── Echte PDC-Spiellängen pro Turnier ───────────────────────────────────────
+// Lookup: Turniername → { [spielerAnzahl]: { first_to, format } }
+const TURNIER_FORMAT_TABLE: Record<string, Record<number, { first_to: number; format: string }>> = {
+  // Players Championship (128 Spieler, legs, alle Runden BO11 außer SF/F)
+  ProTour: {
+    128: { first_to: 6, format: "legs" },
+    64:  { first_to: 6, format: "legs" },
+    32:  { first_to: 6, format: "legs" },
+    16:  { first_to: 6, format: "legs" },
+    8:   { first_to: 6, format: "legs" },
+    4:   { first_to: 7, format: "legs" },
+    2:   { first_to: 8, format: "legs" },
+  },
+  // European Tour (64 Spieler, legs)
+  EuropeanTour: {
+    64: { first_to: 6, format: "legs" },
+    32: { first_to: 6, format: "legs" },
+    16: { first_to: 6, format: "legs" },
+    8:  { first_to: 6, format: "legs" },
+    4:  { first_to: 7, format: "legs" },
+    2:  { first_to: 8, format: "legs" },
+  },
+  // World Series (32 Spieler, legs)
+  WorldSeries: {
+    32: { first_to: 6, format: "legs" },
+    16: { first_to: 6, format: "legs" },
+    8:  { first_to: 6, format: "legs" },
+    4:  { first_to: 7, format: "legs" },
+    2:  { first_to: 8, format: "legs" },
+  },
+  // UK Open (128 Spieler, legs – wächst pro Runde)
+  "UK Open": {
+    128: { first_to: 6,  format: "legs" },
+    64:  { first_to: 6,  format: "legs" },
+    32:  { first_to: 6,  format: "legs" },
+    16:  { first_to: 7,  format: "legs" },
+    8:   { first_to: 8,  format: "legs" },
+    4:   { first_to: 9,  format: "legs" },
+    2:   { first_to: 10, format: "legs" },
+  },
+  // World Matchplay (32 Spieler, legs – echte PDC-Längen)
+  "World Matchplay": {
+    32: { first_to: 10, format: "legs" },
+    16: { first_to: 11, format: "legs" },
+    8:  { first_to: 13, format: "legs" },
+    4:  { first_to: 14, format: "legs" },
+    2:  { first_to: 18, format: "legs" },
+  },
+  // World Grand Prix (32 Spieler, sets, double-in/out)
+  "World Grand Prix": {
+    32: { first_to: 3, format: "sets" },
+    16: { first_to: 3, format: "sets" },
+    8:  { first_to: 4, format: "sets" },
+    4:  { first_to: 5, format: "sets" },
+    2:  { first_to: 7, format: "sets" },
+  },
+  // European Championship (32 Spieler, sets)
+  "European Championship": {
+    32: { first_to: 4, format: "sets" },
+    16: { first_to: 4, format: "sets" },
+    8:  { first_to: 5, format: "sets" },
+    4:  { first_to: 6, format: "sets" },
+    2:  { first_to: 7, format: "sets" },
+  },
+  // Grand Slam of Darts (Gruppenphase + KO ab L16, sets)
+  "Grand Slam of Darts": {
+    128: { first_to: 3, format: "sets" },
+    16:  { first_to: 3, format: "sets" },
+    8:   { first_to: 4, format: "sets" },
+    4:   { first_to: 5, format: "sets" },
+    2:   { first_to: 7, format: "sets" },
+  },
+  // Players Championship Finals (64 Spieler, legs)
+  "Players Championship Finals": {
+    64: { first_to: 6,  format: "legs" },
+    32: { first_to: 7,  format: "legs" },
+    16: { first_to: 9,  format: "legs" },
+    8:  { first_to: 9,  format: "legs" },
+    4:  { first_to: 10, format: "legs" },
+    2:  { first_to: 11, format: "legs" },
+  },
+  // PDC World Championship (96 Spieler, sets – Sätze werden länger)
+  "PDC World Championship": {
+    96: { first_to: 3, format: "sets" },
+    48: { first_to: 3, format: "sets" },
+    32: { first_to: 4, format: "sets" },
+    16: { first_to: 4, format: "sets" },
+    8:  { first_to: 5, format: "sets" },
+    4:  { first_to: 6, format: "sets" },
+    2:  { first_to: 7, format: "sets" },
+  },
+};
 
 const DEFAULT_ACHIEVEMENTS = {
   first_win: { name: "Erstes Blut", desc: "Gewinne dein allererstes Match.", unlocked: false },
@@ -515,16 +627,15 @@ function simulateBotPreisverteilung(
   neuerBaum: any[],      // survivors after the player's last round
   playerName: string,
   currentRound: number,
-  turnierTyp: string
+  turnierEntry: { name: string; typ: string }
 ): Record<string, number> {
-  const pm = PRIZE_MONEY[turnierTyp] ?? PRIZE_MONEY["ProTour"];
   const payouts: Record<string, number> = {};
 
-  // Bots that lost in this round (were in the bracket, not in neuerBaum, and not the player)
+  // Bots that lost in this round get the prize for that round
   for (const bot of turnier_baum) {
     if (bot.name === playerName) continue;
     if (!neuerBaum.find((n: any) => n.name === bot.name)) {
-      payouts[bot.name] = (payouts[bot.name] ?? 0) + pm.rd_exit(currentRound);
+      payouts[bot.name] = (payouts[bot.name] ?? 0) + getTurnierPreisgeld(turnierEntry, currentRound);
     }
   }
 
@@ -539,10 +650,10 @@ function simulateBotPreisverteilung(
       if (!b2) { next.push(b1); continue; }
       const p1 = Math.max(0.1, Math.min(0.9, 0.5 + (b1.avg - b2.avg) * 0.02));
       if (Math.random() < p1) {
-        payouts[b2.name] = (payouts[b2.name] ?? 0) + pm.rd_exit(roundNum);
+        payouts[b2.name] = (payouts[b2.name] ?? 0) + getTurnierPreisgeld(turnierEntry, roundNum);
         next.push(b1);
       } else {
-        payouts[b1.name] = (payouts[b1.name] ?? 0) + pm.rd_exit(roundNum);
+        payouts[b1.name] = (payouts[b1.name] ?? 0) + getTurnierPreisgeld(turnierEntry, roundNum);
         next.push(b2);
       }
     }
@@ -551,7 +662,7 @@ function simulateBotPreisverteilung(
   }
   // Tournament winner gets full prize
   if (sim.length === 1) {
-    payouts[sim[0].name] = (payouts[sim[0].name] ?? 0) + pm.win;
+    payouts[sim[0].name] = (payouts[sim[0].name] ?? 0) + getTurnierSiegerpreis(turnierEntry);
   }
   return payouts;
 }
@@ -673,12 +784,14 @@ export function getRundenInfo(
 ) {
   const rundenNamen: Record<number, string> = {
     128: "Letzte 128",
-    64: "Letzte 64",
-    32: "Letzte 32",
-    16: "Achtelfinale",
-    8: "Viertelfinale",
-    4: "Halbfinale",
-    2: "Finale",
+    96:  "Letzte 96",
+    64:  "Letzte 64",
+    48:  "Letzte 48",
+    32:  "Letzte 32",
+    16:  "Achtelfinale",
+    8:   "Viertelfinale",
+    4:   "Halbfinale",
+    2:   "Finale",
   };
   const aktuell = turnier_baum.length || 128;
   const name = rundenNamen[aktuell] ?? `Runde ${aktuell}`;
@@ -686,29 +799,26 @@ export function getRundenInfo(
   if (!hat_tourcard) return { name, first_to: 5, format: "legs" };
 
   const t = KALENDER[aktuelles_turnier_index];
-  const format_typ = t.format ?? "legs";
 
-  if (t.typ === "PremierLeague") return { name: "Liga-Abend", first_to: 6, format: "legs" };
-  if ((t as any).gruppenphase && aktuell >= 128) return { name: "Gruppenphase", first_to: 5, format: "sets" };
+  if (t.typ === "PremierLeague") return { name: "Liga-Abend", first_to: 7, format: "legs" };
 
-  if (format_typ === "sets") {
-    let first_to: number;
-    if (aktuell >= 64) first_to = 3;
-    else if (aktuell >= 16) first_to = 4;
-    else if (aktuell >= 4) first_to = 5;
-    else first_to = 7;
-    return { name, first_to, format: "sets" };
-  } else {
-    let first_to: number;
-    if (t.typ === "ProTour") {
-      first_to = aktuell >= 8 ? 6 : aktuell === 4 ? 7 : 8;
-    } else if (t.typ === "EuropeanTour") {
-      first_to = aktuell >= 8 ? 8 : aktuell === 4 ? 10 : 12;
-    } else {
-      first_to = aktuell >= 8 ? 10 : aktuell === 4 ? 13 : 18;
+  // Grand Slam Gruppenphase
+  if ((t as any).gruppenphase && aktuell >= 128) return { name: "Gruppenphase", first_to: 3, format: "sets" };
+
+  // Look up by tournament name, then by typ
+  const formatMap = TURNIER_FORMAT_TABLE[t.name] ?? TURNIER_FORMAT_TABLE[t.typ];
+  if (formatMap) {
+    const fmt = formatMap[aktuell];
+    if (fmt) return { name, first_to: fmt.first_to, format: fmt.format };
+    // Nearest smaller key as fallback
+    const keys = Object.keys(formatMap).map(Number).sort((a, b) => b - a);
+    for (const k of keys) {
+      if (aktuell >= k) return { name, first_to: formatMap[k].first_to, format: formatMap[k].format };
     }
-    return { name, first_to, format: "legs" };
   }
+
+  // Final fallback
+  return { name, first_to: 6, format: t.format ?? "legs" };
 }
 
 // ─── Phase 1: Match-Herausforderungen (Side Quests) ───────────────────────────
@@ -1722,10 +1832,9 @@ export async function processResult(
     } else {
       updates.aktuelle_runde = career.aktuelle_runde + 1;
       const t = KALENDER[career.aktuelles_turnier_index];
-      const pm = PRIZE_MONEY[t.typ] ?? PRIZE_MONEY["ProTour"];
 
       if (neuerBaum.length === 1) {
-        const geld = pm.win;
+        const geld = getTurnierSiegerpreis(t);
         addToOoM(career, updates, geld);
         updates.bank_konto = (updates.bank_konto ?? career.bank_konto) + geld;
         updates.letzte_schlagzeile = generiereSchlagzeile(career.spieler_name, t.name, "Finale", true, my_avg);
@@ -1749,8 +1858,7 @@ export async function processResult(
         // Distribute prize money to all bots in the bracket (player won = no remaining sim needed)
         // Bots that lost in this round (the final) get runner-up prize
         {
-          const t2 = KALENDER[career.aktuelles_turnier_index];
-          const payouts = simulateBotPreisverteilung(turnier_baum, neuerBaum, career.spieler_name, career.aktuelle_runde, t2.typ);
+          const payouts = simulateBotPreisverteilung(turnier_baum, neuerBaum, career.spieler_name, career.aktuelle_runde, t);
           const updatedBots = (career.bot_rangliste as any[]).map((bot: any) => {
             const bonus = payouts[bot.name] ?? 0;
             return bonus > 0 ? { ...bot, geld: bot.geld + bonus } : bot;
@@ -1775,8 +1883,7 @@ export async function processResult(
   } else {
     if (career.hat_tourcard) {
       const t = KALENDER[career.aktuelles_turnier_index];
-      const pm = PRIZE_MONEY[t.typ] ?? PRIZE_MONEY["ProTour"];
-      const trostGeld = pm.rd_exit(career.aktuelle_runde);
+      const trostGeld = getTurnierPreisgeld(t, career.aktuelle_runde);
       addToOoM(career, updates, trostGeld);
       updates.bank_konto = (updates.bank_konto ?? career.bank_konto) + trostGeld;
       msgs.push(`❌ Ausgeschieden. Preisgeld gesichert: £${trostGeld.toLocaleString()}`);
@@ -1789,7 +1896,7 @@ export async function processResult(
       updates.turnier_verlauf = turnier_verlauf.slice(0, 100);
 
       // Distribute prize money to remaining bots by simulating the rest of the bracket
-      const botPayouts = simulateBotPreisverteilung(turnier_baum, neuerBaum, career.spieler_name, career.aktuelle_runde, t.typ);
+      const botPayouts = simulateBotPreisverteilung(turnier_baum, neuerBaum, career.spieler_name, career.aktuelle_runde, t);
       updates.bot_rangliste = (career.bot_rangliste as any[]).map((bot: any) => {
         const bonus = botPayouts[bot.name] ?? 0;
         return bonus > 0 ? { ...bot, geld: bot.geld + bonus } : bot;
