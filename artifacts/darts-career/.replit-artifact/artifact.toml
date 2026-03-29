@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "OnlineProTour"
+title = "OnlineProTourCompanion"
 version = "1.0.0"
 id = "artifacts/darts-career"
 router = "path"

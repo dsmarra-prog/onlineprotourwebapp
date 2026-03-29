@@ -17,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDartsSounds } from "@/hooks/use-sounds";
+import { preloadPlayerImage, HAS_WIKI } from "@/lib/player-images";
 
 // Known real PDC pro players — everyone else is a fictional regional tour player
 const PDC_PROS = new Set([
@@ -41,21 +42,48 @@ const PDC_PROS = new Set([
   "Wayne Mardle","Kirk Shepherd","Chris Mason","Paul Lim","Wayne Jones","Colin Lloyd",
 ]);
 
+function usePlayerImage(name: string) {
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!HAS_WIKI(name)) { setLoaded(true); return; }
+    let cancelled = false;
+    preloadPlayerImage(name).then((url) => {
+      if (!cancelled) { setPhotoUrl(url); setLoaded(true); }
+    });
+    return () => { cancelled = true; };
+  }, [name]);
+
+  return { photoUrl, loaded };
+}
+
 function PlayerAvatar({ name, size = 48 }: { name: string; size?: number }) {
-  // All players now have human names — use portrait style for everyone
-  // PDC pros get a slightly different seed prefix so their avatar is distinct
+  const { photoUrl, loaded } = usePlayerImage(name);
   const seed = PDC_PROS.has(name) ? `pro_${name}` : name;
-  const url = `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(seed)}&backgroundColor=0f1923&radius=50`;
+  const fallbackUrl = `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(seed)}&backgroundColor=0f1923&radius=50`;
+
+  const imgSrc = photoUrl ?? fallbackUrl;
+
   return (
-    <img
-      src={url}
-      alt={name}
-      width={size}
-      height={size}
-      className="rounded-full border-2 border-border object-cover"
+    <div
+      className="rounded-full border-2 border-border overflow-hidden flex-shrink-0 bg-secondary"
       style={{ width: size, height: size }}
-      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-    />
+    >
+      {loaded && (
+        <img
+          src={imgSrc}
+          alt={name}
+          width={size}
+          height={size}
+          className="rounded-full object-cover w-full h-full"
+          onError={(e) => {
+            const el = e.target as HTMLImageElement;
+            if (el.src !== fallbackUrl) el.src = fallbackUrl;
+          }}
+        />
+      )}
+    </div>
   );
 }
 
