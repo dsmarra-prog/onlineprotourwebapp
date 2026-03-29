@@ -85,6 +85,12 @@ export const tourBonusPointsTable = pgTable("tour_bonus_points", {
 });
 
 export type TourPlayer = typeof tourPlayersTable.$inferSelect;
+export const systemSettingsTable = pgTable("system_settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updated_at: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export type TourSchedule = typeof tourScheduleTable.$inferSelect;
 export type TourOomStanding = typeof tourOomStandingsTable.$inferSelect;
 export type TourTournament = typeof tourTournamentsTable.$inferSelect;

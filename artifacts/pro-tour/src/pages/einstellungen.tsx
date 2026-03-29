@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Settings, UserPlus, CheckCircle, Loader2, Target } from "lucide-react";
+import { Settings, UserPlus, CheckCircle, Loader2, Target, KeyRound, RefreshCw, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch, TourPlayer } from "@/lib/api";
 
@@ -18,6 +19,9 @@ export default function EinstellungenPage() {
     pin: "",
     pin_confirm: "",
   });
+
+  const [tokenForm, setTokenForm] = useState({ pin: "", refresh_token: "" });
+  const [tokenSectionOpen, setTokenSectionOpen] = useState(false);
 
   const registerMut = useMutation({
     mutationFn: () =>
@@ -37,8 +41,23 @@ export default function EinstellungenPage() {
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
+  const tokenMut = useMutation({
+    mutationFn: () =>
+      apiFetch<{ ok: boolean; message: string }>("/tour/admin/autodarts-token", {
+        method: "POST",
+        body: JSON.stringify({ pin: tokenForm.pin, refresh_token: tokenForm.refresh_token.trim() }),
+      }),
+    onSuccess: (data) => {
+      toast({ title: "Token aktualisiert", description: data.message });
+      setTokenForm({ pin: "", refresh_token: "" });
+      setTokenSectionOpen(false);
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
   const pinsMatch = form.pin === form.pin_confirm;
   const canRegister = form.name.trim() && form.autodarts_username.trim() && form.pin.length >= 4 && pinsMatch;
+  const canUpdateToken = tokenForm.pin.length >= 4 && tokenForm.refresh_token.trim().length > 20;
 
   return (
     <div className="space-y-6 max-w-md">
@@ -129,6 +148,70 @@ export default function EinstellungenPage() {
           </p>
         </div>
       )}
+
+      {/* Admin: Autodarts Token Update */}
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <button
+          className="w-full flex items-center justify-between p-4 text-left hover:bg-accent/30 transition-colors"
+          onClick={() => setTokenSectionOpen((o) => !o)}
+        >
+          <div className="flex items-center gap-2">
+            <KeyRound className="w-4 h-4 text-primary" />
+            <span className="font-semibold text-sm">Admin: Autodarts Token</span>
+          </div>
+          <RefreshCw className={`w-4 h-4 text-muted-foreground transition-transform ${tokenSectionOpen ? "rotate-180" : ""}`} />
+        </button>
+
+        {tokenSectionOpen && (
+          <div className="px-4 pb-4 space-y-4 border-t border-border pt-4">
+            <p className="text-xs text-muted-foreground">
+              Falls die Lobby-Erstellung nicht funktioniert, muss der Autodarts-Token erneuert werden.
+              So holst du dir den Token:
+            </p>
+            <ol className="text-xs text-muted-foreground space-y-1.5 list-decimal list-inside">
+              <li>Öffne <span className="text-foreground font-mono">play.autodarts.io</span> im Browser (eingeloggt)</li>
+              <li>Öffne die Entwicklerkonsole (<span className="font-mono">F12</span>) → Tab <span className="font-mono">Application</span></li>
+              <li>Links: <span className="font-mono">Local Storage → https://play.autodarts.io</span></li>
+              <li>Suche einen Eintrag mit <span className="font-mono">kc-callback</span> oder öffne <span className="font-mono">Session Storage</span></li>
+              <li>Alternativ: Network-Tab → Filter <span className="font-mono">token</span> → POST-Request an <span className="font-mono">openid-connect/token</span> → Response → <span className="font-mono">refresh_token</span> kopieren</li>
+            </ol>
+
+            <div className="space-y-1">
+              <Label className="flex items-center gap-1.5">
+                <ShieldCheck className="w-3 h-3" /> Admin-PIN
+              </Label>
+              <Input
+                type="password"
+                value={tokenForm.pin}
+                onChange={(e) => setTokenForm((f) => ({ ...f, pin: e.target.value }))}
+                placeholder="Admin-PIN eingeben"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Autodarts Refresh Token</Label>
+              <Textarea
+                value={tokenForm.refresh_token}
+                onChange={(e) => setTokenForm((f) => ({ ...f, refresh_token: e.target.value }))}
+                placeholder="eyJhbGciOi..."
+                className="font-mono text-xs h-24 resize-none"
+              />
+            </div>
+
+            <Button
+              className="w-full"
+              disabled={!canUpdateToken || tokenMut.isPending}
+              onClick={() => tokenMut.mutate()}
+            >
+              {tokenMut.isPending ? (
+                <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Wird gespeichert...</>
+              ) : (
+                <><RefreshCw className="w-4 h-4 mr-2" /> Token aktualisieren</>
+              )}
+            </Button>
+          </div>
+        )}
+      </div>
 
       {/* Info box */}
       <div className="bg-card border border-border rounded-xl p-4">

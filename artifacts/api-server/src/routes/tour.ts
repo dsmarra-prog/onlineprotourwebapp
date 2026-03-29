@@ -8,6 +8,7 @@ import {
   tourMatchesTable,
   tourEntriesTable,
   tourBonusPointsTable,
+  systemSettingsTable,
 } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import crypto from "crypto";
@@ -879,18 +880,38 @@ router.post("/tour/matches/:matchId/result", async (req, res) => {
 // ─── Autodarts Helpers ────────────────────────────────────────────────────────
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
-// Store the latest refresh token in memory so each refresh extends the session.
-// Falls back to the env var on first start or after a server restart.
+// Store the latest refresh token in memory — updated on every successful refresh.
+// Survives concurrent calls but NOT server restarts (→ persisted to DB below).
 let activeRefreshToken: string | null = null;
 // Mutex: only one refresh in flight at a time — prevents race-conditions where
 // two concurrent callers both try to refresh and Keycloak rejects the second one
 // (OAuth2 refresh tokens are single-use).
 let refreshPromise: Promise<string | null> | null = null;
 
+async function persistRefreshToken(token: string) {
+  try {
+    await db.insert(systemSettingsTable)
+      .values({ key: "autodarts_refresh_token", value: token, updated_at: new Date() })
+      .onConflictDoUpdate({ target: systemSettingsTable.key, set: { value: token, updated_at: new Date() } });
+  } catch { /* non-critical */ }
+}
+
+async function loadRefreshTokenFromDb(): Promise<string | null> {
+  try {
+    const row = await db.select().from(systemSettingsTable)
+      .where(eq(systemSettingsTable.key, "autodarts_refresh_token")).limit(1);
+    return row[0]?.value ?? null;
+  } catch { return null; }
+}
+
 async function getAutodartAccessToken(): Promise<string | null> {
   if (cachedToken && Date.now() < cachedToken.expiresAt) return cachedToken.value;
   // If another caller is already refreshing, wait for that same promise
   if (refreshPromise) return refreshPromise;
+  // Priority: in-memory → DB → env var
+  if (!activeRefreshToken) {
+    activeRefreshToken = await loadRefreshTokenFromDb();
+  }
   const refreshToken = activeRefreshToken ?? process.env.AUTODARTS_REFRESH_TOKEN;
   if (!refreshToken) return null;
   refreshPromise = (async () => {
@@ -909,9 +930,11 @@ async function getAutodartAccessToken(): Promise<string | null> {
       );
       if (!tokenRes.ok) return null;
       const tokenData: any = await tokenRes.json();
-      // Always keep the newest refresh token — this keeps the Autodarts session alive
-      // as long as the server is running and regularly calls getAutodartAccessToken().
-      if (tokenData.refresh_token) activeRefreshToken = tokenData.refresh_token;
+      if (tokenData.refresh_token) {
+        activeRefreshToken = tokenData.refresh_token;
+        // Persist so the newest token survives server restarts
+        await persistRefreshToken(tokenData.refresh_token);
+      }
       cachedToken = { value: tokenData.access_token, expiresAt: Date.now() + 50_000 };
       return tokenData.access_token;
     } catch { return null; }
@@ -1254,6 +1277,28 @@ router.post("/tour/matches/:matchId/create-lobby", async (req, res) => {
       .where(eq(tourMatchesTable.id, matchId));
 
     res.json({ lobbyId: lobby.id, joinUrl });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/admin/autodarts-token — admin: update Autodarts refresh token (survives restarts via DB)
+router.post("/tour/admin/autodarts-token", async (req, res) => {
+  try {
+    const { pin, refresh_token } = req.body;
+    if (!pin || !refresh_token) return res.status(400).json({ error: "pin und refresh_token erforderlich" });
+    const pinHash = crypto.createHash("sha256").update(String(pin)).digest("hex");
+    const players = await db.select().from(tourPlayersTable).limit(10);
+    const isAdmin = players.some((p) => p.pin_hash === pinHash);
+    if (!isAdmin) return res.status(403).json({ error: "Ungültige PIN" });
+    // Reset in-memory state and persist to DB
+    activeRefreshToken = refresh_token;
+    cachedToken = null;
+    await persistRefreshToken(refresh_token);
+    // Verify it works
+    const token = await getAutodartAccessToken();
+    if (!token) return res.status(502).json({ error: "Token gespeichert, aber Autodarts-Login fehlgeschlagen" });
+    res.json({ ok: true, message: "Token aktualisiert und verifiziert" });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
