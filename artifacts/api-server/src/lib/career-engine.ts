@@ -2,66 +2,23 @@ import { db, careerTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 export const WALK_ON_VIDEOS: Record<string, string> = {
-  // World #1 contenders
+  // Only verified real YouTube IDs — fakes removed
   "Michael van Gerwen": "zaJ1AC4wT3Y",
-  "Luke Littler": "I66tENw1feA",
-  "Luke Humphries": "x9bHvQc_VnU",
-  // Top 10 players
-  "Gerwyn Price": "HbDDzJvGguc",
-  "Michael Smith": "kLKK21m9tOo",
-  "Peter Wright": "HSTa28UTMUQ",
-  "Gary Anderson": "MWkDjHrMjvI",
-  "Jonny Clayton": "zFBkl4Y3cdo",
-  "Jose de Sousa": "fOJQiHKbFRU",
-  "Rob Cross": "g9sWxBF-78M",
+  "Luke Littler":       "I66tENw1feA",
+  "Luke Humphries":     "x9bHvQc_VnU",
+  "Gerwyn Price":       "HbDDzJvGguc",
+  "Michael Smith":      "kLKK21m9tOo",
+  "Peter Wright":       "HSTa28UTMUQ",
+  "Gary Anderson":      "MWkDjHrMjvI",
+  "Jonny Clayton":      "zFBkl4Y3cdo",
+  "Jose de Sousa":      "fOJQiHKbFRU",
+  "Rob Cross":          "g9sWxBF-78M",
   "Dimitri Van den Bergh": "t6_rVl63CXQ",
-  "Nathan Aspinall": "V7aeO3EFMHE",
-  "Damon Heta": "CmXOuX5dM34",
+  "Nathan Aspinall":    "V7aeO3EFMHE",
+  "Damon Heta":         "CmXOuX5dM34",
   "Raymond van Barneveld": "mVRHGVpbYgQ",
-  "James Wade": "nPXyHv5Lvfc",
-  "Mensur Suljovic": "hY7mK9cXZdA",
-  // Top 30 players
-  "Dave Chisnall": "BxiRkKXl8YI",
-  "Danny Noppert": "4r7YHkH-NZk",
-  "Martin Lukeman": "wX8aq2YRsaM",
-  "Chris Dobey": "yYB2r3fQJiU",
-  "Andrew Gilding": "e3mZg7kN2Xs",
-  "Ricardo Pietreczko": "pA5sRRvL9nY",
-  "Callan Rydz": "6cQ1Zng3OkU",
-  "Gian van Veen": "nQWvFhbDSc8",
-  "Josh Rock": "dHlG1mVsTrE",
-  "Ryan Joyce": "kVP3oL7tNwM",
-  "Stephen Bunting": "TtS3lR5kXwA",
-  "Brendan Dolan": "rJqM4nK8Lpz",
-  "Ian White": "jE7vXcN2mQs",
-  "Ricky Evans": "oHpC6sKbTrG",
-  "Dirk van Duijvenbode": "aFmK8nZ3QrL",
-  "Krzysztof Ratajski": "uWn5cLv1TsX",
-  "Martin Schindler": "iSd2vJmNkPy",
-  "Florian Hempel": "eXr7cBkGqTs",
-  "Gabriel Clemens": "nRm4sLpWvZo",
-  "Boris Krcmar": "tKj6pMrDwNs",
-  "Daryl Gurney": "vBn3mQkTrYs",
-  "Alan Warriner-Little": "sJp5vKrNmQz",
-  "Andy Hamilton": "mHr7kBnLqTs",
-  "Mark Webster": "pKs4vJmNrWz",
-  "Wayne Mardle": "wNk6pRmTsJv",
-  "Ted Evetts": "cZr8vKmNpQs",
-  "Rowby-John Rodriguez": "nQm5sKpTrJv",
-  "Mike de Decker": "vJk4mNrPsQz",
-  "Karel Sedlacek": "pLs6vKmNrWz",
-  "Matt Campbell": "sNm3vJkRpTz",
-  // Legends
-  "Phil Taylor": "4xgPnmJkKcU",
-  "Adrian Lewis": "rTs8vNmJkPz",
-  "Terry Jenkins": "kNs5vJmRpTz",
-  "John Lowe": "mJk3vNpRsQz",
-  "Eric Bristow": "pKs7vJmNrWz",
-  "Dennis Priestley": "vNm4sJkRpTz",
-  "John Part": "sKp6vJmNrWz",
-  "Tony O'Shea": "nRm8vKpJsTz",
-  "Andy Fordham": "mJs5vNkRpQz",
-  "Ted Hankey": "kNp4vJmRsTz",
+  "James Wade":         "nPXyHv5Lvfc",
+  "Phil Taylor":        "4xgPnmJkKcU",
 };
 
 export const KALENDER = [
@@ -717,16 +674,20 @@ function getBotAvgForLevel(level: number, formBonus: number = 0): number {
   return Math.round((rand(min, max) + formBonus) * 10) / 10;
 }
 
-// Generate Q-School bots centered on playerLevel (1–11, std dev ~1.2), with real names
+// Generate Q-School bots: mostly weaker than the player (centre = playerLevel - 1.5, σ=0.9)
+// Q-School is a qualifying event — the player should be competitive, not overwhelmed.
 function generateQSchoolBots(playerLevel: number, count: number): { name: string; level: number }[] {
   const shuffled = [...BOT_NAME_POOL].sort(() => Math.random() - 0.5);
   const bots: { name: string; level: number }[] = [];
+  // Centre distribution 1.5 levels below player; cap max at playerLevel (no bot stronger)
+  const center = playerLevel - 1.5;
   for (let i = 0; i < count; i++) {
     const u = Math.max(1e-10, Math.random());
     const v = Math.random();
     const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
-    // σ=1.2 → tight spread: ~95% of bots within ±2 levels of the player
-    const level = Math.max(1, Math.min(11, Math.round(playerLevel + z * 1.2)));
+    const raw = center + z * 0.9;
+    // Hard cap: no Q-School bot is stronger than the player's own level
+    const level = Math.max(1, Math.min(playerLevel, Math.round(raw)));
     const name = shuffled[i % shuffled.length];
     bots.push({ name, level });
   }

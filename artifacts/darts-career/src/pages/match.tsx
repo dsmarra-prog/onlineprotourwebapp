@@ -1025,9 +1025,9 @@ export default function MatchView() {
               <div className="aspect-video w-full">
                 <iframe
                   className="w-full h-full"
-                  src={`https://www.youtube.com/embed/${career.walk_on_video}?autoplay=1`}
+                  src={`https://www.youtube.com/embed/${career.walk_on_video}?autoplay=1&mute=1&rel=0&modestbranding=1`}
                   frameBorder="0"
-                  allow="autoplay; encrypted-media"
+                  allow="autoplay; encrypted-media; picture-in-picture"
                   allowFullScreen
                 />
               </div>
