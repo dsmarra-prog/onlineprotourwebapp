@@ -83,9 +83,12 @@ export default function EinstellungenPage() {
     try {
       const codeVerifier = generateCodeVerifier();
       const codeChallenge = await generateCodeChallenge(codeVerifier);
-      const redirectUri = `${window.location.origin}${import.meta.env.BASE_URL}autodarts-callback`.replace(/\/\//g, "/").replace(":/", "://");
+      const base = import.meta.env.BASE_URL.endsWith("/")
+        ? import.meta.env.BASE_URL
+        : import.meta.env.BASE_URL + "/";
+      const redirectUri = `${window.location.origin}${base}autodarts-callback`;
 
-      sessionStorage.setItem("autodarts_oauth", JSON.stringify({
+      localStorage.setItem("autodarts_oauth", JSON.stringify({
         code_verifier: codeVerifier,
         player_id: currentPlayer.id,
         pin: connectPin,
@@ -101,7 +104,12 @@ export default function EinstellungenPage() {
         code_challenge_method: "S256",
       });
 
-      window.location.href = `https://login.autodarts.io/realms/autodarts/protocol/openid-connect/auth?${params}`;
+      window.open(
+        `https://login.autodarts.io/realms/autodarts/protocol/openid-connect/auth?${params}`,
+        "_blank"
+      );
+      // Reset loading state after opening – the result comes back in the new tab
+      setOauthLoading(false);
     } catch (e) {
       toast({ title: "Fehler", description: String(e), variant: "destructive" });
       setOauthLoading(false);

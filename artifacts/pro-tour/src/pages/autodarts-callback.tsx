@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
-import { useLocation } from "wouter";
 import { Target, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 
 export default function AutodartsCallback() {
-  const [, navigate] = useLocation();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [message, setMessage] = useState("");
 
@@ -26,15 +25,15 @@ export default function AutodartsCallback() {
       return;
     }
 
-    const stored = sessionStorage.getItem("autodarts_oauth");
+    const stored = localStorage.getItem("autodarts_oauth");
     if (!stored) {
       setStatus("error");
-      setMessage("OAuth-Session abgelaufen. Bitte erneut versuchen.");
+      setMessage("OAuth-Session abgelaufen oder nicht gefunden. Bitte erneut versuchen.");
       return;
     }
 
     const { code_verifier, player_id, pin, redirect_uri } = JSON.parse(stored);
-    sessionStorage.removeItem("autodarts_oauth");
+    localStorage.removeItem("autodarts_oauth");
 
     apiFetch<{ ok: boolean; message?: string; error?: string }>(
       `/tour/players/${player_id}/autodarts-oauth-callback`,
@@ -47,7 +46,6 @@ export default function AutodartsCallback() {
         if (data.ok) {
           setStatus("success");
           setMessage(data.message ?? "Erfolgreich verbunden!");
-          setTimeout(() => navigate("/einstellungen"), 2500);
         } else {
           setStatus("error");
           setMessage(data.error ?? "Unbekannter Fehler");
@@ -57,11 +55,15 @@ export default function AutodartsCallback() {
         setStatus("error");
         setMessage(e.message);
       });
-  }, [navigate]);
+  }, []);
+
+  const handleClose = () => {
+    window.close();
+  };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
-      <div className="max-w-sm w-full bg-card border border-border rounded-2xl p-8 text-center space-y-4">
+      <div className="max-w-sm w-full bg-card border border-border rounded-2xl p-8 text-center space-y-5">
         <div className="flex justify-center">
           <Target className="w-10 h-10 text-primary" />
         </div>
@@ -78,7 +80,12 @@ export default function AutodartsCallback() {
           <>
             <CheckCircle className="w-10 h-10 text-green-400 mx-auto" />
             <p className="text-sm text-green-400 font-semibold">{message}</p>
-            <p className="text-xs text-muted-foreground">Du wirst weitergeleitet…</p>
+            <p className="text-xs text-muted-foreground">
+              Dein Autodarts-Account ist jetzt verbunden. Du kannst diesen Tab schließen.
+            </p>
+            <Button className="w-full" onClick={handleClose}>
+              Tab schließen
+            </Button>
           </>
         )}
 
@@ -87,12 +94,9 @@ export default function AutodartsCallback() {
             <XCircle className="w-10 h-10 text-destructive mx-auto" />
             <p className="text-sm text-destructive font-semibold">Verbindung fehlgeschlagen</p>
             <p className="text-xs text-muted-foreground break-all">{message}</p>
-            <button
-              onClick={() => navigate("/einstellungen")}
-              className="text-xs text-primary underline"
-            >
-              Zurück zu den Einstellungen
-            </button>
+            <Button variant="outline" className="w-full" onClick={handleClose}>
+              Tab schließen
+            </Button>
           </>
         )}
       </div>
