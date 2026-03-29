@@ -26,27 +26,27 @@ export function Layout({ children }: { children: ReactNode }) {
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-4xl h-[500px] bg-primary/5 blur-[120px] rounded-full pointer-events-none -z-10" />
 
       <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 group">
-            <Trophy className="w-6 h-6 text-primary group-hover:text-primary/80 transition-colors" />
-            <h1 className="text-xl font-display font-bold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">
+        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-2">
+          <Link href="/" className="flex items-center gap-1.5 group shrink-0">
+            <Trophy className="w-5 h-5 text-primary group-hover:text-primary/80 transition-colors" />
+            <h1 className="text-base font-display font-bold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent whitespace-nowrap">
               OnlineProTourCompanion
             </h1>
           </Link>
 
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-0.5 overflow-x-auto scrollbar-hide">
             {navItems.map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}
                 href={href}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
                   location === href
                     ? "bg-primary/20 text-primary"
                     : "text-muted-foreground hover:text-primary hover:bg-primary/10"
                 }`}
               >
-                <Icon className="w-4 h-4" />
-                <span className="hidden md:inline">{label}</span>
+                <Icon className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden lg:inline">{label}</span>
               </Link>
             ))}
             <button
@@ -56,10 +56,10 @@ export function Layout({ children }: { children: ReactNode }) {
                 }
               }}
               disabled={isResetting}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              className="flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors whitespace-nowrap"
             >
-              <RotateCcw className="w-4 h-4" />
-              <span className="hidden md:inline">Reset</span>
+              <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden lg:inline">Reset</span>
             </button>
           </nav>
         </div>
