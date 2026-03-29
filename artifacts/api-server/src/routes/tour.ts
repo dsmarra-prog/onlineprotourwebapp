@@ -1118,14 +1118,20 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
       // Autodarts makes it available at as/v0/matches/{id} — works for private lobbies too.
       if (match.autodarts_match_id) {
         try {
-          const directRes = await fetch(
-            `https://api.autodarts.io/as/v0/matches/${match.autodarts_match_id}`,
-            { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" } }
-          );
-          if (directRes.ok) {
-            const directMatch = await directRes.json();
+          // Check both endpoints in parallel:
+          // 1. as/v0/matches/{id} → only populated once match is COMPLETED
+          // 2. gs/v0/lobbies/{id} → active while match is IN PROGRESS (works for private lobbies)
+          const [completedRes, lobbyRes] = await Promise.allSettled([
+            fetch(`https://api.autodarts.io/as/v0/matches/${match.autodarts_match_id}`,
+              { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" } }),
+            fetch(`https://api.autodarts.io/gs/v0/lobbies/${match.autodarts_match_id}`,
+              { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" } }),
+          ]);
+
+          // Completed match takes priority
+          if (completedRes.status === "fulfilled" && completedRes.value.ok) {
+            const directMatch = await completedRes.value.json();
             if (directMatch?.id && directMatch.finishedAt && (directMatch.targetLegs ?? 0) >= winLegs) {
-              // Match found directly — use it regardless of public/private
               const score = getMatchScore(directMatch, u1, u2);
               const complete = isMatchComplete(directMatch, winLegs);
               if (complete) {
@@ -1139,11 +1145,27 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
                 synced++;
                 continue;
               } else {
-                // In progress
                 results.push({ match_id: match.id, status: "live", legs1: score.legs1, legs2: score.legs2, avg1: Math.round(score.avg1 * 10) / 10, avg2: Math.round(score.avg2 * 10) / 10, autodarts_id: directMatch.id });
                 continue;
               }
             }
+          }
+
+          // Still in progress — check live lobby (works for private lobbies by direct ID)
+          if (lobbyRes.status === "fulfilled" && lobbyRes.value.ok) {
+            const lobby = await lobbyRes.value.json();
+            // Lobby exists → match is live (scores not available until leg completes, show 0:0)
+            if (lobby?.id) {
+              results.push({ match_id: match.id, status: "live", legs1: 0, legs2: 0, avg1: 0, avg2: 0, autodarts_id: lobby.id });
+              continue;
+            }
+          }
+
+          // Lobby returned 404 → it has expired; clear the stored ID so the UI shows "Lobby erstellen" again
+          if (lobbyRes.status === "fulfilled" && lobbyRes.value.status === 404) {
+            await db.update(tourMatchesTable)
+              .set({ autodarts_match_id: null })
+              .where(eq(tourMatchesTable.id, match.id));
           }
         } catch { /* fall through to global filter */ }
       }
