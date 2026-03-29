@@ -9,37 +9,34 @@ export default function AutodartsCallback() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    const error = params.get("error");
-    const errorDesc = params.get("error_description");
+    const token = params.get("t");
 
-    if (error) {
+    // Clear token from URL immediately so it doesn't linger in browser history
+    if (token) {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+
+    if (!token) {
       setStatus("error");
-      setMessage(errorDesc ?? error);
+      setMessage("Kein Token erhalten. Bitte erneut versuchen.");
       return;
     }
 
-    if (!code) {
-      setStatus("error");
-      setMessage("Kein Autorisierungscode erhalten.");
-      return;
-    }
-
-    const stored = localStorage.getItem("autodarts_oauth");
+    const stored = localStorage.getItem("autodarts_connect");
     if (!stored) {
       setStatus("error");
-      setMessage("OAuth-Session abgelaufen oder nicht gefunden. Bitte erneut versuchen.");
+      setMessage("Verbindungs-Session abgelaufen. Bitte den Vorgang von vorne starten.");
       return;
     }
 
-    const { code_verifier, player_id, pin, redirect_uri } = JSON.parse(stored);
-    localStorage.removeItem("autodarts_oauth");
+    const { player_id, pin } = JSON.parse(stored);
+    localStorage.removeItem("autodarts_connect");
 
     apiFetch<{ ok: boolean; message?: string; error?: string }>(
-      `/tour/players/${player_id}/autodarts-oauth-callback`,
+      `/tour/players/${player_id}/autodarts-connect`,
       {
         method: "POST",
-        body: JSON.stringify({ code, code_verifier, redirect_uri, pin }),
+        body: JSON.stringify({ token, pin }),
       }
     )
       .then((data) => {
@@ -56,10 +53,6 @@ export default function AutodartsCallback() {
         setMessage(e.message);
       });
   }, []);
-
-  const handleClose = () => {
-    window.close();
-  };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
@@ -81,9 +74,9 @@ export default function AutodartsCallback() {
             <CheckCircle className="w-10 h-10 text-green-400 mx-auto" />
             <p className="text-sm text-green-400 font-semibold">{message}</p>
             <p className="text-xs text-muted-foreground">
-              Dein Autodarts-Account ist jetzt verbunden. Du kannst diesen Tab schließen.
+              Dein Autodarts-Account ist jetzt verknüpft. Du kannst diesen Tab schließen.
             </p>
-            <Button className="w-full" onClick={handleClose}>
+            <Button className="w-full" onClick={() => window.close()}>
               Tab schließen
             </Button>
           </>
@@ -94,7 +87,7 @@ export default function AutodartsCallback() {
             <XCircle className="w-10 h-10 text-destructive mx-auto" />
             <p className="text-sm text-destructive font-semibold">Verbindung fehlgeschlagen</p>
             <p className="text-xs text-muted-foreground break-all">{message}</p>
-            <Button variant="outline" className="w-full" onClick={handleClose}>
+            <Button variant="outline" className="w-full" onClick={() => window.close()}>
               Tab schließen
             </Button>
           </>

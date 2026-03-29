@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Settings, CheckCircle, Loader2, Target, KeyRound, RefreshCw, ShieldCheck, LogOut,
-  User, Link2, Link2Off, ChevronDown, Wifi, WifiOff, ExternalLink,
+  User, Link2, Link2Off, ChevronDown, Wifi, WifiOff, Copy, Check, ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,20 +11,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api";
 import { usePlayer } from "@/context/PlayerContext";
-
-function generateCodeVerifier(): string {
-  const array = new Uint8Array(48);
-  crypto.getRandomValues(array);
-  return btoa(String.fromCharCode(...array))
-    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
-}
-
-async function generateCodeChallenge(verifier: string): Promise<string> {
-  const data = new TextEncoder().encode(verifier);
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return btoa(String.fromCharCode(...new Uint8Array(digest)))
-    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
-}
 
 export default function EinstellungenPage() {
   const { toast } = useToast();
@@ -54,7 +40,8 @@ export default function EinstellungenPage() {
   // ── Player Autodarts connection ──────────────────────────────────────────
   const [disconnectPin, setDisconnectPin] = useState("");
   const [connectPin, setConnectPin] = useState("");
-  const [oauthLoading, setOauthLoading] = useState(false);
+  const [connectStep, setConnectStep] = useState<"form" | "script">("form");
+  const [copied, setCopied] = useState(false);
 
   const { data: adStatus, isLoading: statusLoading } = useQuery({
     queryKey: ["autodarts-status", currentPlayer?.id],
@@ -77,43 +64,33 @@ export default function EinstellungenPage() {
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
-  const handleOAuthConnect = async () => {
+  const base = import.meta.env.BASE_URL.endsWith("/")
+    ? import.meta.env.BASE_URL
+    : import.meta.env.BASE_URL + "/";
+  const callbackUrl = `${window.location.origin}${base}autodarts-callback`;
+
+  // Compact relay script: captures Autodarts refresh token, then navigates browser to our
+  // callback page with the token as a URL param — no cross-origin fetch needed.
+  const connectScript = currentPlayer && connectPin.length >= 4
+    ? `(async()=>{const CB='${callbackUrl}';let ok=false;const o=window.fetch;window.fetch=async function(u,v){const r=await o.apply(this,arguments);if(!ok&&typeof u==='string'&&u.includes('openid-connect/token')){try{const d=await r.clone().json();if(d.refresh_token){ok=true;window.fetch=o;window.location.href=CB+'?t='+encodeURIComponent(d.refresh_token);}}catch(e){console.error(e);}}return r;};for(const k of Object.keys(window)){try{const w=window[k];if(w&&typeof w.updateToken==='function'){w.updateToken(99999);break;}}catch{}}console.log('⏳ Warte auf Token...');})();`
+    : "";
+
+  const handleStartConnect = () => {
     if (!currentPlayer || connectPin.length < 4) return;
-    setOauthLoading(true);
-    try {
-      const codeVerifier = generateCodeVerifier();
-      const codeChallenge = await generateCodeChallenge(codeVerifier);
-      const base = import.meta.env.BASE_URL.endsWith("/")
-        ? import.meta.env.BASE_URL
-        : import.meta.env.BASE_URL + "/";
-      const redirectUri = `${window.location.origin}${base}autodarts-callback`;
+    localStorage.setItem("autodarts_connect", JSON.stringify({
+      player_id: currentPlayer.id,
+      pin: connectPin,
+    }));
+    window.open("https://play.autodarts.io", "_blank");
+    setConnectStep("script");
+  };
 
-      localStorage.setItem("autodarts_oauth", JSON.stringify({
-        code_verifier: codeVerifier,
-        player_id: currentPlayer.id,
-        pin: connectPin,
-        redirect_uri: redirectUri,
-      }));
-
-      const params = new URLSearchParams({
-        client_id: "autodarts-play",
-        redirect_uri: redirectUri,
-        response_type: "code",
-        scope: "openid",
-        code_challenge: codeChallenge,
-        code_challenge_method: "S256",
-      });
-
-      window.open(
-        `https://login.autodarts.io/realms/autodarts/protocol/openid-connect/auth?${params}`,
-        "_blank"
-      );
-      // Reset loading state after opening – the result comes back in the new tab
-      setOauthLoading(false);
-    } catch (e) {
-      toast({ title: "Fehler", description: String(e), variant: "destructive" });
-      setOauthLoading(false);
-    }
+  const handleCopyScript = () => {
+    if (!connectScript) return;
+    navigator.clipboard.writeText(connectScript).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   };
 
   const isConnected = adStatus?.connected ?? false;
@@ -219,7 +196,12 @@ export default function EinstellungenPage() {
 
               <div className="border-t border-border pt-3 space-y-2">
                 <p className="text-xs text-muted-foreground">Token abgelaufen? Hier neu verbinden:</p>
-                <OAuthConnectForm pin={connectPin} onPinChange={setConnectPin} onConnect={handleOAuthConnect} loading={oauthLoading} />
+                <ConnectFlow
+                  pin={connectPin} onPinChange={setConnectPin}
+                  step={connectStep} onStart={handleStartConnect}
+                  onBack={() => setConnectStep("form")}
+                  script={connectScript} copied={copied} onCopy={handleCopyScript}
+                />
               </div>
             </>
           ) : (
@@ -228,7 +210,12 @@ export default function EinstellungenPage() {
                 Verbinde deinen Autodarts-Account, um Lobby-Links für deine Matches selbst zu erstellen —
                 auch wenn der Admin nicht online ist.
               </p>
-              <OAuthConnectForm pin={connectPin} onPinChange={setConnectPin} onConnect={handleOAuthConnect} loading={oauthLoading} />
+              <ConnectFlow
+                pin={connectPin} onPinChange={setConnectPin}
+                step={connectStep} onStart={handleStartConnect}
+                onBack={() => setConnectStep("form")}
+                script={connectScript} copied={copied} onCopy={handleCopyScript}
+              />
             </>
           )}
         </div>
@@ -314,43 +301,88 @@ export default function EinstellungenPage() {
   );
 }
 
-function OAuthConnectForm({ pin, onPinChange, onConnect, loading }: {
+function ConnectFlow({
+  pin, onPinChange, step, onStart, onBack, script, copied, onCopy,
+}: {
   pin: string;
   onPinChange: (v: string) => void;
-  onConnect: () => void;
-  loading: boolean;
+  step: "form" | "script";
+  onStart: () => void;
+  onBack: () => void;
+  script: string;
+  copied: boolean;
+  onCopy: () => void;
 }) {
-  const pinReady = pin.length >= 4;
+  if (step === "form") {
+    return (
+      <div className="space-y-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs">Pro Tour PIN eingeben</Label>
+          <Input
+            type="password"
+            placeholder="PIN eingeben"
+            value={pin}
+            onChange={(e) => onPinChange(e.target.value)}
+            className="max-w-[160px]"
+          />
+        </div>
+        <Button
+          className="w-full gap-2"
+          disabled={pin.length < 4}
+          onClick={onStart}
+        >
+          <ExternalLink className="w-4 h-4" /> Mit Autodarts verbinden
+        </Button>
+        <p className="text-xs text-muted-foreground/60 italic">
+          Dein Passwort wird nie an die Pro Tour übertragen.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
-      <div className="space-y-1.5">
-        <Label className="text-xs">Pro Tour PIN eingeben</Label>
-        <Input
-          type="password"
-          placeholder="PIN eingeben"
-          value={pin}
-          onChange={(e) => onPinChange(e.target.value)}
-          className="max-w-[160px]"
-        />
+      <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
+        <CheckCircle className="w-4 h-4 text-primary shrink-0" />
+        <p className="text-xs text-muted-foreground">
+          play.autodarts.io wurde in einem neuen Tab geöffnet. Folge den Schritten:
+        </p>
       </div>
 
-      <Button
-        className="w-full gap-2"
-        disabled={!pinReady || loading}
-        onClick={onConnect}
-      >
-        {loading ? (
-          <><Loader2 className="w-4 h-4 animate-spin" /> Weiterleitung…</>
-        ) : (
-          <><ExternalLink className="w-4 h-4" /> Mit Autodarts verbinden</>
-        )}
-      </Button>
+      <ol className="text-xs text-muted-foreground space-y-2">
+        <li className="flex gap-2">
+          <span className="text-primary font-bold shrink-0">1.</span>
+          <span>Stelle sicher, dass du auf <span className="font-mono text-foreground">play.autodarts.io</span> eingeloggt bist</span>
+        </li>
+        <li className="flex gap-2">
+          <span className="text-primary font-bold shrink-0">2.</span>
+          <span>Drücke <span className="font-mono bg-muted px-1 rounded">F12</span> → Reiter <span className="font-mono bg-muted px-1 rounded">Console</span></span>
+        </li>
+        <li className="flex gap-2">
+          <span className="text-primary font-bold shrink-0">3.</span>
+          <span>Kopiere den Befehl unten, füge ihn ein und drücke <span className="font-mono bg-muted px-1 rounded">Enter</span></span>
+        </li>
+        <li className="flex gap-2">
+          <span className="text-primary font-bold shrink-0">4.</span>
+          <span>Du wirst <span className="text-foreground font-medium">automatisch zurückgeleitet</span> — kein weiterer Schritt nötig!</span>
+        </li>
+      </ol>
 
-      <p className="text-xs text-muted-foreground/60 italic">
-        Du wirst zu autodarts.io weitergeleitet und automatisch zurückgeleitet.
-        Dein Passwort wird dabei nie an die Pro Tour übertragen.
-      </p>
+      <button
+        onClick={onCopy}
+        className="w-full flex items-center justify-between gap-2 p-3 rounded-lg bg-muted/50 hover:bg-muted border border-border hover:border-primary/30 transition-colors"
+      >
+        <span className="font-mono text-xs text-muted-foreground truncate text-left">
+          {script.slice(0, 55)}…
+        </span>
+        <span className="shrink-0 flex items-center gap-1.5 text-xs font-semibold text-primary">
+          {copied ? <><Check className="w-4 h-4" /> Kopiert!</> : <><Copy className="w-4 h-4" /> Kopieren</>}
+        </span>
+      </button>
+
+      <button onClick={onBack} className="text-xs text-muted-foreground underline">
+        ← Zurück
+      </button>
     </div>
   );
 }
