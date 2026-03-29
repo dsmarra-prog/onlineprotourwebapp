@@ -1062,18 +1062,23 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
       const u2 = playerMap[match.player2_id!];
       if (!u1 || !u2) continue;
 
-      // Check live lobbies first, then completed matches
+      // Lobby = currently playing indicator (scores always undefined/0:0 from API)
+      // Completed matches = accumulated leg score (the real running score)
+      // → Always use completed match for score; lobby is just "in progress" signal
       const adLiveMatch = findAdMatch(adLive, u1, u2);
       const adCompletedMatch = findAdMatch(adCompleted, u1, u2);
-      const adMatch = adLiveMatch ?? adCompletedMatch;
 
-      if (!adMatch) {
+      if (!adLiveMatch && !adCompletedMatch) {
         results.push({ match_id: match.id, status: "not_found" });
         continue;
       }
 
-      const score = getMatchScore(adMatch, u1, u2);
-      const complete = isMatchComplete(adMatch, winLegs);
+      // Score always comes from the completed match (it carries accumulated legs).
+      // If no completed match yet (first leg still in lobby), score is 0:0.
+      const scoreSource = adCompletedMatch ?? adLiveMatch!;
+      const score = getMatchScore(scoreSource, u1, u2);
+      // Only auto-complete based on completed match data (lobby has no reliable score)
+      const complete = adCompletedMatch ? isMatchComplete(adCompletedMatch, winLegs) : false;
 
       if (!complete) {
         results.push({
@@ -1083,11 +1088,11 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
           legs2: score.legs2,
           avg1: Math.round(score.avg1 * 10) / 10,
           avg2: Math.round(score.avg2 * 10) / 10,
-          autodarts_id: adMatch.id,
+          autodarts_id: scoreSource.id,
         });
-        // Store the Autodarts match ID
+        // Store the Autodarts match ID (prefer completed match ID)
         await db.update(tourMatchesTable)
-          .set({ autodarts_match_id: adMatch.id })
+          .set({ autodarts_match_id: scoreSource.id })
           .where(eq(tourMatchesTable.id, match.id));
         continue;
       }
@@ -1100,7 +1105,7 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
           score_p1: score.legs1,
           score_p2: score.legs2,
           status: "abgeschlossen",
-          autodarts_match_id: adMatch.id,
+          autodarts_match_id: scoreSource.id,
         })
         .where(eq(tourMatchesTable.id, match.id));
 
@@ -1115,7 +1120,7 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
         legs2: score.legs2,
         avg1: Math.round(score.avg1 * 10) / 10,
         avg2: Math.round(score.avg2 * 10) / 10,
-        autodarts_id: adMatch.id,
+        autodarts_id: scoreSource.id,
       });
       synced++;
     }
