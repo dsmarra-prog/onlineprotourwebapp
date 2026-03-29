@@ -878,10 +878,13 @@ router.post("/tour/matches/:matchId/result", async (req, res) => {
 // ─── Autodarts Helpers ────────────────────────────────────────────────────────
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
+// Store the latest refresh token in memory so each refresh extends the session.
+// Falls back to the env var on first start or after a server restart.
+let activeRefreshToken: string | null = null;
 
 async function getAutodartAccessToken(): Promise<string | null> {
   if (cachedToken && Date.now() < cachedToken.expiresAt) return cachedToken.value;
-  const refreshToken = process.env.AUTODARTS_REFRESH_TOKEN;
+  const refreshToken = activeRefreshToken ?? process.env.AUTODARTS_REFRESH_TOKEN;
   if (!refreshToken) return null;
   try {
     const tokenRes = await fetch(
@@ -898,6 +901,9 @@ async function getAutodartAccessToken(): Promise<string | null> {
     );
     if (!tokenRes.ok) return null;
     const tokenData: any = await tokenRes.json();
+    // Always keep the newest refresh token — this keeps the Autodarts session alive
+    // as long as the server is running and regularly calls getAutodartAccessToken().
+    if (tokenData.refresh_token) activeRefreshToken = tokenData.refresh_token;
     cachedToken = { value: tokenData.access_token, expiresAt: Date.now() + 50_000 };
     return tokenData.access_token;
   } catch { return null; }
