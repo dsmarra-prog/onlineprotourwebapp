@@ -1118,9 +1118,10 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
       // Autodarts makes it available at as/v0/matches/{id} — works for private lobbies too.
       if (match.autodarts_match_id) {
         try {
-          // Check both endpoints in parallel:
-          // 1. as/v0/matches/{id} → only populated once match is COMPLETED
-          // 2. gs/v0/lobbies/{id} → active while match is IN PROGRESS (works for private lobbies)
+          // Check all three endpoints in parallel:
+          // 1. as/v0/matches/{id} → completed match (analytics, has scores + finishedAt)
+          // 2. gs/v0/matches/{id} → in-progress match (game server, has live leg scores)
+          // 3. gs/v0/lobbies/{id} → waiting lobby (players joined, game not started yet)
           const [completedRes, lobbyRes] = await Promise.allSettled([
             fetch(`https://api.autodarts.io/as/v0/matches/${match.autodarts_match_id}`,
               { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" } }),
@@ -1151,22 +1152,27 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
             }
           }
 
-          // Still in progress — check live lobby (works for private lobbies by direct ID)
-          if (lobbyRes.status === "fulfilled" && lobbyRes.value.ok) {
-            const lobby = await lobbyRes.value.json();
-            // Lobby exists → match is live (scores not available until leg completes, show 0:0)
-            if (lobby?.id) {
-              results.push({ match_id: match.id, status: "live", legs1: 0, legs2: 0, avg1: 0, avg2: 0, autodarts_id: lobby.id });
+          // Still in progress — check gs/v0/matches/{id} (works for private matches, has live scores)
+          // This is the game-server live match endpoint; populated once the match starts (lobby consumed).
+          const liveMatchRes = await fetch(
+            `https://api.autodarts.io/gs/v0/matches/${match.autodarts_match_id}`,
+            { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" } }
+          ).catch(() => null);
+          if (liveMatchRes?.ok) {
+            const liveMatch = await liveMatchRes.json();
+            if (liveMatch?.id && Array.isArray(liveMatch.players)) {
+              // Map leg scores to player1/player2 by matching Autodarts username
+              const idx1 = liveMatch.players.findIndex((p: any) => p.name?.toLowerCase() === u1.toLowerCase());
+              const idx2 = liveMatch.players.findIndex((p: any) => p.name?.toLowerCase() === u2.toLowerCase());
+              const legs1 = idx1 >= 0 ? (liveMatch.scores?.[idx1]?.legs ?? 0) : 0;
+              const legs2 = idx2 >= 0 ? (liveMatch.scores?.[idx2]?.legs ?? 0) : 0;
+              results.push({ match_id: match.id, status: "live", legs1, legs2, avg1: 0, avg2: 0, autodarts_id: liveMatch.id });
               continue;
             }
           }
 
-          // Lobby returned 404 → it has expired; clear the stored ID so the UI shows "Lobby erstellen" again
-          if (lobbyRes.status === "fulfilled" && lobbyRes.value.status === 404) {
-            await db.update(tourMatchesTable)
-              .set({ autodarts_match_id: null })
-              .where(eq(tourMatchesTable.id, match.id));
-          }
+          // Note: lobby 404 + gs/v0/matches 404 can mean expired lobby (before match started).
+          // We keep the stored ID so as/v0/matches/{id} can detect completion once finished.
         } catch { /* fall through to global filter */ }
       }
 
