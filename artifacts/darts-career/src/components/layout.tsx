@@ -29,7 +29,7 @@ export function Layout({ children }: { children: ReactNode }) {
           <Link href="/" className="flex items-center gap-2 group">
             <Trophy className="w-6 h-6 text-primary group-hover:text-primary/80 transition-colors" />
             <h1 className="text-xl font-display font-bold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">
-              PDC KARRIERE
+              OnlineProTourCompanion
             </h1>
           </Link>
 
