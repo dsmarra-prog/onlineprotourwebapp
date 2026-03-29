@@ -17,6 +17,9 @@ Vollständige PDC Darts Karriere-Simulation als pnpm-Monorepo. React + Vite Fron
 - **Achievements**: 12 Meilensteine
 - **Autodarts-Integration**: Match-Daten direkt von Autodarts API importieren
 - **Form-Tracking**: Gegner-Form wird angezeigt (Heißlauf, Kältephase etc.)
+- **Phase 1 – RPG**: Momentum-Badge (Win/Loss-Serie ±5–10%), Angstgegner (+7% AVG), Match-Herausforderungen (Sponsor-Bonusziele)
+- **Phase 2 – Social**: Social-Follower-Counter, Gegner Social-Media-Posts, Pressenachrichten/Zeitungsartikel-Feed
+- **Phase 3 – Strukturen**: 2-Jahres-Rolling-OoM (Preisgeld verfällt nach 2 Saisons), Premier League Liga-Abend (4-Spieler Round-Robin mit Live-Tabelle), Grand Slam Gruppenphase (3 Gruppenspiele, Top 2 kommen weiter), World Grand Prix Double-In/Double-Out Badge
 
 ## Stack
 

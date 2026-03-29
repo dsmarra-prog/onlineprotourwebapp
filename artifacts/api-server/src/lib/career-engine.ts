@@ -35,7 +35,7 @@ export const KALENDER = [
   { name: "European Tour 1", typ: "EuropeanTour", min_platz: 64, format: "legs" },
   { name: "European Tour 2", typ: "EuropeanTour", min_platz: 64, format: "legs" },
   // Premier League
-  { name: "Premier League Night", typ: "Major", min_platz: 8, format: "legs" },
+  { name: "Premier League Night", typ: "PremierLeague", min_platz: 8, format: "legs" },
   // Q3 – Players Championships
   { name: "Players Championship 7", typ: "ProTour", format: "legs" },
   { name: "Players Championship 8", typ: "ProTour", format: "legs" },
@@ -62,8 +62,8 @@ export const KALENDER = [
   // Q6 – Players Championships
   { name: "Players Championship 15", typ: "ProTour", format: "legs" },
   { name: "Players Championship 16", typ: "ProTour", format: "legs" },
-  // World Grand Prix (Major)
-  { name: "World Grand Prix", typ: "Major", min_platz: 32, format: "sets" },
+  // World Grand Prix (Major) – Double-In / Double-Out
+  { name: "World Grand Prix", typ: "Major", min_platz: 32, format: "sets", modus: "double_in_out" },
   // Q7 – Players Championships
   { name: "Players Championship 17", typ: "ProTour", format: "legs" },
   { name: "Players Championship 18", typ: "ProTour", format: "legs" },
@@ -72,8 +72,8 @@ export const KALENDER = [
   // Q8 – Players Championships
   { name: "Players Championship 19", typ: "ProTour", format: "legs" },
   { name: "Players Championship 20", typ: "ProTour", format: "legs" },
-  // Grand Slam of Darts (Major)
-  { name: "Grand Slam of Darts", typ: "Major", min_platz: 16, format: "sets" },
+  // Grand Slam of Darts (Major) – Gruppenphase + Knockout
+  { name: "Grand Slam of Darts", typ: "Major", min_platz: 16, format: "sets", gruppenphase: true },
   // Q9 – Players Championships
   { name: "Players Championship 21", typ: "ProTour", format: "legs" },
   { name: "Players Championship 22", typ: "ProTour", format: "legs" },
@@ -88,7 +88,11 @@ const PRIZE_MONEY: Record<string, { win: number; rd_exit: (round: number) => num
   Major: { win: 150000, rd_exit: (r) => r * 5000 },
   EuropeanTour: { win: 25000, rd_exit: (r) => r * 1000 },
   WorldSeries: { win: 40000, rd_exit: (r) => r * 1500 },
+  PremierLeague: { win: 35000, rd_exit: () => 5000 },
 };
+
+// Premier League – Preisgeld nach Platzierung (4 Spieler)
+const PL_PRIZE_POSITIONS = [35000, 20000, 10000, 5000];
 
 const DEFAULT_ACHIEVEMENTS = {
   first_win: { name: "Erstes Blut", desc: "Gewinne dein allererstes Match.", unlocked: false },
@@ -503,6 +507,71 @@ function generateQSchoolBots(playerLevel: number, count: number): { name: string
   return bots;
 }
 
+// ── Rolling Order-of-Merit (2 Jahre) ────────────────────────────────────────
+function addToOoM(career: any, updates: any, geld: number) {
+  const saison = updates.saison_jahr ?? career.saison_jahr;
+  const oom_saisons: Record<string, number> = { ...(career.oom_saisons as any ?? {}) };
+  const k = String(saison);
+  oom_saisons[k] = (oom_saisons[k] ?? 0) + geld;
+  // Keep only the last 2 seasons
+  for (const s of Object.keys(oom_saisons)) {
+    if (Number(s) < saison - 1) delete oom_saisons[s];
+  }
+  updates.oom_saisons = oom_saisons;
+  updates.order_of_merit_geld = Object.values(oom_saisons).reduce((a, b) => a + b, 0);
+}
+
+function expireOoMForNewSeason(career: any, updates: any, newSaison: number) {
+  const oom_saisons: Record<string, number> = { ...(career.oom_saisons as any ?? {}) };
+  let expired = 0;
+  for (const s of Object.keys(oom_saisons)) {
+    if (Number(s) < newSaison - 1) {
+      expired += oom_saisons[s];
+      delete oom_saisons[s];
+    }
+  }
+  updates.oom_saisons = oom_saisons;
+  updates.order_of_merit_geld = Object.values(oom_saisons).reduce((a, b) => a + b, 0);
+  return expired;
+}
+
+// ── Premier League Liga-Abend ────────────────────────────────────────────────
+function createPLTabelle(playerName: string, bots: { name: string; avg: number }[]) {
+  return {
+    match_index: 0,
+    spieler: [
+      { name: playerName, avg: 0, punkte: 0, siege: 0, niederlagen: 0 },
+      { name: bots[0].name, avg: bots[0].avg, punkte: 0, siege: 0, niederlagen: 0 },
+      { name: bots[1].name, avg: bots[1].avg, punkte: 0, siege: 0, niederlagen: 0 },
+      { name: bots[2].name, avg: bots[2].avg, punkte: 0, siege: 0, niederlagen: 0 },
+    ],
+    // Each round: [player_opp_idx, concurrent_pair: [a, b]]
+    matchups: [[1, 2, 3], [2, 1, 3], [3, 1, 2]],
+  };
+}
+
+function simulateBotMatch(avgA: number, avgB: number): "a" | "b" {
+  const total = avgA + avgB;
+  return Math.random() < (total > 0 ? avgA / total : 0.5) ? "a" : "b";
+}
+
+// ── Grand Slam Gruppenphase ───────────────────────────────────────────────────
+function createGSGruppe(playerName: string, bots: { name: string; avg: number }[]) {
+  return {
+    match_index: 0,
+    spieler: [
+      { name: playerName, avg: 0, punkte: 0, siege: 0, niederlagen: 0 },
+      { name: bots[0].name, avg: bots[0].avg, punkte: 0, siege: 0, niederlagen: 0 },
+      { name: bots[1].name, avg: bots[1].avg, punkte: 0, siege: 0, niederlagen: 0 },
+      { name: bots[2].name, avg: bots[2].avg, punkte: 0, siege: 0, niederlagen: 0 },
+    ],
+    // Player plays bots 1, 2, 3 in order. Each round also has 1 bot-bot match.
+    matchups: [[1, 2, 3], [2, 1, 3], [3, 1, 2]],
+    beendet: false,
+    weiter: false,
+  };
+}
+
 export function ermittlePlatz(
   botRangliste: any[],
   spielerName: string,
@@ -548,7 +617,8 @@ export function getRundenInfo(
   const t = KALENDER[aktuelles_turnier_index];
   const format_typ = t.format ?? "legs";
 
-  if (t.name === "Premier League Night") return { name, first_to: 6, format: "legs" };
+  if (t.typ === "PremierLeague") return { name: "Liga-Abend", first_to: 6, format: "legs" };
+  if ((t as any).gruppenphase && aktuell >= 128) return { name: "Gruppenphase", first_to: 5, format: "sets" };
 
   if (format_typ === "sets") {
     let first_to: number;
@@ -792,7 +862,7 @@ function generiereGegner(career: any) {
   } else {
     const t = KALENDER[aktuelles_turnier_index];
     if (t.name === "World Matchplay" || t.name === "World Grand Prix" || t.name === "European Championship") size = 32;
-    else if (t.name === "Premier League Night") size = 8;
+    else if (t.typ === "PremierLeague") size = 8;
     else if (t.typ === "EuropeanTour" || t.typ === "WorldSeries") size = 32;
     else size = 128;
 
@@ -904,6 +974,18 @@ function nextTurnier(career: any): { msgs: string[]; updates: any } {
   updates.aktuelles_turnier_index = aktuelles_turnier_index;
   updates.saison_jahr = saison_jahr;
 
+  // Also clear PL tabelle and GS gruppe when moving to next tournament
+  updates.pl_tabelle = null;
+  updates.gs_gruppe = null;
+
+  // Rolling OoM: expire seasons older than the last 2
+  if (saison_jahr > career.saison_jahr) {
+    const expired = expireOoMForNewSeason(career, updates, saison_jahr);
+    if (expired > 0) {
+      msgs.push(`📅 Neue Saison ${saison_jahr}! £${expired.toLocaleString("en-GB")} Order-of-Merit-Geld aus Saison ${saison_jahr - 2} ist abgelaufen.`);
+    }
+  }
+
   // Track ranking progression
   const ranking_verlauf: any[] = [...((career.ranking_verlauf ?? []) as any[])];
   ranking_verlauf.push({
@@ -1007,7 +1089,67 @@ export async function startMatch() {
     updates.turnier_runden_log = [];
   }
 
-  const { gegner_name, gegner_avg: baseAvg, turnier_baum } = generiereGegner({ ...career, ...updates });
+  // ── Determine opponent based on tournament type ──────────────────────────
+  let baseAvg: number;
+  let gegner_name: string;
+
+  const currentT = KALENDER[career.aktuelles_turnier_index];
+  const alleBots = [...(career.bot_rangliste as any[])].sort((a, b) => b.geld - a.geld);
+  const botFormMap = career.bot_form as Record<string, number>;
+  const spielerAvg = career.spieler_avg ?? 60;
+
+  if (career.hat_tourcard && currentT.typ === "PremierLeague" && career.aktuelle_runde === 0) {
+    // ── Premier League Liga-Abend: 4-Spieler-Modus initialisieren ───────────
+    const top3 = alleBots.slice(0, 3).map((b: any) => ({
+      name: b.name,
+      avg: getBotAvg(b.name, alleBots, botFormMap, spielerAvg),
+    }));
+    const plTabelle = createPLTabelle(career.spieler_name, top3);
+    updates.pl_tabelle = plTabelle;
+    updates.turnier_baum = [];
+    gegner_name = top3[0].name;
+    baseAvg = top3[0].avg;
+    msgs.push(`🏆 Premier League Liga-Abend! Du spielst im Round-Robin gegen: ${top3.map((b) => b.name).join(", ")}`);
+  } else if (career.hat_tourcard && (currentT as any).gruppenphase && career.aktuelle_runde === 0 && !career.gs_gruppe) {
+    // ── Grand Slam: Gruppenphase initialisieren ──────────────────────────────
+    const pool = alleBots.slice(0, 15).map((b: any) => b.name);
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    const gs3 = pool.slice(0, 3).map((name: string) => ({
+      name,
+      avg: getBotAvg(name, alleBots, botFormMap, spielerAvg),
+    }));
+    const gsGruppe = createGSGruppe(career.spieler_name, gs3);
+    updates.gs_gruppe = gsGruppe;
+    updates.turnier_baum = [];
+    gegner_name = gs3[0].name;
+    baseAvg = gs3[0].avg;
+    msgs.push(`📋 Grand Slam of Darts – Gruppenphase! Gegner: ${gs3.map((b) => b.name).join(", ")}`);
+  } else if (career.hat_tourcard && (currentT as any).gruppenphase && career.gs_gruppe && !(career.gs_gruppe as any).beendet) {
+    // ── Grand Slam: Nächster Gruppenphase-Gegner ─────────────────────────────
+    const gruppe = career.gs_gruppe as any;
+    const nextOppIdx = gruppe.matchups[gruppe.match_index][0];
+    const nextOpp = gruppe.spieler[nextOppIdx];
+    gegner_name = nextOpp.name;
+    baseAvg = nextOpp.avg;
+    updates.turnier_baum = [];
+  } else if (career.hat_tourcard && currentT.typ === "PremierLeague" && career.pl_tabelle) {
+    // ── Premier League: Nächste Runde ────────────────────────────────────────
+    const pl = career.pl_tabelle as any;
+    const nextOppIdx = pl.matchups[pl.match_index][0];
+    const nextOpp = pl.spieler[nextOppIdx];
+    gegner_name = nextOpp.name;
+    baseAvg = nextOpp.avg;
+    updates.turnier_baum = [];
+  } else {
+    // ── Normal bracket ────────────────────────────────────────────────────────
+    const result = generiereGegner({ ...career, ...updates });
+    gegner_name = result.gegner_name;
+    baseAvg = result.gegner_avg;
+    updates.turnier_baum = result.turnier_baum;
+  }
 
   // Phase 1: Apply momentum modifier
   const serie = career.aktuelle_serie ?? 0;
@@ -1020,7 +1162,6 @@ export async function startMatch() {
 
   updates.gegner_name = gegner_name;
   updates.gegner_avg = Math.round(baseAvg * momentumFaktor * angstFaktor * 10) / 10;
-  updates.turnier_baum = turnier_baum;
 
   // Phase 1: Log momentum messages
   if (serie >= 3) msgs.push(`🔥 ${serie} Siege in Folge! Gegner respektiert dich (-${Math.round((1 - momentumFaktor) * 100)}% AVG).`);
@@ -1104,6 +1245,260 @@ export async function processResult(
   const h2hAfter = h2h[gegner_name];
   if (win && h2hAfter.niederlagen >= 3 && h2hAfter.siege === 1) {
     msgs.push(`💪 Angstgegner besiegt! Erster Sieg gegen ${gegner_name}!`);
+  }
+
+  // ── Inline helper: shared post-match processing (sponsor, achievements, phase 2) ──
+  function doPostMatch(
+    istTurnierSieg: boolean,
+    isMajorSieg: boolean,
+    neueSerie: number,
+    rundenName: string,
+    turniername: string,
+    localAchievements: any,
+  ) {
+    // Sponsor progress
+    let aktiver_sponsor = career.aktiver_sponsor ? { ...(career.aktiver_sponsor as any) } : null;
+    if (aktiver_sponsor) {
+      if (aktiver_sponsor.ziel_typ === "180s") aktiver_sponsor.aktuell += my_180s;
+      else if (aktiver_sponsor.ziel_typ === "siege" && win) aktiver_sponsor.aktuell += 1;
+      else if (aktiver_sponsor.ziel_typ === "hf" && my_hf >= aktiver_sponsor.ziel_wert) aktiver_sponsor.aktuell = aktiver_sponsor.ziel_wert;
+      else if (aktiver_sponsor.ziel_typ === "spiele") aktiver_sponsor.aktuell += 1;
+      else if (aktiver_sponsor.ziel_typ === "avg" && my_avg >= aktiver_sponsor.ziel_wert) aktiver_sponsor.aktuell = aktiver_sponsor.ziel_wert;
+      if (aktiver_sponsor.aktuell >= aktiver_sponsor.ziel_wert) {
+        const bonus = aktiver_sponsor.belohnung;
+        updates.bank_konto = (updates.bank_konto ?? career.bank_konto) + bonus;
+        msgs.push(`🤝 ZIEL ERREICHT! ${aktiver_sponsor.name} zahlt Sponsoren-Bonus: £${bonus.toLocaleString()}`);
+        aktiver_sponsor = null;
+      }
+      updates.aktiver_sponsor = aktiver_sponsor;
+    }
+    // Achievements
+    if (my_180s > 0 && !localAchievements.first_180?.unlocked) {
+      localAchievements.first_180.unlocked = true;
+      msgs.push("🎯 ONE HUNDRED AND EIGHTY! Deine erste 180 geworfen!");
+    }
+    if ((career.stats_180s + my_180s) >= 100 && !localAchievements.century_180s?.unlocked) {
+      localAchievements.century_180s = localAchievements.century_180s || {};
+      localAchievements.century_180s.unlocked = true;
+      msgs.push("🎯 180 MASCHINE! Du hast 100 Maximums geworfen!");
+    }
+    if (my_hf >= 100 && !localAchievements.ton_finish?.unlocked) {
+      localAchievements.ton_finish.unlocked = true;
+      msgs.push("🎯 Ton Plus! Starkes High-Finish!");
+    }
+    if (my_hf >= 170 && !localAchievements.big_fish?.unlocked) {
+      localAchievements.big_fish.unlocked = true;
+      msgs.push("🎯 THE BIG FISH! Die magische 170 gecheckt!");
+    }
+    if (win && !localAchievements.first_win?.unlocked) {
+      localAchievements.first_win.unlocked = true;
+      msgs.push("⭐ Erstes Blut! Du hast dein allererstes Match gewonnen.");
+    }
+    if (istTurnierSieg && !localAchievements.first_title?.unlocked) {
+      localAchievements.first_title.unlocked = true;
+      msgs.push("⭐ Silberzeug! Erstes Turnier gewonnen!");
+    }
+    if (isMajorSieg && !localAchievements.first_major?.unlocked) {
+      localAchievements.first_major = localAchievements.first_major || {};
+      localAchievements.first_major.unlocked = true;
+      msgs.push("👑 MAJOR CHAMPION!");
+    }
+    updates.achievements = localAchievements;
+    // Phase 2: Follower
+    let followerZuwachs = win ? 50 : 5;
+    followerZuwachs += my_180s * 15;
+    if (my_hf >= 150) followerZuwachs += 200;
+    else if (my_hf >= 120) followerZuwachs += 100;
+    else if (my_hf >= 100) followerZuwachs += 60;
+    if (neueSerie === 3) followerZuwachs += 100;
+    if (neueSerie === 5) followerZuwachs += 200;
+    if (istTurnierSieg) followerZuwachs += 500;
+    updates.social_follower = (career.social_follower ?? 0) + followerZuwachs;
+    // Phase 2: Zeitungsartikel
+    const artikel = generateZeitungsartikel(
+      career.spieler_name, gegner_name, win, legs_won, legs_lost,
+      my_avg, my_180s, my_hf, turniername, rundenName, neueSerie, istTurnierSieg
+    );
+    if (artikel) {
+      const feed = [...((career.nachrichten_feed ?? []) as any[])];
+      updates.nachrichten_feed = [
+        { ...artikel, datum: new Date().toISOString(), id: Date.now().toString() },
+        ...feed,
+      ].slice(0, 20);
+    }
+  }
+
+  // ── Phase 3: Premier League Liga-Abend handler ───────────────────────────
+  if (career.hat_tourcard && KALENDER[career.aktuelles_turnier_index].typ === "PremierLeague" && career.pl_tabelle) {
+    const pl: any = JSON.parse(JSON.stringify(career.pl_tabelle));
+    const matchup = pl.matchups[pl.match_index];
+    const oppIdx: number = matchup[0];
+    const botAIdx: number = matchup[1];
+    const botBIdx: number = matchup[2];
+
+    // Player match result
+    if (win) {
+      pl.spieler[0].punkte += 3; pl.spieler[0].siege += 1;
+      pl.spieler[oppIdx].niederlagen += 1;
+    } else {
+      pl.spieler[oppIdx].punkte += 3; pl.spieler[oppIdx].siege += 1;
+      pl.spieler[0].niederlagen += 1;
+    }
+    // Concurrent bot match
+    const botA = pl.spieler[botAIdx];
+    const botB = pl.spieler[botBIdx];
+    if (simulateBotMatch(botA.avg || 70, botB.avg || 70) === "a") {
+      botA.punkte += 3; botA.siege += 1; botB.niederlagen += 1;
+    } else {
+      botB.punkte += 3; botB.siege += 1; botA.niederlagen += 1;
+    }
+    pl.match_index += 1;
+    msgs.push(`📊 Ergebnis eingetragen: ${legs_won} : ${legs_lost}`);
+
+    const neueSerie = updates.aktuelle_serie ?? 0;
+    const achievements: any = { ...(career.achievements as any) };
+
+    if (pl.match_index >= 3) {
+      // Liga-Abend abgeschlossen
+      pl.spieler.sort((a: any, b: any) => b.punkte - a.punkte || b.siege - a.siege);
+      const playerPos = pl.spieler.findIndex((s: any) => s.name === career.spieler_name);
+      const preisgeld = PL_PRIZE_POSITIONS[playerPos] ?? PL_PRIZE_POSITIONS[3];
+      const plSieg = playerPos === 0;
+
+      addToOoM(career, updates, preisgeld);
+      updates.bank_konto = (updates.bank_konto ?? career.bank_konto) + preisgeld;
+      msgs.push(`🏆 Liga-Abend beendet! Platz ${playerPos + 1} von 4 — £${preisgeld.toLocaleString("en-GB")} Preisgeld`);
+
+      if (plSieg) {
+        pl.spieler.forEach((s: any, i: number) => {
+          if (i === 0) msgs.push(`🥇 ${s.name}: ${s.punkte} Punkte`);
+          else msgs.push(`  ${["🥈","🥉","4️⃣"][i-1] ?? ""} ${s.name}: ${s.punkte} Punkte`);
+        });
+      }
+      pl.beendet = true;
+      const tv: any[] = [...((career.turnier_verlauf ?? []) as any[])];
+      tv.unshift({ name: "Premier League Night", typ: "PremierLeague", runde: "Liga-Abend", ergebnis: plSieg ? "Sieg" : "Platz " + (playerPos + 1), preisgeld, saison: career.saison_jahr, avg: my_avg });
+      updates.turnier_verlauf = tv.slice(0, 100);
+      updates.pl_tabelle = pl;
+      updates.turnier_laeuft = false;
+      updates.aktuelle_runde = 0;
+      updates.turnier_baum = [];
+
+      const newOoM = updates.order_of_merit_geld ?? career.order_of_merit_geld;
+      const platz = ermittlePlatz(career.bot_rangliste as any[], career.spieler_name, newOoM);
+      if (platz <= 64 && !achievements.top64?.unlocked) { achievements.top64.unlocked = true; msgs.push("⭐ Etabliert! Top 64!"); }
+      if (platz <= 16 && !achievements.top16?.unlocked) { achievements.top16.unlocked = true; msgs.push("⭐ Elite! Top 16!"); }
+      if (platz <= 8 && !achievements.top8?.unlocked) { achievements.top8 = { ...achievements.top8, unlocked: true }; msgs.push("⭐ World Class! Top 8!"); }
+
+      doPostMatch(plSieg, plSieg, neueSerie, "Liga-Abend", "Premier League Night", achievements);
+
+      const { msgs: nextMsgs, updates: nextUpdates } = nextTurnier({ ...career, ...updates });
+      msgs.push(...nextMsgs);
+      Object.assign(updates, nextUpdates);
+    } else {
+      updates.pl_tabelle = pl;
+      updates.aktuelle_runde = career.aktuelle_runde + 1;
+      msgs.push(`➡️ Runde ${pl.match_index}/3 — Nächster Gegner: ${pl.spieler[pl.matchups[pl.match_index][0]].name}`);
+      doPostMatch(false, false, neueSerie, "PL Runde " + pl.match_index, "Premier League Night", achievements);
+    }
+
+    await saveCareer(updates);
+    return { career: await getOrCreateCareer(), messages: msgs };
+  }
+
+  // ── Phase 3: Grand Slam Gruppenphase handler ─────────────────────────────
+  if (career.hat_tourcard && (KALENDER[career.aktuelles_turnier_index] as any).gruppenphase && career.gs_gruppe && !(career.gs_gruppe as any).beendet) {
+    const gs: any = JSON.parse(JSON.stringify(career.gs_gruppe));
+    const matchup = gs.matchups[gs.match_index];
+    const oppIdx: number = matchup[0];
+    const botAIdx: number = matchup[1];
+    const botBIdx: number = matchup[2];
+
+    // Player match result
+    if (win) {
+      gs.spieler[0].punkte += 3; gs.spieler[0].siege += 1;
+      gs.spieler[oppIdx].niederlagen += 1;
+    } else {
+      gs.spieler[oppIdx].punkte += 3; gs.spieler[oppIdx].siege += 1;
+      gs.spieler[0].niederlagen += 1;
+    }
+    // Concurrent bot match
+    const gsA = gs.spieler[botAIdx];
+    const gsB = gs.spieler[botBIdx];
+    if (simulateBotMatch(gsA.avg || 70, gsB.avg || 70) === "a") {
+      gsA.punkte += 3; gsA.siege += 1; gsB.niederlagen += 1;
+    } else {
+      gsB.punkte += 3; gsB.siege += 1; gsA.niederlagen += 1;
+    }
+    gs.match_index += 1;
+    msgs.push(`📊 Ergebnis eingetragen: ${legs_won} : ${legs_lost}`);
+
+    const neueSerie = updates.aktuelle_serie ?? 0;
+    const achievements: any = { ...(career.achievements as any) };
+
+    if (gs.match_index >= 3) {
+      // Gruppe ist abgeschlossen — Top 2 kommen weiter
+      gs.spieler.sort((a: any, b: any) => b.punkte - a.punkte || b.siege - a.siege);
+      const playerPos = gs.spieler.findIndex((s: any) => s.name === career.spieler_name);
+      const weiter = playerPos < 2;
+      gs.beendet = true;
+      gs.weiter = weiter;
+
+      msgs.push(`📋 Gruppenphase beendet! Platz ${playerPos + 1} in der Gruppe — ${weiter ? "✅ Du kommst ins Achtelfinale!" : "❌ Ausgeschieden."}`);
+      gs.spieler.forEach((s: any, i: number) => {
+        const icon = i === 0 ? "🥇" : i === 1 ? (weiter && i === 1 ? "🥈" : "🥈") : i === 2 ? "🥉" : "4️⃣";
+        msgs.push(`${icon} ${s.name}: ${s.punkte} Pkt — ${s.siege}S/${s.niederlagen}N`);
+      });
+
+      updates.gs_gruppe = gs;
+      doPostMatch(false, false, neueSerie, "Gruppenphase", "Grand Slam of Darts", achievements);
+
+      if (!weiter) {
+        // Eliminiert: Trostgeld
+        const trost = 5000;
+        addToOoM(career, updates, trost);
+        updates.bank_konto = (updates.bank_konto ?? career.bank_konto) + trost;
+        msgs.push(`💰 Trostgeld: £${trost.toLocaleString("en-GB")}`);
+        const tv: any[] = [...((career.turnier_verlauf ?? []) as any[])];
+        tv.unshift({ name: "Grand Slam of Darts", typ: "Major", runde: "Gruppenphase", ergebnis: "Niederlage", preisgeld: trost, saison: career.saison_jahr, avg: my_avg });
+        updates.turnier_verlauf = tv.slice(0, 100);
+        updates.turnier_laeuft = false;
+        updates.aktuelle_runde = 0;
+        updates.turnier_baum = [];
+        const { msgs: nextMsgs, updates: nextUpdates } = nextTurnier({ ...career, ...updates });
+        msgs.push(...nextMsgs);
+        Object.assign(updates, nextUpdates);
+      } else {
+        // Weiter ins Achtelfinale — generiere 8er-Bracket
+        const alleBots = [...(career.bot_rangliste as any[])].sort((a, b) => b.geld - a.geld);
+        const pool = alleBots.slice(0, 7).map((b: any) => b.name);
+        for (let i = pool.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+        const botFormMap2 = career.bot_form as Record<string, number>;
+        const bots7 = pool.map((name: string) => ({
+          name,
+          avg: getBotAvg(name, alleBots, botFormMap2, career.spieler_avg ?? 60),
+        }));
+        let bracket = [{ name: career.spieler_name, avg: 0 }, ...bots7];
+        for (let i = bracket.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [bracket[i], bracket[j]] = [bracket[j], bracket[i]];
+        }
+        updates.turnier_baum = bracket;
+        updates.turnier_laeuft = true;
+        updates.aktuelle_runde = career.aktuelle_runde + 1;
+      }
+    } else {
+      updates.gs_gruppe = gs;
+      updates.aktuelle_runde = career.aktuelle_runde + 1;
+      msgs.push(`➡️ Gruppenphase Runde ${gs.match_index}/3 — Nächster Gegner: ${gs.spieler[gs.matchups[gs.match_index][0]].name}`);
+      doPostMatch(false, false, neueSerie, "Gruppenphase", "Grand Slam of Darts", achievements);
+    }
+
+    await saveCareer(updates);
+    return { career: await getOrCreateCareer(), messages: msgs };
   }
 
   const turnier_baum = [...(career.turnier_baum as any[])];
@@ -1247,7 +1642,7 @@ export async function processResult(
 
       if (neuerBaum.length === 1) {
         const geld = pm.win;
-        updates.order_of_merit_geld = career.order_of_merit_geld + geld;
+        addToOoM(career, updates, geld);
         updates.bank_konto = (updates.bank_konto ?? career.bank_konto) + geld;
         updates.letzte_schlagzeile = generiereSchlagzeile(career.spieler_name, t.name, "Finale", true, my_avg);
 
@@ -1287,7 +1682,7 @@ export async function processResult(
       const t = KALENDER[career.aktuelles_turnier_index];
       const pm = PRIZE_MONEY[t.typ] ?? PRIZE_MONEY["ProTour"];
       const trostGeld = pm.rd_exit(career.aktuelle_runde);
-      updates.order_of_merit_geld = career.order_of_merit_geld + trostGeld;
+      addToOoM(career, updates, trostGeld);
       updates.bank_konto = (updates.bank_konto ?? career.bank_konto) + trostGeld;
       msgs.push(`❌ Ausgeschieden. Preisgeld gesichert: £${trostGeld.toLocaleString()}`);
       const rundenName = getRundenInfo(neuerBaum, true, career.aktuelles_turnier_index).name;
@@ -1477,6 +1872,18 @@ export function buildCareerState(career: any) {
     gegner_social_post: career.turnier_laeuft && career.gegner_name
       ? generateSocialPost(career.gegner_name, career.spieler_name, career)
       : null,
+    // Phase 3: Premier League / Grand Slam / Rolling OoM
+    pl_tabelle: career.pl_tabelle ?? null,
+    gs_gruppe: career.gs_gruppe ?? null,
+    oom_saisons: career.oom_saisons ?? {},
+    turnier_modus: (() => {
+      if (!career.hat_tourcard) return null;
+      const t = KALENDER[career.aktuelles_turnier_index];
+      if ((t as any).modus) return (t as any).modus;
+      if (t.typ === "PremierLeague") return "premier_league";
+      if ((t as any).gruppenphase) return "gruppenphase";
+      return null;
+    })(),
   };
 }
 
@@ -1487,7 +1894,7 @@ export function buildCalendar(career: any) {
     let status = "upcoming";
     if (index < career.aktuelles_turnier_index) status = "played";
     else if (index === career.aktuelles_turnier_index) status = career.turnier_laeuft ? "live" : "next";
-    return { index, name: t.name, typ: t.typ, format: t.format, min_platz: t.min_platz ?? null, status, qualifiziert };
+    return { index, name: t.name, typ: t.typ, format: t.format, min_platz: t.min_platz ?? null, status, qualifiziert, gruppenphase: (t as any).gruppenphase ?? false, modus: (t as any).modus ?? null };
   });
 }
 

@@ -622,10 +622,31 @@ export default function MatchView() {
               </div>
             </div>
 
-            <div className="mt-6 pt-5 border-t border-border/50">
+            <div className="mt-6 pt-5 border-t border-border/50 space-y-2">
               <p className="text-primary font-bold text-sm">
                 First to {career.runden_info.first_to} {isSets ? "Sätze" : "Legs"}
               </p>
+              {(career as any).turnier_modus === "double_in_out" && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full border border-amber-400/50 bg-amber-500/10 text-amber-300 tracking-wide">
+                    ⚡ Double-In / Double-Out Pflicht
+                  </span>
+                </div>
+              )}
+              {(career as any).turnier_modus === "premier_league" && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full border border-cyan-400/50 bg-cyan-500/10 text-cyan-300 tracking-wide">
+                    🏆 Premier League – Round Robin
+                  </span>
+                </div>
+              )}
+              {(career as any).turnier_modus === "gruppenphase" && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full border border-violet-400/50 bg-violet-500/10 text-violet-300 tracking-wide">
+                    📋 Gruppenphase – Top 2 kommen weiter
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -684,6 +705,76 @@ export default function MatchView() {
                   </p>
                 </div>
               </div>
+            </motion.div>
+          )}
+
+          {/* Premier League Tabelle */}
+          {(career as any).pl_tabelle && !(career as any).pl_tabelle.beendet && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.15 }}
+              className="bg-card border border-cyan-500/30 rounded-2xl p-4 shadow-[0_0_20px_rgba(0,210,255,0.06)]"
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-primary font-bold text-sm uppercase tracking-widest">Premier League</span>
+                <span className="ml-auto text-xs text-muted-foreground">
+                  Runde {(career as any).pl_tabelle.match_index + 1} / 3
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {[...(career as any).pl_tabelle.spieler]
+                  .sort((a: any, b: any) => b.punkte - a.punkte)
+                  .map((s: any, i: number) => {
+                    const isPlayer = s.name === career.spieler_name;
+                    return (
+                      <div key={s.name} className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm ${isPlayer ? "bg-primary/10 border border-primary/30" : "bg-secondary/20"}`}>
+                        <span className="text-muted-foreground font-mono w-4 text-center">{i + 1}</span>
+                        <span className={`flex-1 font-medium ${isPlayer ? "text-primary font-bold" : "text-white/80"}`}>{s.name}</span>
+                        <span className="text-xs text-muted-foreground">{s.siege}S / {s.niederlagen}N</span>
+                        <span className={`font-mono font-bold w-6 text-right ${i === 0 ? "text-yellow-400" : i === 1 ? "text-slate-300" : "text-muted-foreground"}`}>
+                          {s.punkte}
+                        </span>
+                      </div>
+                    );
+                  })}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Grand Slam Gruppenphase Tabelle */}
+          {(career as any).gs_gruppe && !(career as any).gs_gruppe.beendet && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.15 }}
+              className="bg-card border border-violet-500/30 rounded-2xl p-4 shadow-[0_0_20px_rgba(139,92,246,0.06)]"
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-violet-400 font-bold text-sm uppercase tracking-widest">Gruppe A</span>
+                <span className="ml-auto text-xs text-muted-foreground">
+                  Runde {(career as any).gs_gruppe.match_index + 1} / 3
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {[...(career as any).gs_gruppe.spieler]
+                  .sort((a: any, b: any) => b.punkte - a.punkte)
+                  .map((s: any, i: number) => {
+                    const isPlayer = s.name === career.spieler_name;
+                    const weiter = i < 2;
+                    return (
+                      <div key={s.name} className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm ${isPlayer ? "bg-violet-500/10 border border-violet-500/30" : "bg-secondary/20"} ${weiter ? "border-l-2 border-l-green-500/50" : "border-l-2 border-l-transparent"}`}>
+                        <span className="text-muted-foreground font-mono w-4 text-center">{i + 1}</span>
+                        <span className={`flex-1 font-medium ${isPlayer ? "text-violet-300 font-bold" : "text-white/80"}`}>{s.name}</span>
+                        <span className="text-xs text-muted-foreground">{s.siege}S / {s.niederlagen}N</span>
+                        <span className={`font-mono font-bold w-6 text-right ${weiter ? "text-green-400" : "text-muted-foreground"}`}>
+                          {s.punkte}
+                        </span>
+                      </div>
+                    );
+                  })}
+              </div>
+              <p className="text-[10px] text-muted-foreground/50 mt-2 pl-1">🟢 = weiter ins Achtelfinale</p>
             </motion.div>
           )}
 

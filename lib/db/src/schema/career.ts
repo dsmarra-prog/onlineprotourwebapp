@@ -45,6 +45,10 @@ export const careerTable = pgTable("career", {
   match_herausforderung: jsonb("match_herausforderung"),
   social_follower: integer("social_follower").notNull().default(0),
   nachrichten_feed: jsonb("nachrichten_feed").notNull().default([]),
+  // Phase 3
+  oom_saisons: jsonb("oom_saisons").notNull().default({}),
+  pl_tabelle: jsonb("pl_tabelle"),
+  gs_gruppe: jsonb("gs_gruppe"),
 });
 
 export const insertCareerSchema = createInsertSchema(careerTable);

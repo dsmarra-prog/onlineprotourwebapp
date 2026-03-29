@@ -445,8 +445,21 @@ export default function Dashboard() {
                   <p className="text-3xl font-mono font-bold text-white">£{career.bank_konto.toLocaleString("en-GB")}</p>
                 </div>
                 <div className="pt-4 border-t border-border/50">
-                  <p className="text-sm text-muted-foreground mb-1">Order of Merit (Preisgeld)</p>
+                  <p className="text-sm text-muted-foreground mb-1">Order of Merit (2 Jahre)</p>
                   <p className="text-xl font-mono font-bold text-primary">£{career.order_of_merit_geld.toLocaleString("en-GB")}</p>
+                  {(career as any).oom_saisons && Object.keys((career as any).oom_saisons).length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {Object.entries((career as any).oom_saisons as Record<string, number>)
+                        .sort(([a], [b]) => Number(b) - Number(a))
+                        .map(([saison, geld]) => (
+                          <div key={saison} className="flex justify-between text-xs">
+                            <span className="text-muted-foreground/60">Saison {saison}</span>
+                            <span className="font-mono text-muted-foreground">£{(geld as number).toLocaleString("en-GB")}</span>
+                          </div>
+                        ))
+                      }
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
