@@ -49,6 +49,8 @@ export const careerTable = pgTable("career", {
   oom_saisons: jsonb("oom_saisons").notNull().default({}),
   pl_tabelle: jsonb("pl_tabelle"),
   gs_gruppe: jsonb("gs_gruppe"),
+  // Sponsor offers waiting for player choice (null = none pending)
+  sponsor_angebote: jsonb("sponsor_angebote"),
 });
 
 export const insertCareerSchema = createInsertSchema(careerTable);

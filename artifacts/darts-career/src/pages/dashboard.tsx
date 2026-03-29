@@ -5,10 +5,92 @@ import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Trophy, Banknote, Target, TrendingUp, Medal, PlayCircle,
-  AlertCircle, ChevronRight, Zap, Users, Newspaper,
+  AlertCircle, ChevronRight, Zap, Users, Newspaper, X, CheckCircle2,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+
+// ─── Sponsor-Auswahl-Modal ────────────────────────────────────────────────────
+function SponsorAngeboteModal({
+  angebote,
+  onAccept,
+  onDecline,
+  isLoading,
+}: {
+  angebote: any[];
+  onAccept: (index: number) => void;
+  onDecline: () => void;
+  isLoading: boolean;
+}) {
+  const ZIEL_ICON: Record<string, string> = {
+    "180s": "🎯", siege: "⚔️", hf: "🏹", spiele: "🎮", avg: "📊",
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.92, y: 24 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="relative w-full max-w-2xl bg-[#0d1117] border border-primary/30 rounded-3xl shadow-[0_0_60px_rgba(0,210,255,0.15)] overflow-hidden"
+      >
+        {/* Header */}
+        <div className="px-6 pt-6 pb-4 border-b border-border/40 bg-primary/5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-primary/20 border border-primary/40 flex items-center justify-center text-xl">📩</div>
+            <div>
+              <h2 className="text-xl font-display font-black text-white tracking-tight">Sponsorenangebote</h2>
+              <p className="text-sm text-muted-foreground">Wähle einen Vertrag aus oder lehne alle ab.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Angebote */}
+        <div className="p-5 grid gap-3">
+          {angebote.map((a, i) => (
+            <button
+              key={i}
+              disabled={isLoading}
+              onClick={() => onAccept(i)}
+              className="w-full text-left rounded-2xl border border-border/50 bg-secondary/20 hover:border-primary/60 hover:bg-primary/5 hover:shadow-[0_0_20px_rgba(0,210,255,0.08)] transition-all duration-150 p-4 group"
+            >
+              <div className="flex items-start gap-4">
+                <div className="text-3xl mt-0.5 shrink-0">{a.logo}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="font-bold text-base text-white group-hover:text-primary transition-colors">{a.name}</span>
+                    <span className="text-[10px] text-muted-foreground bg-secondary px-2 py-0.5 rounded-full border border-border/40">{a.kategorie}</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground flex items-center gap-1.5 mb-2">
+                    <span>{ZIEL_ICON[a.ziel_typ] ?? "📋"}</span>
+                    {a.text} — in {a.turniere_zeit} Turnieren
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-lg px-3 py-1 text-sm">
+                      <span className="text-muted-foreground">Bonus:</span>
+                      <span className="ml-1.5 font-bold text-yellow-400">£{a.belohnung.toLocaleString("en-GB")}</span>
+                    </div>
+                    <CheckCircle2 className="w-4 h-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity ml-auto" />
+                  </div>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 pb-5">
+          <button
+            disabled={isLoading}
+            onClick={onDecline}
+            className="w-full py-2.5 rounded-xl border border-border/40 text-sm text-muted-foreground hover:text-white hover:border-border transition-all flex items-center justify-center gap-2"
+          >
+            <X className="w-4 h-4" /> Alle Angebote ablehnen
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
 
 function formatFollower(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -44,7 +126,7 @@ const LEVEL_DESCS: Record<number, string> = {
 
 export default function Dashboard() {
   const { data: career, isLoading, error } = useGetCareer();
-  const { startMatch, isStarting, setPlayerName, isSettingName } = useCareerActions();
+  const { startMatch, isStarting, setPlayerName, isSettingName, acceptSponsorOffer, isAcceptingSponsor } = useCareerActions();
   const [, setLocation] = useLocation();
   const [newName, setNewName] = useState("");
   const [setupStep, setSetupStep] = useState<1 | 2>(1);
@@ -204,8 +286,24 @@ export default function Dashboard() {
   const unlockedCount = Object.values(career.achievements).filter((a: any) => a.unlocked).length;
   const totalAchievements = Object.values(career.achievements).length;
 
+  const sponsorAngebote: any[] | null =
+    Array.isArray(career.sponsor_angebote) && career.sponsor_angebote.length > 0
+      ? career.sponsor_angebote
+      : null;
+
   return (
     <Layout>
+      {/* Sponsor-Auswahl-Modal – erscheint wenn neue Angebote vorhanden */}
+      <AnimatePresence>
+        {sponsorAngebote && (
+          <SponsorAngeboteModal
+            angebote={sponsorAngebote}
+            onAccept={(i) => acceptSponsorOffer(i)}
+            onDecline={() => acceptSponsorOffer(null)}
+            isLoading={isAcceptingSponsor}
+          />
+        )}
+      </AnimatePresence>
       <div className="space-y-8">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div>

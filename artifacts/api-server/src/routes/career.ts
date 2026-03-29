@@ -15,6 +15,8 @@ import {
   setPlayerName,
   avgToAutodartsBotLevel,
   ermittlePlatz,
+  acceptSponsor,
+  saveCareer,
 } from "../lib/career-engine.js";
 import { SubmitResultBody, BuyEquipmentBody, SetPlayerNameBody } from "@workspace/api-zod";
 
@@ -234,6 +236,21 @@ router.get("/career/oom", async (req, res) => {
     res.json({ entries: result, spieler_name: career.spieler_name });
   } catch (err) {
     req.log.error({ err }, "Error getting OoM");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/career/sponsor – accept (index=0/1/2) or decline (index=null) a sponsor offer
+router.post("/career/sponsor", async (req, res) => {
+  try {
+    const { index } = req.body as { index: number | null };
+    const career = await getOrCreateCareer();
+    const { msgs, updates } = acceptSponsor(career, index ?? null);
+    await saveCareer(updates);
+    const updatedCareer = await getOrCreateCareer();
+    res.json({ career: buildCareerState(updatedCareer), messages: msgs });
+  } catch (err) {
+    req.log.error({ err }, "Error accepting sponsor");
     res.status(500).json({ error: "Internal server error" });
   }
 });

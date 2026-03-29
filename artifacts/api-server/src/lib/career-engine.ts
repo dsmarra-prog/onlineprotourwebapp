@@ -1120,20 +1120,69 @@ function generiereSchlagzeile(
   return { titel, text };
 }
 
-function getMoreSponsorMissions() {
-  const sponsoren = ["Winmau", "Target", "RedDragon", "Unicorn", "L-Style", "Paddy Power", "Betway", "Unibet", "Bodog", "CAZOO"];
-  const ziele = [
-    { typ: "180s", ziel: 10, belohnung: 2000, text: "Wirf zehn 180er" },
-    { typ: "180s", ziel: 20, belohnung: 4000, text: "Wirf zwanzig 180er" },
-    { typ: "siege", ziel: 3, belohnung: 3500, text: "Gewinne 3 Matches" },
-    { typ: "siege", ziel: 5, belohnung: 6000, text: "Gewinne 5 Matches" },
-    { typ: "hf", ziel: 100, belohnung: 1500, text: "Checke 100+ (Highfinish)" },
-    { typ: "hf", ziel: 140, belohnung: 3000, text: "Checke ein 140+ Finish" },
-    { typ: "hf", ziel: 170, belohnung: 8000, text: "Checke die legendäre 170" },
-    { typ: "spiele", ziel: 10, belohnung: 2500, text: "Spiele 10 Matches" },
-    { typ: "avg", ziel: 90, belohnung: 3000, text: "Erreiche 90+ Average in einem Match" },
-  ];
-  return { sponsoren, ziele };
+const SPONSOR_POOL = [
+  { name: "Winmau",       logo: "🎯", kategorie: "Dartsausrüster" },
+  { name: "Target",       logo: "🏹", kategorie: "Dartsausrüster" },
+  { name: "Red Dragon",   logo: "🐉", kategorie: "Dartsausrüster" },
+  { name: "Unicorn",      logo: "🦄", kategorie: "Dartsausrüster" },
+  { name: "L-Style",      logo: "🇯🇵", kategorie: "Flights & Shafts" },
+  { name: "Paddy Power",  logo: "🍀", kategorie: "Wettanbieter" },
+  { name: "Betway",       logo: "💜", kategorie: "Wettanbieter" },
+  { name: "Unibet",       logo: "🎲", kategorie: "Wettanbieter" },
+  { name: "Bodog",        logo: "💰", kategorie: "Wettanbieter" },
+  { name: "CAZOO",        logo: "🚗", kategorie: "Automobilhandel" },
+  { name: "Lidl",         logo: "🛒", kategorie: "Einzelhandel" },
+  { name: "Monster",      logo: "🟢", kategorie: "Energy Drink" },
+  { name: "Red Bull",     logo: "🐂", kategorie: "Energy Drink" },
+  { name: "Sky Sports",   logo: "📺", kategorie: "Medien" },
+  { name: "Coral",        logo: "🪸", kategorie: "Wettanbieter" },
+];
+
+const ZIEL_POOL = [
+  { typ: "180s",  ziel: 8,   belohnung: 1800, text: "Wirf 8x die 180" },
+  { typ: "180s",  ziel: 15,  belohnung: 3200, text: "Wirf 15x die 180" },
+  { typ: "180s",  ziel: 25,  belohnung: 5500, text: "Wirf 25x die 180" },
+  { typ: "siege", ziel: 2,   belohnung: 2500, text: "Gewinne 2 Matches" },
+  { typ: "siege", ziel: 4,   belohnung: 4500, text: "Gewinne 4 Matches" },
+  { typ: "siege", ziel: 6,   belohnung: 7000, text: "Gewinne 6 Matches" },
+  { typ: "hf",    ziel: 100, belohnung: 1500, text: "Checke ein 100+ Finish" },
+  { typ: "hf",    ziel: 140, belohnung: 3500, text: "Checke ein 140+ Finish" },
+  { typ: "hf",    ziel: 170, belohnung: 10000,text: "Checke die legendäre 170" },
+  { typ: "spiele",ziel: 8,   belohnung: 2000, text: "Spiele 8 Matches" },
+  { typ: "spiele",ziel: 15,  belohnung: 3800, text: "Spiele 15 Matches" },
+  { typ: "avg",   ziel: 85,  belohnung: 2800, text: "Erreiche 85+ Average" },
+  { typ: "avg",   ziel: 95,  belohnung: 5000, text: "Erreiche 95+ Average" },
+];
+
+function generiereEinSponsorAngebot(): any {
+  const sponsor = SPONSOR_POOL[Math.floor(Math.random() * SPONSOR_POOL.length)];
+  const ziel = ZIEL_POOL[Math.floor(Math.random() * ZIEL_POOL.length)];
+  return {
+    name: sponsor.name,
+    logo: sponsor.logo,
+    kategorie: sponsor.kategorie,
+    ziel_typ: ziel.typ,
+    ziel_wert: ziel.ziel,
+    aktuell: 0,
+    turniere_zeit: 5,
+    belohnung: ziel.belohnung,
+    text: ziel.text,
+  };
+}
+
+export function acceptSponsor(career: any, index: number | null): { msgs: string[]; updates: any } {
+  const msgs: string[] = [];
+  const updates: any = { sponsor_angebote: null };
+  if (index === null) {
+    msgs.push("🚫 Alle Sponsorenangebote abgelehnt.");
+    return { msgs, updates };
+  }
+  const angebote = career.sponsor_angebote as any[];
+  const chosen = angebote?.[index];
+  if (!chosen) return { msgs, updates };
+  updates.aktiver_sponsor = chosen;
+  msgs.push(`✅ Vertrag mit ${chosen.name} unterzeichnet! Ziel: ${chosen.text} in den nächsten 5 Turnieren. Bonus: £${chosen.belohnung.toLocaleString("en-GB")}`);
+  return { msgs, updates };
 }
 
 function nextTurnier(career: any): { msgs: string[]; updates: any } {
@@ -1197,22 +1246,28 @@ function nextTurnier(career: any): { msgs: string[]; updates: any } {
     }
   }
 
-  if (!aktiver_sponsor && career.hat_tourcard && Math.random() < 0.4) {
-    const { sponsoren, ziele } = getMoreSponsorMissions();
-    const ziel = ziele[Math.floor(Math.random() * ziele.length)];
-    aktiver_sponsor = {
-      name: sponsoren[Math.floor(Math.random() * sponsoren.length)],
-      ziel_typ: ziel.typ,
-      ziel_wert: ziel.ziel,
-      aktuell: 0,
-      turniere_zeit: 4,
-      belohnung: ziel.belohnung,
-      text: ziel.text,
-    };
-    msgs.push(`📝 Angebot von ${aktiver_sponsor.name}! Ziel: ${aktiver_sponsor.text} in den nächsten 4 Turnieren. Bonus: £${aktiver_sponsor.belohnung.toLocaleString()}`);
+  // Generate sponsor OFFERS for player to choose from (instead of auto-assign)
+  let sponsor_angebote = career.sponsor_angebote ?? null;
+  if (!aktiver_sponsor && !sponsor_angebote && career.hat_tourcard && Math.random() < 0.4) {
+    // Deduplicate: generate 3 unique offers from different sponsors
+    const anzahl = 3;
+    const used = new Set<string>();
+    const angebote: any[] = [];
+    let versuche = 0;
+    while (angebote.length < anzahl && versuche < 30) {
+      versuche++;
+      const a = generiereEinSponsorAngebot();
+      if (!used.has(a.name)) {
+        used.add(a.name);
+        angebote.push(a);
+      }
+    }
+    sponsor_angebote = angebote;
+    msgs.push(`📩 ${anzahl} Sponsorenangebote eingegangen! Wähle jetzt deinen Vertrag.`);
   }
 
   updates.aktiver_sponsor = aktiver_sponsor;
+  updates.sponsor_angebote = sponsor_angebote;
   return { msgs, updates };
 }
 
@@ -2038,6 +2093,7 @@ export function buildCareerState(career: any) {
     stats_highest_finish: career.stats_highest_finish,
     achievements: career.achievements,
     aktiver_sponsor: career.aktiver_sponsor,
+    sponsor_angebote: (career.sponsor_angebote as any[]) ?? null,
     letzte_schlagzeile: career.letzte_schlagzeile,
     platz,
     turnier_name,

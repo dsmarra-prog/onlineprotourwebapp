@@ -1,5 +1,5 @@
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import {
   useGetCareer,
   useStartMatch,
@@ -19,6 +19,8 @@ import {
   getGetEquipmentQueryKey,
 } from "@workspace/api-client-react";
 import type { MatchResult } from "@workspace/api-client-react/src/generated/api.schemas";
+
+const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 
 export function useCareerActions() {
   const { toast } = useToast();
@@ -75,6 +77,20 @@ export function useCareerActions() {
   const setNameMutation = useSetPlayerName({ mutation: { onSuccess: handleSuccess, onError: handleError } });
   const buyEquipmentMutation = useBuyEquipment({ mutation: { onSuccess: handleSuccess, onError: handleError } });
 
+  const acceptSponsorMutation = useMutation({
+    mutationFn: async (index: number | null) => {
+      const resp = await fetch(`${BASE}/api/career/sponsor`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ index }),
+      });
+      if (!resp.ok) throw new Error("Fehler beim Sponsorenangebot");
+      return resp.json();
+    },
+    onSuccess: handleSuccess,
+    onError: handleError,
+  });
+
   return {
     startMatch: startMatchMutation.mutate,
     isStarting: startMatchMutation.isPending,
@@ -98,6 +114,9 @@ export function useCareerActions() {
 
     buyEquipment: (id: string) => buyEquipmentMutation.mutate({ data: { id } }),
     isBuying: buyEquipmentMutation.isPending,
+
+    acceptSponsorOffer: (index: number | null) => acceptSponsorMutation.mutate(index),
+    isAcceptingSponsor: acceptSponsorMutation.isPending,
   };
 }
 
