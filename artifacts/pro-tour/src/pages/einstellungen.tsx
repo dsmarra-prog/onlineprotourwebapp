@@ -69,10 +69,10 @@ export default function EinstellungenPage() {
     : import.meta.env.BASE_URL + "/";
   const callbackUrl = `${window.location.origin}${base}autodarts-callback`;
 
-  // Compact relay script: captures Autodarts refresh token, then navigates browser to our
-  // callback page with the token as a URL param — no cross-origin fetch needed.
+  // Relay script: patches both window.fetch AND XMLHttpRequest to catch Keycloak token refresh,
+  // then navigates to our callback page — works regardless of which method Autodarts uses.
   const connectScript = currentPlayer && connectPin.length >= 4
-    ? `(async()=>{const CB='${callbackUrl}';let ok=false;const o=window.fetch;window.fetch=async function(u,v){const r=await o.apply(this,arguments);if(!ok&&typeof u==='string'&&u.includes('openid-connect/token')){try{const d=await r.clone().json();if(d.refresh_token){ok=true;window.fetch=o;window.location.href=CB+'?t='+encodeURIComponent(d.refresh_token);}}catch(e){console.error(e);}}return r;};for(const k of Object.keys(window)){try{const w=window[k];if(w&&typeof w.updateToken==='function'){w.updateToken(99999);break;}}catch{}}console.log('⏳ Warte auf Token...');})();`
+    ? `(()=>{const CB='${callbackUrl}';let ok=false;function relay(tok){if(ok)return;ok=true;window.location.href=CB+'?t='+encodeURIComponent(tok);}const oF=window.fetch;window.fetch=async function(u,v){const r=await oF.apply(this,arguments);if(typeof u==='string'&&u.includes('openid-connect/token')){try{const d=await r.clone().json();if(d.refresh_token)relay(d.refresh_token);}catch{}}return r;};const oO=XMLHttpRequest.prototype.open,oS=XMLHttpRequest.prototype.send;XMLHttpRequest.prototype.open=function(m,u){this._u=u;return oO.apply(this,arguments);};XMLHttpRequest.prototype.send=function(){this.addEventListener('load',()=>{if(this._u&&this._u.includes('openid-connect/token')){try{const d=JSON.parse(this.responseText);if(d.refresh_token)relay(d.refresh_token);}catch{}}});return oS.apply(this,arguments);};let found=false;for(const k of Object.keys(window)){try{const w=window[k];if(w&&typeof w==='object'&&typeof w.updateToken==='function'){w.updateToken(-1);found=true;break;}}catch{}}if(!found)console.warn('Keycloak nicht gefunden – navigiere kurz auf der Seite');else console.log('⏳ Warte auf Token...');})();`
     : "";
 
   const handleStartConnect = () => {
