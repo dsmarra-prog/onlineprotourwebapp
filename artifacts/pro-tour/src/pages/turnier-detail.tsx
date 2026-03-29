@@ -39,8 +39,9 @@ function LiveMatchModal({
   onManualResult: () => void;
 }) {
   const winLegs = Math.ceil(legsFormat / 2);
-  const lobbyUrl = match.autodarts_match_id
-    ? `https://play.autodarts.io/lobbies/${match.autodarts_match_id}`
+  // When the game is in progress, the lobby is consumed → link to the live match instead
+  const gameUrl = liveData.autodarts_id
+    ? `https://play.autodarts.io/matches/${liveData.autodarts_id}`
     : null;
 
   return (
@@ -65,6 +66,13 @@ function LiveMatchModal({
           <div className="text-xs text-muted-foreground text-center mb-3">
             Best of {legsFormat} · Erster zu {winLegs} Legs
           </div>
+          {/* "Leg läuft" indicator when first leg is in progress (0:0 but avg already streaming) */}
+          {liveData.legs1 === 0 && liveData.legs2 === 0 && (liveData.avg1 > 0 || liveData.avg2 > 0) && (
+            <div className="flex items-center justify-center gap-1.5 text-[11px] text-primary mb-3">
+              <Radio className="w-3 h-3 animate-pulse" />
+              <span className="font-medium">Leg 1 läuft gerade…</span>
+            </div>
+          )}
           <div className="flex items-center justify-between gap-2">
             {/* Player 1 */}
             <div className={`flex-1 text-center ${liveData.legs1 > liveData.legs2 ? "opacity-100" : "opacity-60"}`}>
@@ -118,15 +126,15 @@ function LiveMatchModal({
 
         {/* Actions */}
         <div className="space-y-2">
-          {lobbyUrl && (
+          {gameUrl && (
             <a
-              href={lobbyUrl}
+              href={gameUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 w-full text-sm font-semibold rounded-xl py-2.5 px-4 bg-primary text-black hover:bg-primary/90 transition-colors"
             >
               <ExternalLink className="w-4 h-4" />
-              Autodarts öffnen
+              Spiel in Autodarts öffnen
             </a>
           )}
           <button
@@ -640,10 +648,22 @@ function MatchCard({
           {match.autodarts_match_id && <span className="ml-auto text-[10px]">via Autodarts</span>}
         </div>
       )}
-      {/* Lobby button / join URL */}
+      {/* Lobby / Game button */}
       {!isComplete && !isPending && (
         <div className="mt-2 pt-2 border-t border-border/30" onClick={(e) => e.stopPropagation()}>
-          {lobbyUrl ? (
+          {isLive && live?.autodarts_id ? (
+            // Game in progress → link to live match (lobby is consumed)
+            <a
+              href={`https://play.autodarts.io/matches/${live.autodarts_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-1.5 w-full text-xs font-semibold rounded-md py-1.5 px-2 bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" />
+              Spiel in Autodarts öffnen
+            </a>
+          ) : lobbyUrl ? (
+            // In lobby phase → join link
             <a
               href={lobbyUrl}
               target="_blank"
@@ -654,6 +674,7 @@ function MatchCard({
               Lobby beitreten
             </a>
           ) : (
+            // No lobby yet → create one
             <button
               onClick={createLobby}
               disabled={creatingLobby}
