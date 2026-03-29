@@ -1,7 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
-import { ArrowLeft, Play, UserPlus, UserMinus, Check, Loader2, Lock, Target } from "lucide-react";
+import {
+  ArrowLeft, Play, UserPlus, UserMinus, Check, Loader2, Lock, Target,
+  Zap, Radio, CheckCircle2, Search,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -9,6 +12,17 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch, TourTournamentDetail, TourPlayer, TourMatch, TYP_LABELS, RUNDE_LABELS } from "@/lib/api";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type SyncMatchStatus =
+  | { match_id: number; status: "not_found" }
+  | { match_id: number; status: "live"; legs1: number; legs2: number; avg1: number; avg2: number; autodarts_id: string }
+  | { match_id: number; status: "auto_completed"; winner_id: number; legs1: number; legs2: number; avg1: number; avg2: number };
+
+type SyncResult = { synced: number; matches: SyncMatchStatus[]; error?: string };
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function TurnierDetail() {
   const { id } = useParams<{ id: string }>();
@@ -19,6 +33,7 @@ export default function TurnierDetail() {
   const [resultForm, setResultForm] = useState({ winner_id: "", score_p1: "", score_p2: "" });
   const [addPlayerOpen, setAddPlayerOpen] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState("");
+  const prevSyncedRef = useRef(0);
 
   const { data: detail, isLoading } = useQuery<TourTournamentDetail>({
     queryKey: ["tournament", id],
@@ -30,8 +45,45 @@ export default function TurnierDetail() {
     queryFn: () => apiFetch("/tour/players"),
   });
 
+  // ── Auto-sync: poll Autodarts every 15 s when tournament is live ──
+  const isRunning = detail?.tournament.status === "laufend";
+  const { data: syncResult } = useQuery<SyncResult>({
+    queryKey: ["autodarts-sync", id],
+    queryFn: () => apiFetch(`/tour/tournaments/${id}/autodarts-sync`, { method: "POST" }),
+    enabled: isRunning,
+    refetchInterval: 15_000,
+    staleTime: 0,
+  });
+
+  // Build live match status map
+  const liveStatus = new Map<number, SyncMatchStatus>();
+  if (syncResult?.matches) {
+    for (const s of syncResult.matches) liveStatus.set(s.match_id, s);
+  }
+
+  // Notify and refetch when a result is auto-detected
+  useEffect(() => {
+    if (!syncResult) return;
+    if (syncResult.synced > prevSyncedRef.current) {
+      const completed = syncResult.matches.filter((m) => m.status === "auto_completed");
+      for (const m of completed) {
+        toast({
+          title: "✅ Ergebnis automatisch erkannt",
+          description: `Match automatisch via Autodarts ausgewertet`,
+        });
+      }
+      qc.invalidateQueries({ queryKey: ["tournament", id] });
+      qc.invalidateQueries({ queryKey: ["oom"] });
+    }
+    prevSyncedRef.current = syncResult.synced;
+  }, [syncResult]);
+
+  // Mutations
   const startMut = useMutation({
-    mutationFn: () => apiFetch(`/tour/tournaments/${id}/start`, { method: "POST" }),
+    mutationFn: () => apiFetch(`/tour/tournaments/${id}/start`, {
+      method: "POST",
+      body: JSON.stringify({ admin_pin: adminPin }),
+    }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tournament", id] }); toast({ title: "Turnier gestartet! Bracket generiert." }); },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
@@ -46,9 +98,8 @@ export default function TurnierDetail() {
   });
 
   const removePlayerMut = useMutation({
-    mutationFn: (player_id: number) => apiFetch(`/tour/tournaments/${id}/entries`, {
+    mutationFn: (player_id: number) => apiFetch(`/tour/tournaments/${id}/entries/${player_id}`, {
       method: "DELETE",
-      body: JSON.stringify({ player_id, admin_pin: adminPin }),
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tournament", id] }); toast({ title: "Spieler entfernt" }); },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
@@ -68,6 +119,7 @@ export default function TurnierDetail() {
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
+  // ── Render ──
   if (isLoading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>;
   if (!detail) return <div className="text-center py-20 text-muted-foreground">Turnier nicht gefunden</div>;
 
@@ -86,29 +138,63 @@ export default function TurnierDetail() {
     ? "text-muted-foreground bg-muted border-border"
     : "text-yellow-400 bg-yellow-400/10 border-yellow-400/30";
 
+  const pendingMatchCount = matches.filter(
+    (m) => m.status === "ausstehend" && m.player1_id && m.player2_id && !m.is_bye
+  ).length;
+  const liveCount = [...liveStatus.values()].filter((s) => s.status === "live").length;
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center gap-3">
         <Link href="/turniere" className="p-1.5 rounded-lg hover:bg-accent transition-colors">
-
-            <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-4 h-4" />
         </Link>
         <div className="flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-xl font-bold">{tournament.name}</h1>
             <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${statusBadge}`}>
               {tournament.status === "laufend" ? "Laufend" : tournament.status === "abgeschlossen" ? "Abgeschlossen" : "Offen"}
             </span>
+            {isRunning && (
+              <span className="text-xs text-primary flex items-center gap-1">
+                <Radio className="w-3 h-3 animate-pulse" />
+                {liveCount > 0 ? `${liveCount} Match${liveCount > 1 ? "es" : ""} live` : "Überwachung aktiv"}
+              </span>
+            )}
           </div>
           <p className="text-sm text-muted-foreground">{TYP_LABELS[tournament.typ]} · Best of {tournament.legs_format} · {tournament.datum}</p>
         </div>
       </div>
 
+      {/* Auto-sync status bar */}
+      {isRunning && pendingMatchCount > 0 && (
+        <div className="bg-primary/5 border border-primary/20 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm">
+            <Zap className="w-4 h-4 text-primary" />
+            <span className="text-primary font-medium">Automatische Erkennung aktiv</span>
+            <span className="text-muted-foreground">· alle 15 Sek. wird Autodarts abgefragt</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Search className="w-3 h-3" />
+              {pendingMatchCount} ausstehend
+            </span>
+            {liveCount > 0 && (
+              <span className="flex items-center gap-1 text-primary">
+                <Radio className="w-3 h-3 animate-pulse" />
+                {liveCount} live
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Admin PIN */}
       <div className="bg-card border border-border rounded-xl p-4">
         <div className="flex items-center gap-2 mb-2">
           <Lock className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm font-medium">Admin-PIN (für Verwaltung)</span>
+          <span className="text-sm font-medium">Admin-PIN (für manuelle Eingabe)</span>
         </div>
         <Input
           type="password"
@@ -119,7 +205,7 @@ export default function TurnierDetail() {
         />
       </div>
 
-      {/* Players & actions for open tournaments */}
+      {/* Players section for open tournaments */}
       {tournament.status === "offen" && (
         <div className="bg-card border border-border rounded-xl p-4">
           <div className="flex items-center justify-between mb-4">
@@ -152,7 +238,7 @@ export default function TurnierDetail() {
               <Button
                 size="sm"
                 onClick={() => startMut.mutate()}
-                disabled={startMut.isPending || players.length < 2}
+                disabled={startMut.isPending || players.length < 2 || !adminPin}
               >
                 {startMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Play className="w-3.5 h-3.5 mr-1" />Turnier starten</>}
               </Button>
@@ -188,7 +274,7 @@ export default function TurnierDetail() {
                   .filter((m) => m.runde === runde)
                   .sort((a, b) => a.match_nr - b.match_nr);
                 return (
-                  <div key={runde} className="flex flex-col gap-3 min-w-[200px]">
+                  <div key={runde} className="flex flex-col gap-3 min-w-[220px]">
                     <div className="text-xs font-semibold text-muted-foreground text-center py-1 border-b border-border">
                       {RUNDE_LABELS[runde] || runde}
                     </div>
@@ -198,6 +284,7 @@ export default function TurnierDetail() {
                           key={match.id}
                           match={match}
                           legsFormat={tournament.legs_format}
+                          liveStatus={liveStatus.get(match.id)}
                           onResult={() => {
                             setResultOpen(match.id);
                             setResultForm({ winner_id: "", score_p1: "", score_p2: "" });
@@ -213,7 +300,7 @@ export default function TurnierDetail() {
         </div>
       )}
 
-      {/* Result dialog */}
+      {/* Manual result dialog */}
       {resultOpen !== null && (
         <Dialog open={true} onOpenChange={() => setResultOpen(null)}>
           <DialogContent className="bg-card border-border">
@@ -221,8 +308,16 @@ export default function TurnierDetail() {
             {(() => {
               const match = matches.find((m) => m.id === resultOpen);
               if (!match) return null;
+              const live = liveStatus.get(match.id);
               return (
                 <div className="space-y-4 mt-2">
+                  {live?.status === "live" && (
+                    <div className="bg-primary/10 border border-primary/30 rounded-lg px-3 py-2 text-sm flex items-center gap-2">
+                      <Radio className="w-3.5 h-3.5 text-primary animate-pulse" />
+                      <span className="text-primary font-medium">Live erkannt:</span>
+                      <span>{match.player1_name} {(live as any).legs1} : {(live as any).legs2} {match.player2_name}</span>
+                    </div>
+                  )}
                   <div className="space-y-1">
                     <Label>Sieger</Label>
                     <Select value={resultForm.winner_id} onValueChange={(v) => setResultForm((f) => ({ ...f, winner_id: v }))}>
@@ -235,12 +330,14 @@ export default function TurnierDetail() {
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <Label>{match.player1_name} - Legs</Label>
-                      <Input type="number" value={resultForm.score_p1} onChange={(e) => setResultForm((f) => ({ ...f, score_p1: e.target.value }))} />
+                      <Label>{match.player1_name} – Legs</Label>
+                      <Input type="number" value={resultForm.score_p1}
+                        onChange={(e) => setResultForm((f) => ({ ...f, score_p1: e.target.value }))} />
                     </div>
                     <div className="space-y-1">
-                      <Label>{match.player2_name} - Legs</Label>
-                      <Input type="number" value={resultForm.score_p2} onChange={(e) => setResultForm((f) => ({ ...f, score_p2: e.target.value }))} />
+                      <Label>{match.player2_name} – Legs</Label>
+                      <Input type="number" value={resultForm.score_p2}
+                        onChange={(e) => setResultForm((f) => ({ ...f, score_p2: e.target.value }))} />
                     </div>
                   </div>
                   <Button className="w-full" disabled={!resultForm.winner_id || resultMut.isPending}
@@ -262,7 +359,19 @@ export default function TurnierDetail() {
   );
 }
 
-function MatchCard({ match, legsFormat, onResult }: { match: TourMatch; legsFormat: number; onResult: () => void }) {
+// ─── Match Card ───────────────────────────────────────────────────────────────
+
+function MatchCard({
+  match,
+  legsFormat,
+  liveStatus,
+  onResult,
+}: {
+  match: TourMatch;
+  legsFormat: number;
+  liveStatus?: SyncMatchStatus;
+  onResult: () => void;
+}) {
   if (match.is_bye) {
     return (
       <div className="p-3 rounded-lg bg-accent/20 border border-border/50 opacity-60">
@@ -274,44 +383,107 @@ function MatchCard({ match, legsFormat, onResult }: { match: TourMatch; legsForm
 
   const isComplete = match.status === "abgeschlossen";
   const isPending = !match.player1_id || !match.player2_id;
+  const isLive = liveStatus?.status === "live";
+  const live = isLive ? (liveStatus as any) : null;
+
+  // Border styling
+  let borderClass = "border-border";
+  if (isComplete) borderClass = "border-border/50";
+  else if (isLive) borderClass = "border-primary/60 shadow-[0_0_8px_rgba(0,210,255,0.15)]";
+  else if (isPending) borderClass = "border-border/30";
+
+  // Background
+  let bgClass = "bg-card";
+  if (isComplete) bgClass = "bg-accent/20";
+  else if (isLive) bgClass = "bg-primary/5";
+  else if (isPending) bgClass = "bg-card opacity-60";
 
   return (
-    <div className={`p-3 rounded-lg border transition-all ${
-      isComplete ? "bg-accent/20 border-border/50" :
-      isPending ? "bg-card border-border/30 opacity-60" :
-      "bg-card border-border hover:border-primary/40 cursor-pointer"
-    }`}
-    onClick={() => !isComplete && !isPending && onResult()}>
+    <div
+      className={`p-3 rounded-lg border transition-all ${bgClass} ${borderClass} ${
+        !isComplete && !isPending ? "hover:border-primary/40 cursor-pointer" : ""
+      }`}
+      onClick={() => !isComplete && !isPending && onResult()}
+    >
+      {/* Live indicator */}
+      {isLive && (
+        <div className="flex items-center gap-1 mb-2 text-xs text-primary">
+          <Radio className="w-3 h-3 animate-pulse" />
+          <span className="font-medium">Live erkannt</span>
+          <span className="ml-auto font-bold tabular-nums">
+            {live.legs1} : {live.legs2}
+          </span>
+        </div>
+      )}
+
+      {/* Match not found yet indicator */}
+      {!isComplete && !isPending && !isLive && liveStatus?.status === "not_found" && (
+        <div className="flex items-center gap-1 mb-1.5 text-xs text-muted-foreground/70">
+          <Search className="w-3 h-3" />
+          <span>Suche in Autodarts…</span>
+        </div>
+      )}
+
       <div className="space-y-1.5">
         <PlayerRow
           name={match.player1_name ?? "TBD"}
-          score={match.score_p1}
+          score={isLive ? live.legs1 : match.score_p1}
+          avg={isLive ? live.avg1 : null}
           isWinner={match.winner_id === match.player1_id}
           isComplete={isComplete}
+          isLive={isLive}
         />
         <PlayerRow
           name={match.player2_name ?? "TBD"}
-          score={match.score_p2}
+          score={isLive ? live.legs2 : match.score_p2}
+          avg={isLive ? live.avg2 : null}
           isWinner={match.winner_id === match.player2_id}
           isComplete={isComplete}
+          isLive={isLive}
         />
       </div>
-      {!isComplete && !isPending && (
-        <div className="mt-2 text-xs text-primary/70 text-center">Ergebnis eintragen →</div>
+
+      {/* Footer hint */}
+      {isComplete && (
+        <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground/60">
+          <CheckCircle2 className="w-3 h-3 text-primary" />
+          <span>Abgeschlossen</span>
+          {match.autodarts_match_id && <span className="ml-auto text-[10px]">via Autodarts</span>}
+        </div>
+      )}
+      {!isComplete && !isPending && !isLive && (
+        <div className="mt-2 text-xs text-primary/70 text-center">Ergebnis manuell eintragen →</div>
       )}
     </div>
   );
 }
 
-function PlayerRow({ name, score, isWinner, isComplete }: {
-  name: string; score: number | null; isWinner: boolean; isComplete: boolean;
+function PlayerRow({
+  name, score, avg, isWinner, isComplete, isLive,
+}: {
+  name: string;
+  score: number | null;
+  avg: number | null;
+  isWinner: boolean;
+  isComplete: boolean;
+  isLive: boolean;
 }) {
   return (
     <div className={`flex items-center justify-between ${isWinner ? "text-foreground" : isComplete ? "text-muted-foreground" : ""}`}>
       <span className={`text-sm ${isWinner ? "font-semibold" : "font-normal"}`}>
-        {isWinner && <span className="text-primary mr-1">●</span>}{name}
+        {isWinner && <span className="text-primary mr-1">●</span>}
+        {name}
       </span>
-      {score !== null && <span className={`text-sm font-bold ${isWinner ? "text-primary" : ""}`}>{score}</span>}
+      <div className="flex items-center gap-2">
+        {avg !== null && avg > 0 && (
+          <span className="text-[10px] text-muted-foreground tabular-nums">⌀{avg}</span>
+        )}
+        {score !== null && (
+          <span className={`text-sm font-bold tabular-nums ${isLive ? "text-primary" : isWinner ? "text-primary" : ""}`}>
+            {score}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

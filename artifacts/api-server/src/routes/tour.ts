@@ -875,6 +875,183 @@ router.post("/tour/matches/:matchId/result", async (req, res) => {
   }
 });
 
+// ─── Autodarts Helpers ────────────────────────────────────────────────────────
+
+let cachedToken: { value: string; expiresAt: number } | null = null;
+
+async function getAutodartAccessToken(): Promise<string | null> {
+  if (cachedToken && Date.now() < cachedToken.expiresAt) return cachedToken.value;
+  const refreshToken = process.env.AUTODARTS_REFRESH_TOKEN;
+  if (!refreshToken) return null;
+  try {
+    const tokenRes = await fetch(
+      "https://login.autodarts.io/realms/autodarts/protocol/openid-connect/token",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          client_id: "autodarts-play",
+          refresh_token: refreshToken,
+        }),
+      }
+    );
+    if (!tokenRes.ok) return null;
+    const tokenData: any = await tokenRes.json();
+    cachedToken = { value: tokenData.access_token, expiresAt: Date.now() + 50_000 };
+    return tokenData.access_token;
+  } catch { return null; }
+}
+
+async function fetchAutodartMatches(accessToken: string): Promise<any[]> {
+  const res = await fetch("https://api.autodarts.io/ms/v0/matches?limit=20", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) return [];
+  const data: any = await res.json();
+  return data.data || data || [];
+}
+
+function findAdMatch(adMatches: any[], username1: string, username2: string): any | null {
+  return adMatches.find((m: any) => {
+    const names = (m.players || []).map((p: any) => p.name?.toLowerCase());
+    return names.includes(username1.toLowerCase()) && names.includes(username2.toLowerCase());
+  }) ?? null;
+}
+
+function isMatchComplete(adMatch: any, winLegs: number): boolean {
+  const players: any[] = adMatch.players || [];
+  return players.some((p: any) => (p.legs ?? 0) >= winLegs);
+}
+
+function getMatchScore(adMatch: any, username1: string, username2: string) {
+  const players: any[] = adMatch.players || [];
+  const p1 = players.find((p) => p.name?.toLowerCase() === username1.toLowerCase());
+  const p2 = players.find((p) => p.name?.toLowerCase() === username2.toLowerCase());
+  return {
+    legs1: p1?.legs ?? 0,
+    legs2: p2?.legs ?? 0,
+    avg1: p1?.stats?.average ?? 0,
+    avg2: p2?.stats?.average ?? 0,
+  };
+}
+
+// POST /tour/tournaments/:id/autodarts-sync — auto-detect results for all pending matches
+router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const tournament = await db
+      .select()
+      .from(tourTournamentsTable)
+      .where(eq(tourTournamentsTable.id, tournamentId))
+      .limit(1);
+    if (!tournament[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
+    if (tournament[0].status !== "laufend") {
+      return res.json({ synced: 0, matches: [] });
+    }
+
+    // Get all pending matches with both players assigned
+    const allMatches = await db
+      .select()
+      .from(tourMatchesTable)
+      .where(eq(tourMatchesTable.tournament_id, tournamentId));
+
+    const pendingMatches = allMatches.filter(
+      (m) => m.status === "ausstehend" && m.player1_id && m.player2_id && !m.is_bye
+    );
+
+    if (pendingMatches.length === 0) {
+      return res.json({ synced: 0, matches: [] });
+    }
+
+    // Fetch Autodarts token once
+    const accessToken = await getAutodartAccessToken();
+    if (!accessToken) {
+      return res.json({ synced: 0, matches: [], error: "Kein Autodarts-Token" });
+    }
+
+    // Fetch recent Autodarts matches once
+    const adMatches = await fetchAutodartMatches(accessToken);
+
+    // legsFormat → winning legs
+    const winLegs = Math.ceil(tournament[0].legs_format / 2);
+
+    // Resolve player names from DB
+    const playerIds = [...new Set(pendingMatches.flatMap((m) => [m.player1_id!, m.player2_id!]))];
+    const playerMap: Record<number, string> = {};
+    for (const pid of playerIds) {
+      const p = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, pid)).limit(1);
+      if (p[0]) playerMap[pid] = p[0].autodarts_username;
+    }
+
+    const results: any[] = [];
+    let synced = 0;
+
+    for (const match of pendingMatches) {
+      const u1 = playerMap[match.player1_id!];
+      const u2 = playerMap[match.player2_id!];
+      if (!u1 || !u2) continue;
+
+      const adMatch = findAdMatch(adMatches, u1, u2);
+      if (!adMatch) {
+        results.push({ match_id: match.id, status: "not_found" });
+        continue;
+      }
+
+      const score = getMatchScore(adMatch, u1, u2);
+      const complete = isMatchComplete(adMatch, winLegs);
+
+      if (!complete) {
+        results.push({
+          match_id: match.id,
+          status: "live",
+          legs1: score.legs1,
+          legs2: score.legs2,
+          avg1: Math.round(score.avg1 * 10) / 10,
+          avg2: Math.round(score.avg2 * 10) / 10,
+          autodarts_id: adMatch.id,
+        });
+        // Store the Autodarts match ID
+        await db.update(tourMatchesTable)
+          .set({ autodarts_match_id: adMatch.id })
+          .where(eq(tourMatchesTable.id, match.id));
+        continue;
+      }
+
+      // Match complete → auto-record
+      const winnerId = score.legs1 >= winLegs ? match.player1_id! : match.player2_id!;
+      await db.update(tourMatchesTable)
+        .set({
+          winner_id: winnerId,
+          score_p1: score.legs1,
+          score_p2: score.legs2,
+          status: "abgeschlossen",
+          autodarts_match_id: adMatch.id,
+        })
+        .where(eq(tourMatchesTable.id, match.id));
+
+      await advanceWinner(tournamentId, match.runde, match.match_nr, winnerId);
+      await checkTournamentComplete(tournamentId);
+
+      results.push({
+        match_id: match.id,
+        status: "auto_completed",
+        winner_id: winnerId,
+        legs1: score.legs1,
+        legs2: score.legs2,
+        avg1: Math.round(score.avg1 * 10) / 10,
+        avg2: Math.round(score.avg2 * 10) / 10,
+        autodarts_id: adMatch.id,
+      });
+      synced++;
+    }
+
+    res.json({ synced, matches: results });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // POST /tour/matches/:matchId/autodarts
 router.post("/tour/matches/:matchId/autodarts", async (req, res) => {
   try {
