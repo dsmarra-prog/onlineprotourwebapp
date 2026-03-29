@@ -33,9 +33,13 @@ export default function EinstellungenPage() {
 
   const { data: discordStatus } = useQuery({
     queryKey: ["discord-settings"],
-    queryFn: () => apiFetch<{ webhook_url: string; bot_token_set: boolean; channel_id: string }>(
-      "/tour/admin/discord-settings"
-    ),
+    queryFn: () => apiFetch<{
+      webhook_url: string;
+      bot_token_set: boolean;
+      channel_id: string;
+      webhook_from_env?: boolean;
+      bot_from_env?: boolean;
+    }>("/tour/admin/discord-settings"),
     staleTime: 60_000,
   });
 
@@ -341,11 +345,21 @@ export default function EinstellungenPage() {
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className={`flex items-center gap-1.5 p-2 rounded-lg border ${discordStatus?.webhook_url ? "bg-green-500/5 border-green-500/20 text-green-400" : "bg-muted border-border text-muted-foreground"}`}>
                 <Bell className="w-3.5 h-3.5 shrink-0" />
-                <span>{discordStatus?.webhook_url ? "Webhook aktiv" : "Webhook nicht gesetzt"}</span>
+                <div className="flex flex-col">
+                  <span>{discordStatus?.webhook_url ? "Webhook aktiv" : "Webhook nicht gesetzt"}</span>
+                  {discordStatus?.webhook_from_env && (
+                    <span className="text-[10px] text-muted-foreground">via Umgebungsvariable</span>
+                  )}
+                </div>
               </div>
               <div className={`flex items-center gap-1.5 p-2 rounded-lg border ${discordStatus?.bot_token_set ? "bg-green-500/5 border-green-500/20 text-green-400" : "bg-muted border-border text-muted-foreground"}`}>
                 <GitBranch className="w-3.5 h-3.5 shrink-0" />
-                <span>{discordStatus?.bot_token_set ? "Bot-Token aktiv" : "Kein Bot-Token"}</span>
+                <div className="flex flex-col">
+                  <span>{discordStatus?.bot_token_set ? "Bot-Token aktiv" : "Kein Bot-Token"}</span>
+                  {discordStatus?.bot_from_env && (
+                    <span className="text-[10px] text-muted-foreground">via Umgebungsvariable</span>
+                  )}
+                </div>
               </div>
             </div>
 

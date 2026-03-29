@@ -6,18 +6,24 @@ const OPT_COLOR = 0xC8982E;
 const OPT_ICON = "https://onlineprotour.eu/images/opt-logo.png";
 
 // ─── Settings ────────────────────────────────────────────────────────────────
+// Priority: DB value (set via admin panel) → environment variable fallback
 
 export async function getDiscordSettings() {
   try {
     const rows = await db.select().from(systemSettingsTable);
     const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
-    return {
-      webhookUrl: map["discord_webhook_url"] ?? null,
-      botToken: map["discord_bot_token"] ?? null,
-      channelId: map["discord_channel_id"] ?? null,
-    };
+
+    const webhookUrl = (map["discord_webhook_url"] || "") || process.env["DISCORD_WEBHOOK_URL"] || null;
+    const botToken   = (map["discord_bot_token"]   || "") || process.env["DISCORD_BOT_TOKEN"]   || null;
+    const channelId  = (map["discord_channel_id"]  || "") || process.env["DISCORD_CHANNEL_ID"]  || null;
+
+    return { webhookUrl, botToken, channelId };
   } catch {
-    return { webhookUrl: null, botToken: null, channelId: null };
+    return {
+      webhookUrl: process.env["DISCORD_WEBHOOK_URL"] ?? null,
+      botToken:   process.env["DISCORD_BOT_TOKEN"]   ?? null,
+      channelId:  process.env["DISCORD_CHANNEL_ID"]  ?? null,
+    };
   }
 }
 

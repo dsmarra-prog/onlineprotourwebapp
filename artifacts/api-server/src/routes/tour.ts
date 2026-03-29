@@ -781,10 +781,16 @@ router.post("/tour/dev-oom/update", async (req, res) => {
 router.get("/tour/admin/discord-settings", async (_req, res) => {
   try {
     const settings = await getDiscordSettings();
+    const dbRows = await db.select().from(systemSettingsTable);
+    const dbMap = Object.fromEntries(dbRows.map((r) => [r.key, r.value]));
+    const webhookFromEnv = !dbMap["discord_webhook_url"] && !!process.env["DISCORD_WEBHOOK_URL"];
+    const botFromEnv = !dbMap["discord_bot_token"] && !!process.env["DISCORD_BOT_TOKEN"];
     res.json({
       webhook_url: settings.webhookUrl ? settings.webhookUrl.replace(/\/[^/]+$/, "/***") : "",
       bot_token_set: !!(settings.botToken && settings.botToken.length > 10),
       channel_id: settings.channelId ?? "",
+      webhook_from_env: webhookFromEnv,
+      bot_from_env: botFromEnv,
     });
   } catch (e) {
     res.status(500).json({ error: String(e) });
