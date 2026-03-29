@@ -1065,8 +1065,15 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
       // Lobby = currently playing indicator (scores always undefined/0:0 from API)
       // Completed matches = accumulated leg score (the real running score)
       // → Always use completed match for score; lobby is just "in progress" signal
+      // Only accept Autodarts matches whose targetLegs >= winLegs (filters out short test games)
+      // adLiveMatch: lobby signals "game in progress" – no format filter needed (score comes from completed)
+      // adCompletedMatch: only accept matches where targetLegs matches the tournament format
+      //   e.g. First-to-1 test games are ignored for a Best-of-5 tournament (winLegs=3)
       const adLiveMatch = findAdMatch(adLive, u1, u2);
-      const adCompletedMatch = findAdMatch(adCompleted, u1, u2);
+      const adCompletedMatch = findAdMatch(
+        adCompleted.filter((m) => (m.targetLegs ?? 0) >= winLegs),
+        u1, u2
+      );
 
       if (!adLiveMatch && !adCompletedMatch) {
         results.push({ match_id: match.id, status: "not_found" });
