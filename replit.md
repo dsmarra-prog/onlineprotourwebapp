@@ -74,9 +74,12 @@ React + Vite frontend for the **Online Pro Tour Manager** — multi-player tourn
 - **Spielplan**: Phase-organized Season 1 calendar (23 events: PC1–PC9, Spring Open, Dev Cups 1–6, April Major, etc.)
 - **OOM**: Order of Merit with 119 imported real players from onlineprotour.eu (Stand 26.03.2026). Compact + Detail view with per-tournament columns. DB: `tour_oom_standings` table. Testturniere (is_test=true) sind ausgeschlossen.
 - **Turniere**: Admin creates/manages tournaments with bracket generation. `is_test=true` → no OOM points, orange "Test" badge shown.
+- **Player Portal / Auth**: New visitors see a login/register portal (`src/pages/portal.tsx`). Session stored in localStorage under key `opt_player`. Login endpoint: `POST /api/tour/players/login`. `PlayerContext` (`src/context/PlayerContext.tsx`) wraps the entire app; `usePlayer()` provides `currentPlayer`, `login()`, `logout()`.
+- **Selbstanmeldung**: Logged-in players can self-register for open tournaments via "Jetzt anmelden" button → PIN-confirmation dialog → `POST /api/tour/tournaments/:id/self-register`. Admin-only removal: `DELETE /api/tour/tournaments/:id/entries/:playerId` now requires `admin_pin` in the request body; remove button only shown when adminPin is entered.
 - **Spieler**: Player registration with Autodarts account linking
 - **Live-Match-Erkennung**: 3-stufiger Sync via `gs/v0/lobbies/{id}` (Lobby-Phase, 0:0) → `gs/v0/matches/{id}` (Spielphase, echte Scores + Averages) → `as/v0/matches/{id}` (Abschluss, finales Ergebnis). Privat-Lobbies werden via stored ID direkt abgefragt.
 - **LiveMatchModal**: Klick auf laufendes Match → großes Score-Display, Averages, "Autodarts öffnen"-Button.
+- **Post-Match Averages**: `tour_matches.avg_p1/avg_p2` (real, nullable) — gespeichert bei Auto-Complete via `as/v0/matches.games[].turns[].points`. Angezeigt in MatchCard neben dem Legstand.
 - API URL: `/api` (shared API server at port 8080)
 - Important: `apiFetch` uses `BASE = "/api"` (not prefixed with artifact base path)
 - Tournament types: `pc` | `m1` (Major) | `m2` (Final) | `dev_cup` | `dev_major`

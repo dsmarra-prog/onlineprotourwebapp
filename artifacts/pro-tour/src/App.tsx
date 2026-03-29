@@ -2,7 +2,7 @@ import { Switch, Route, Router as WouterRouter, Link, useLocation } from "wouter
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Trophy, Users, BarChart3, Settings, Home, Target, CalendarDays } from "lucide-react";
+import { Trophy, Users, BarChart3, Settings, Home, Target, CalendarDays, LogOut } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import TourniereListe from "@/pages/turniere";
 import TurnierDetail from "@/pages/turnier-detail";
@@ -12,6 +12,8 @@ import SpielerProfil from "@/pages/spieler-profil";
 import EinstellungenPage from "@/pages/einstellungen";
 import HomeDashboard from "@/pages/home";
 import SpielplanPage from "@/pages/spielplan";
+import Portal from "@/pages/portal";
+import { PlayerProvider, usePlayer } from "@/context/PlayerContext";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 10_000 } },
@@ -28,6 +30,8 @@ const NAV_ITEMS = [
 
 function NavBar() {
   const [location] = useLocation();
+  const { currentPlayer, logout } = usePlayer();
+
   return (
     <nav className="border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 flex items-center h-14 gap-1">
@@ -54,12 +58,45 @@ function NavBar() {
             );
           })}
         </div>
+        {/* Player info + logout */}
+        {currentPlayer && (
+          <div className="flex items-center gap-2 ml-2 pl-3 border-l border-border shrink-0">
+            <div className="text-right hidden sm:block">
+              <div className="text-xs font-semibold text-foreground leading-none">{currentPlayer.name}</div>
+              <div className="text-[10px] text-muted-foreground leading-none mt-0.5">@{currentPlayer.autodarts_username}</div>
+            </div>
+            <button
+              onClick={logout}
+              title="Ausloggen"
+              className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
       </div>
     </nav>
   );
 }
 
 function Router() {
+  const { currentPlayer, isLoading } = usePlayer();
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3 text-muted-foreground">
+          <Target className="w-8 h-8 text-primary animate-pulse" />
+          <span className="text-sm">Laden…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentPlayer) {
+    return <Portal />;
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <NavBar />
@@ -84,9 +121,11 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
+        <PlayerProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Router />
+          </WouterRouter>
+        </PlayerProvider>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

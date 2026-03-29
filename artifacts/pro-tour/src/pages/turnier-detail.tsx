@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch, TourTournamentDetail, TourPlayer, TourMatch, TYP_LABELS, RUNDE_LABELS } from "@/lib/api";
+import { usePlayer } from "@/context/PlayerContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -159,6 +160,7 @@ export default function TurnierDetail() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { currentPlayer } = usePlayer();
   const [adminPin, setAdminPin] = useState("");
   const [resultOpen, setResultOpen] = useState<number | null>(null);
   const [liveModalMatch, setLiveModalMatch] = useState<number | null>(null);
@@ -166,6 +168,9 @@ export default function TurnierDetail() {
   const [addPlayerOpen, setAddPlayerOpen] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState("");
   const prevSyncedRef = useRef(0);
+  // Self-registration
+  const [selfRegOpen, setSelfRegOpen] = useState(false);
+  const [selfRegPin, setSelfRegPin] = useState("");
 
   const { data: detail, isLoading } = useQuery<TourTournamentDetail>({
     queryKey: ["tournament", id],
@@ -237,9 +242,24 @@ export default function TurnierDetail() {
   const removePlayerMut = useMutation({
     mutationFn: (player_id: number) => apiFetch(`/tour/tournaments/${id}/entries/${player_id}`, {
       method: "DELETE",
+      body: JSON.stringify({ admin_pin: adminPin }),
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tournament", id] }); toast({ title: "Spieler entfernt" }); },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const selfRegisterMut = useMutation({
+    mutationFn: () => apiFetch(`/tour/tournaments/${id}/self-register`, {
+      method: "POST",
+      body: JSON.stringify({ player_id: currentPlayer?.id, pin: selfRegPin }),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tournament", id] });
+      setSelfRegOpen(false);
+      setSelfRegPin("");
+      toast({ title: "Erfolgreich angemeldet!", description: `Du bist für das Turnier angemeldet.` });
+    },
+    onError: (e: Error) => toast({ title: "Anmeldung fehlgeschlagen", description: e.message, variant: "destructive" }),
   });
 
   const resultMut = useMutation({
@@ -268,6 +288,8 @@ export default function TurnierDetail() {
 
   const entriedIds = players.map((p) => p.player_id);
   const availablePlayers = allPlayers?.filter((p) => !entriedIds.includes(p.id)) ?? [];
+  const isCurrentPlayerRegistered = currentPlayer ? entriedIds.includes(currentPlayer.id) : false;
+  const canSelfRegister = currentPlayer && !isCurrentPlayerRegistered && tournament.status === "offen" && players.length < tournament.max_players;
 
   const statusBadge = tournament.status === "laufend"
     ? "text-primary bg-primary/10 border-primary/30"
@@ -366,36 +388,93 @@ export default function TurnierDetail() {
         />
       </div>
 
+      {/* Self-register banner for open tournaments */}
+      {canSelfRegister && (
+        <div className="bg-primary/5 border border-primary/30 rounded-xl p-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <UserPlus className="w-4 h-4 text-primary" />
+            <span className="text-sm">Du bist noch nicht für dieses Turnier angemeldet.</span>
+          </div>
+          <Dialog open={selfRegOpen} onOpenChange={(o) => { setSelfRegOpen(o); if (!o) setSelfRegPin(""); }}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="shrink-0">Jetzt anmelden</Button>
+            </DialogTrigger>
+            <DialogContent className="bg-card border-border">
+              <DialogHeader>
+                <DialogTitle>Für Turnier anmelden</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-2">
+                <p className="text-sm text-muted-foreground">
+                  Du meldest dich als <span className="text-foreground font-medium">{currentPlayer?.name}</span> für <span className="text-foreground font-medium">{tournament.name}</span> an.
+                </p>
+                <div className="space-y-1.5">
+                  <Label>Bestätige mit deinem PIN</Label>
+                  <Input
+                    type="password"
+                    value={selfRegPin}
+                    onChange={(e) => setSelfRegPin(e.target.value)}
+                    placeholder="••••"
+                    autoFocus
+                  />
+                </div>
+                <Button
+                  className="w-full"
+                  disabled={selfRegPin.length < 4 || selfRegisterMut.isPending}
+                  onClick={() => selfRegisterMut.mutate()}
+                >
+                  {selfRegisterMut.isPending ? (
+                    <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Anmelden…</>
+                  ) : (
+                    <><Check className="w-4 h-4 mr-2" /> Verbindlich anmelden</>
+                  )}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      )}
+
+      {/* Already registered indicator */}
+      {isCurrentPlayerRegistered && tournament.status === "offen" && (
+        <div className="bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 flex items-center gap-2 text-sm text-primary">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>Du bist für dieses Turnier angemeldet.</span>
+        </div>
+      )}
+
       {/* Players section for open tournaments */}
       {tournament.status === "offen" && (
         <div className="bg-card border border-border rounded-xl p-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-semibold text-sm">Gemeldete Spieler ({players.length}/{tournament.max_players})</h2>
             <div className="flex gap-2">
-              <Dialog open={addPlayerOpen} onOpenChange={setAddPlayerOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" variant="outline" className="gap-1.5">
-                    <UserPlus className="w-3.5 h-3.5" /> Spieler hinzufügen
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="bg-card border-border">
-                  <DialogHeader><DialogTitle>Spieler hinzufügen</DialogTitle></DialogHeader>
-                  <div className="space-y-3 mt-2">
-                    <Select value={selectedPlayer} onValueChange={setSelectedPlayer}>
-                      <SelectTrigger><SelectValue placeholder="Spieler wählen" /></SelectTrigger>
-                      <SelectContent>
-                        {availablePlayers.map((p) => (
-                          <SelectItem key={p.id} value={String(p.id)}>{p.name} ({p.autodarts_username})</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button className="w-full" disabled={!selectedPlayer || addPlayerMut.isPending}
-                      onClick={() => addPlayerMut.mutate(parseInt(selectedPlayer))}>
-                      Hinzufügen
+              {/* Admin: add player */}
+              {adminPin && (
+                <Dialog open={addPlayerOpen} onOpenChange={setAddPlayerOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="sm" variant="outline" className="gap-1.5">
+                      <UserPlus className="w-3.5 h-3.5" /> Spieler hinzufügen
                     </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
+                  </DialogTrigger>
+                  <DialogContent className="bg-card border-border">
+                    <DialogHeader><DialogTitle>Spieler hinzufügen (Admin)</DialogTitle></DialogHeader>
+                    <div className="space-y-3 mt-2">
+                      <Select value={selectedPlayer} onValueChange={setSelectedPlayer}>
+                        <SelectTrigger><SelectValue placeholder="Spieler wählen" /></SelectTrigger>
+                        <SelectContent>
+                          {availablePlayers.map((p) => (
+                            <SelectItem key={p.id} value={String(p.id)}>{p.name} ({p.autodarts_username})</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button className="w-full" disabled={!selectedPlayer || addPlayerMut.isPending}
+                        onClick={() => addPlayerMut.mutate(parseInt(selectedPlayer))}>
+                        Hinzufügen
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
               <Button
                 size="sm"
                 onClick={() => startMut.mutate()}
@@ -412,15 +491,26 @@ export default function TurnierDetail() {
                   <span className="text-xs text-muted-foreground w-5">{i + 1}</span>
                   <span className="text-sm font-medium">{p.name}</span>
                   <span className="text-xs text-muted-foreground">@{p.autodarts_username}</span>
+                  {currentPlayer?.id === p.player_id && (
+                    <span className="text-[10px] text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded-full font-medium">Du</span>
+                  )}
                 </div>
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-300"
-                  onClick={() => removePlayerMut.mutate(p.player_id)}>
-                  <UserMinus className="w-3.5 h-3.5" />
-                </Button>
+                {/* Admin-only remove button — only visible when admin PIN is entered */}
+                {adminPin && (
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-300"
+                    onClick={() => removePlayerMut.mutate(p.player_id)}
+                    disabled={removePlayerMut.isPending}
+                    title="Spieler entfernen (Admin)">
+                    <UserMinus className="w-3.5 h-3.5" />
+                  </Button>
+                )}
               </div>
             ))}
             {players.length === 0 && <p className="text-muted-foreground text-sm text-center py-2">Noch keine Spieler gemeldet</p>}
           </div>
+          {!adminPin && players.length > 0 && (
+            <p className="text-xs text-muted-foreground mt-3 text-center">Admin-PIN eingeben um Spieler zu entfernen oder das Turnier zu starten.</p>
+          )}
         </div>
       )}
 

@@ -677,6 +677,26 @@ router.post("/tour/players/register", async (req, res) => {
   }
 });
 
+// POST /tour/players/login — verify credentials and return player data
+router.post("/tour/players/login", async (req, res) => {
+  try {
+    const { autodarts_username, pin } = req.body;
+    if (!autodarts_username || !pin) {
+      return res.status(400).json({ error: "autodarts_username und pin erforderlich" });
+    }
+    const players = await db.select().from(tourPlayersTable)
+      .where(eq(tourPlayersTable.autodarts_username, autodarts_username)).limit(1);
+    if (!players[0]) return res.status(404).json({ error: "Spieler nicht gefunden" });
+    if (!verifyPin(String(pin), players[0].pin_hash)) {
+      return res.status(403).json({ error: "Falscher PIN" });
+    }
+    const p = players[0];
+    res.json({ id: p.id, name: p.name, autodarts_username: p.autodarts_username });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // GET /tour/players/:id
 router.get("/tour/players/:id", async (req, res) => {
   try {
@@ -810,14 +830,47 @@ router.post("/tour/tournaments/:id/entries", async (req, res) => {
   }
 });
 
-// DELETE /tour/tournaments/:id/entries/:playerId
+// POST /tour/tournaments/:id/self-register — players register themselves (with their own PIN)
+router.post("/tour/tournaments/:id/self-register", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const { player_id, pin } = req.body;
+    if (!player_id || !pin) return res.status(400).json({ error: "player_id und pin erforderlich" });
+
+    const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
+    if (!t[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
+    if (t[0].status !== "offen") return res.status(400).json({ error: "Turnier ist nicht mehr offen für Anmeldungen" });
+
+    const player = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, player_id)).limit(1);
+    if (!player[0]) return res.status(404).json({ error: "Spieler nicht gefunden" });
+    if (!verifyPin(String(pin), player[0].pin_hash)) return res.status(403).json({ error: "Falscher PIN" });
+
+    const existing = await db.select().from(tourEntriesTable)
+      .where(and(eq(tourEntriesTable.tournament_id, tournamentId), eq(tourEntriesTable.player_id, player_id))).limit(1);
+    if (existing[0]) return res.status(409).json({ error: "Du bist bereits für dieses Turnier angemeldet" });
+
+    const entries = await db.select().from(tourEntriesTable).where(eq(tourEntriesTable.tournament_id, tournamentId));
+    if (entries.length >= t[0].max_players) return res.status(400).json({ error: "Turnier ist voll" });
+
+    await db.insert(tourEntriesTable).values({ tournament_id: tournamentId, player_id, seed: entries.length + 1 });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// DELETE /tour/tournaments/:id/entries/:playerId — admin only (requires admin_pin in body)
 router.delete("/tour/tournaments/:id/entries/:playerId", async (req, res) => {
   try {
     const tournamentId = parseInt(req.params.id);
     const playerId = parseInt(req.params.playerId);
+    const { admin_pin } = req.body;
 
     const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
     if (!t[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
+    if (!admin_pin || !verifyPin(String(admin_pin), t[0].admin_pin)) {
+      return res.status(403).json({ error: "Falscher Admin-PIN" });
+    }
     if (t[0].status !== "offen") return res.status(400).json({ error: "Turnier ist bereits gestartet" });
 
     await db.delete(tourEntriesTable)
