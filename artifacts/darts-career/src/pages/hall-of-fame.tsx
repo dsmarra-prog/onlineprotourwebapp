@@ -1,8 +1,12 @@
 import { Layout } from "@/components/layout";
 import { useGetTournamentHistory, useGetCareer } from "@/hooks/use-career";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Star, ExternalLink } from "lucide-react";
 import { motion } from "framer-motion";
 import { KALENDER_META } from "@/lib/kalender-meta";
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
 
 // Trophy SVG silhouette component
 function TrophySVG({ color, glow }: { color: string; glow: string }) {
@@ -106,6 +110,8 @@ export default function HallOfFamePage() {
     (h: any) => h.ergebnis === "Sieg" && h.typ === "Major"
   ).length;
 
+  const besteSpiele: any[] = (career as any).beste_spiele ?? [];
+
   // Group by type
   const byType: Record<string, typeof KALENDER_META> = {
     Major: KALENDER_META.filter((t) => t.typ === "Major"),
@@ -202,6 +208,93 @@ export default function HallOfFamePage() {
             </div>
           );
         })}
+
+        {/* ── Beste Spiele – Performance Wall of Fame ─────────────────────── */}
+        {besteSpiele.length > 0 && (
+          <div>
+            <h2 className="text-2xl font-display font-bold mb-6 flex items-center gap-2">
+              <Star className="w-6 h-6 text-yellow-400" /> Performance Hall of Fame
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {besteSpiele.map((s: any, i: number) => {
+                const medals = ["🥇", "🥈", "🥉"];
+                const medal = medals[i] ?? `#${i + 1}`;
+                const avgColor = s.avg >= 100 ? "text-yellow-300" : s.avg >= 85 ? "text-primary" : s.avg >= 70 ? "text-cyan-300" : "text-white";
+                return (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.06 }}
+                    className={`bg-card border rounded-2xl p-5 hover:border-primary/40 transition-all ${
+                      i === 0 ? "border-yellow-400/40 bg-yellow-400/5 shadow-[0_0_24px_rgba(250,200,0,0.08)]"
+                      : i === 1 ? "border-slate-400/30 bg-slate-400/5"
+                      : i === 2 ? "border-orange-700/30 bg-orange-700/5"
+                      : "border-border"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <span className="text-2xl">{medal}</span>
+                        <p className="text-xs text-muted-foreground mt-1">{s.turnier_name}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-2xl font-mono font-black ${avgColor}`}>{s.avg?.toFixed(2) ?? "–"}</p>
+                        <p className="text-[10px] text-muted-foreground">Average</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className={`text-sm font-bold font-mono ${s.win ? "text-green-400" : "text-red-400"}`}>{s.ergebnis}</span>
+                      <span className="text-muted-foreground text-sm">vs.</span>
+                      <span className="text-sm font-medium text-white truncate">{s.gegner_name}</span>
+                    </div>
+                    <div className="flex gap-3 text-xs">
+                      {s.s180s > 0 && (
+                        <div className="flex items-center gap-1 bg-red-500/10 border border-red-500/20 rounded-lg px-2 py-1">
+                          <span className="text-red-400 font-bold">{s.s180s}×</span>
+                          <span className="text-muted-foreground">180</span>
+                        </div>
+                      )}
+                      {s.hf > 0 && (
+                        <div className="flex items-center gap-1 bg-orange-400/10 border border-orange-400/20 rounded-lg px-2 py-1">
+                          <span className="text-orange-300 font-bold">{s.hf}</span>
+                          <span className="text-muted-foreground">HF</span>
+                        </div>
+                      )}
+                      {s.co_pct > 0 && (
+                        <div className="flex items-center gap-1 bg-green-500/10 border border-green-500/20 rounded-lg px-2 py-1">
+                          <span className="text-green-400 font-bold">{s.co_pct?.toFixed(0)}%</span>
+                          <span className="text-muted-foreground">DQ</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/40">
+                      <span className="text-xs text-muted-foreground">{s.datum ? formatDate(s.datum) : "–"}</span>
+                      {s.autodarts_id ? (
+                        <a
+                          href={`https://app.autodarts.io/matches/${s.autodarts_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-primary hover:text-cyan-300 transition-colors"
+                        >
+                          <ExternalLink className="w-3 h-3" /> Match ansehen
+                        </a>
+                      ) : null}
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {besteSpiele.length === 0 && (
+          <div className="bg-card border border-border rounded-2xl p-10 text-center">
+            <Star className="w-10 h-10 mx-auto mb-3 opacity-30 text-yellow-400" />
+            <h3 className="text-lg font-display font-bold text-muted-foreground">Performance Hall of Fame</h3>
+            <p className="text-sm text-muted-foreground mt-2">Spiele dein erstes Match um hier einzusteigen!</p>
+          </div>
+        )}
       </div>
     </Layout>
   );

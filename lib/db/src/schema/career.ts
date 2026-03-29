@@ -51,6 +51,15 @@ export const careerTable = pgTable("career", {
   gs_gruppe: jsonb("gs_gruppe"),
   // Sponsor offers waiting for player choice (null = none pending)
   sponsor_angebote: jsonb("sponsor_angebote"),
+  // Extended stats
+  stats_best_single_avg: real("stats_best_single_avg").notNull().default(0),
+  stats_most_180s_game: integer("stats_most_180s_game").notNull().default(0),
+  stats_total_co_attempted: integer("stats_total_co_attempted").notNull().default(0),
+  stats_total_co_hit: integer("stats_total_co_hit").notNull().default(0),
+  // Wall of Fame: top 10 best games
+  beste_spiele: jsonb("beste_spiele").notNull().default([]),
+  // Last 10 autodarts match IDs for history links
+  letzte_match_ids: jsonb("letzte_match_ids").notNull().default([]),
 });
 
 export const insertCareerSchema = createInsertSchema(careerTable);

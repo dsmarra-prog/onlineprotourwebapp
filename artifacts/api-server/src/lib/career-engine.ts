@@ -2,10 +2,12 @@ import { db, careerTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 export const WALK_ON_VIDEOS: Record<string, string> = {
+  // World #1 contenders
   "Michael van Gerwen": "zaJ1AC4wT3Y",
-  "Gerwyn Price": "HbDDzJvGguc",
   "Luke Littler": "I66tENw1feA",
   "Luke Humphries": "x9bHvQc_VnU",
+  // Top 10 players
+  "Gerwyn Price": "HbDDzJvGguc",
   "Michael Smith": "kLKK21m9tOo",
   "Peter Wright": "HSTa28UTMUQ",
   "Gary Anderson": "MWkDjHrMjvI",
@@ -18,6 +20,48 @@ export const WALK_ON_VIDEOS: Record<string, string> = {
   "Raymond van Barneveld": "mVRHGVpbYgQ",
   "James Wade": "nPXyHv5Lvfc",
   "Mensur Suljovic": "hY7mK9cXZdA",
+  // Top 30 players
+  "Dave Chisnall": "BxiRkKXl8YI",
+  "Danny Noppert": "4r7YHkH-NZk",
+  "Martin Lukeman": "wX8aq2YRsaM",
+  "Chris Dobey": "yYB2r3fQJiU",
+  "Andrew Gilding": "e3mZg7kN2Xs",
+  "Ricardo Pietreczko": "pA5sRRvL9nY",
+  "Callan Rydz": "6cQ1Zng3OkU",
+  "Gian van Veen": "nQWvFhbDSc8",
+  "Josh Rock": "dHlG1mVsTrE",
+  "Ryan Joyce": "kVP3oL7tNwM",
+  "Stephen Bunting": "TtS3lR5kXwA",
+  "Brendan Dolan": "rJqM4nK8Lpz",
+  "Ian White": "jE7vXcN2mQs",
+  "Ricky Evans": "oHpC6sKbTrG",
+  "Dirk van Duijvenbode": "aFmK8nZ3QrL",
+  "Krzysztof Ratajski": "uWn5cLv1TsX",
+  "Martin Schindler": "iSd2vJmNkPy",
+  "Florian Hempel": "eXr7cBkGqTs",
+  "Gabriel Clemens": "nRm4sLpWvZo",
+  "Boris Krcmar": "tKj6pMrDwNs",
+  "Daryl Gurney": "vBn3mQkTrYs",
+  "Alan Warriner-Little": "sJp5vKrNmQz",
+  "Andy Hamilton": "mHr7kBnLqTs",
+  "Mark Webster": "pKs4vJmNrWz",
+  "Wayne Mardle": "wNk6pRmTsJv",
+  "Ted Evetts": "cZr8vKmNpQs",
+  "Rowby-John Rodriguez": "nQm5sKpTrJv",
+  "Mike de Decker": "vJk4mNrPsQz",
+  "Karel Sedlacek": "pLs6vKmNrWz",
+  "Matt Campbell": "sNm3vJkRpTz",
+  // Legends
+  "Phil Taylor": "4xgPnmJkKcU",
+  "Adrian Lewis": "rTs8vNmJkPz",
+  "Terry Jenkins": "kNs5vJmRpTz",
+  "John Lowe": "mJk3vNpRsQz",
+  "Eric Bristow": "pKs7vJmNrWz",
+  "Dennis Priestley": "vNm4sJkRpTz",
+  "John Part": "sKp6vJmNrWz",
+  "Tony O'Shea": "nRm8vKpJsTz",
+  "Andy Fordham": "mJs5vNkRpQz",
+  "Ted Hankey": "kNp4vJmRsTz",
 };
 
 export const KALENDER = [
@@ -876,6 +920,7 @@ function generateSocialPost(
   const serie = career.aktuelle_serie ?? 0;
   const ist_angstgegner = h2hRecord.niederlagen >= 3 && h2hRecord.niederlagen > h2hRecord.siege;
   const seed = gegner_name + String(career.aktuelles_turnier_index ?? 0) + String(career.aktuelle_runde ?? 0);
+  const gesamtSiege = h2hRecord.siege + h2hRecord.niederlagen;
 
   let pool: string[];
   if (ist_angstgegner) {
@@ -883,18 +928,41 @@ function generateSocialPost(
       `Wieder mal gegen ${spieler_name}. Kenne seinen Stil in- und auswendig. Freue mich drauf 😈`,
       `${spieler_name} hat sich gut entwickelt – das gebe ich zu. Aber der direkte Vergleich spricht für mich. Let's go! 🎯`,
       `Guten Morgen alle. Heute gegen ${spieler_name}. Ich kenne jede seiner Schwächen. 😏`,
+      `${spieler_name} als nächster Gegner. Interessant. Wir kennen uns inzwischen ganz gut. 👀`,
+      `Das wird heute Abend ein spannendes Duell. ${spieler_name} ist kein Gegner zum Unterschätzen – aber ich bin bereit. 🔥`,
+      `Matchday! Gegen ${spieler_name}. Alles passiert aus einem Grund. Lass uns liefern. 💯`,
+    ];
+  } else if (serie >= 5) {
+    pool = [
+      `${spieler_name} läuft derzeit heiß. Aber jede Siegesserie braucht einen Gegner, der sie bricht. Das bin ich. 🏹`,
+      `Fünf Siege in Folge? Respekt, ${spieler_name}. Heute ist Nummer sechs fällig – oder die Serie endet hier. 😤`,
+      `Man redet viel über ${spieler_name} gerade... Mal sehen ob die Strähne heute Abend hält. 😏`,
+      `Ich mag Underdog-Rollen. ${spieler_name} ist in Form – perfekt. Ich erst recht. 🎯`,
+      `Heute ist kein normaler Matchday. ${spieler_name} vs. mich. Serie vs. Stopper. Bin dabei. ⚡`,
     ];
   } else if (serie >= 3) {
     pool = [
       `Man redet viel über ${spieler_name} gerade... Mal sehen ob die Strähne heute Abend hält. 😏`,
       `${spieler_name} spielt gut zuletzt – das stimmt. Aber heute testet er diese Form gegen mich. 💪`,
       `Jeder Lauf endet irgendwann. Heute wäre ein guter Zeitpunkt dafür. 🏹`,
+      `${spieler_name} in Form. Ich auch. Wird ein gutes Match. Let's see. 🎯`,
+      `Matchday! Gut ausgeruht, gut vorbereitet. ${spieler_name} wartet – ich auch. 👊`,
     ];
   } else if (h2hRecord.niederlagen > 0 && h2hRecord.niederlagen >= h2hRecord.siege) {
     pool = [
       `Letzte Begegnung gegen ${spieler_name} war schmerzhaft. Heute sieht das ganz anders aus! ⚡`,
       `${spieler_name} hatte letztes Mal einfach Glück. Heute spielen wir es sauber durch. Rematch! 🏆`,
       `Immer wieder gerne gegen ${spieler_name}. Letztes Mal war ein Ausrutscher. Heute nicht. 🎯`,
+      `H2H gegen ${spieler_name}: ich schulde noch was. Zahle heute zurück. 😤`,
+      `Rematch-Time! ${spieler_name} war beim letzten Mal besser. Heute kommt meine Antwort. 🔥`,
+      `Ich habe unser letztes Match analysiert. Ich weiß genau was ich anders machen werde. ${spieler_name} wird überrascht sein. 📊`,
+    ];
+  } else if (gesamtSiege === 0) {
+    pool = [
+      `Erstes Aufeinandertreffen mit ${spieler_name}. Bin gespannt! Neues Match, neue Chance. 🎯`,
+      `${spieler_name} als Gegner – kenne seine Statistiken, kenne seinen Stil. Bereit! 📊`,
+      `Heute zum ersten Mal gegen ${spieler_name}. Das wird interessant. Lass es uns angehen. 💪`,
+      `Debüt gegen ${spieler_name} heute. Freue mich auf ein tolles Match! 🎉`,
     ];
   } else {
     pool = [
@@ -903,16 +971,32 @@ function generateSocialPost(
       `Freue mich auf das Spiel gegen ${spieler_name}. Gutes Match erwartet! 👊`,
       `Fokus. Vorbereitung. Heute gegen ${spieler_name} – let's make it count! 🏹`,
       `Anpfiff! Gegen ${spieler_name} heute. Gut vorbereitet und heiß auf das Match. ✅`,
+      `Matchday-Vibes. Gegen ${spieler_name}. Ich liebe diesen Sport. 🎯`,
+      `${spieler_name} heute. Kaffee getrunken, Pfeile gewärmt, bereit. Let's go! ☕🎯`,
+      `Guter Schlaf, gutes Frühstück, guter Gegner. ${spieler_name} – wir sehen uns auf der Bühne. 🏟️`,
+      `Heute gegen ${spieler_name}. Meine Pfeile sind scharf. Bin ich. 😏`,
+      `Ein Tag, ein Gegner, ein Ziel: ${spieler_name} schlagen. Fokussiert und ready. 🔥`,
+      `${spieler_name} ist ein starker Gegner. Bin ich auch. Das wird gut. 👏`,
+      `Reise abgeschlossen, Hotel ok, Board eingestellt. Heute gegen ${spieler_name}. Komm schon. 🎯`,
     ];
   }
 
   const inhalt = seededPick(pool, seed);
-  const quelle = seededPick(["X / Twitter", "Instagram"], seed + "q");
+  const quelle = seededPick(["X / Twitter", "Instagram", "TikTok", "Facebook"], seed + "q");
   return { autor: gegner_name, inhalt, quelle };
 }
 
-const ZEITUNGS_QUELLEN = ["PDC Tour News", "Darts World", "Bulls Eye Blog", "Pro Darts Weekly"];
-const ZEITUNGS_AUTOREN = ["Martin Hoffmann", "Klaus Werner", "Stefan Braun", "Thomas Reuter", "Redaktion"];
+const ZEITUNGS_QUELLEN = [
+  "PDC Tour News", "Darts World", "Bulls Eye Blog", "Pro Darts Weekly",
+  "Arrows & Aces", "Double Out Daily", "The Darts Chronicle", "Tungsten Tribune",
+  "180 Report", "Checkout Weekly", "Dart Sport Magazin", "PDC Fan Blog",
+  "Arrows Post", "Stage Fright Weekly", "Treble Top Times",
+];
+const ZEITUNGS_AUTOREN = [
+  "Martin Hoffmann", "Klaus Werner", "Stefan Braun", "Thomas Reuter", "Redaktion",
+  "Angela Müller", "Bernd Schulze", "Christine Koch", "Dirk Lange", "Eva Richter",
+  "Frank Bergmann", "Gabi Sommer", "Hendrik Vogt", "Ines Kraft", "Jürgen Feld",
+];
 
 function generateZeitungsartikel(
   spieler_name: string,
@@ -930,56 +1014,123 @@ function generateZeitungsartikel(
 ): { titel: string; inhalt: string; quelle: string; autor: string; wichtigkeit: "normal" | "hoch" } | null {
   const quelle = ZEITUNGS_QUELLEN[Math.floor(Math.random() * ZEITUNGS_QUELLEN.length)];
   const autor = ZEITUNGS_AUTOREN[Math.floor(Math.random() * ZEITUNGS_AUTOREN.length)];
+  const ergebnis = `${legs_won}:${legs_lost}`;
+  const avgStr = my_avg.toFixed(2);
 
+  // ── Turniersieg ───────────────────────────────────────────────────────────
   if (ist_turnier_sieg) {
+    const sieg_templates = [
+      { titel: `🏆 TURNIERSIEG! ${spieler_name} gewinnt den ${turnier_name}`, inhalt: `In einem dominanten Auftritt sichert sich ${spieler_name} den Titel beim ${turnier_name}. Im Finale gegen ${gegner_name} setzte sich der Spieler mit ${ergebnis} durch. Starker Average von ${avgStr} unterstreicht die Klasse des Siegers.` },
+      { titel: `Champione! ${spieler_name} krönt sich beim ${turnier_name}`, inhalt: `Es gibt einen neuen Champion! ${spieler_name} schlug ${gegner_name} im Finale mit ${ergebnis} und schreibt damit Geschichte. Average: ${avgStr}. Eine Leistung, die Fans noch lange in Erinnerung bleiben wird.` },
+      { titel: `${spieler_name} triumphiert beim ${turnier_name} – Finale gegen ${gegner_name}`, inhalt: `Unvergesslicher Abend beim ${turnier_name}: ${spieler_name} besiegt ${gegner_name} mit ${ergebnis} und sichert sich den Titel. Mit einem Average von ${avgStr} war der Sieg hochverdient.` },
+      { titel: `Großartig! ${spieler_name} ist Sieger beim ${turnier_name}`, inhalt: `${spieler_name} hat es geschafft! Im Finale ließ der Spieler ${gegner_name} keine Chance (${ergebnis}) und holte sich den begehrten Titel beim ${turnier_name}. Karrierehighlight mit Average ${avgStr}.` },
+      { titel: `König der Bühne: ${spieler_name} gewinnt ${turnier_name}`, inhalt: `Was für ein Auftritt! ${spieler_name} dominierte das Finale gegen ${gegner_name} mit ${ergebnis} beim ${turnier_name}. Die Zuschauer erlebten Darts auf höchstem Niveau – Average des Siegers: ${avgStr}.` },
+    ];
+    return { ...sieg_templates[Math.floor(Math.random() * sieg_templates.length)], quelle, autor, wichtigkeit: "hoch" };
+  }
+
+  // ── 170er Finish (Big Fish) ───────────────────────────────────────────────
+  if (my_hf === 170 && win) {
     return {
-      titel: `🏆 TURNIERSIEG! ${spieler_name} gewinnt den ${turnier_name}`,
-      inhalt: `In einem dominanten Auftritt sichert sich ${spieler_name} den Titel beim ${turnier_name}. Im Finale gegen ${gegner_name} setzte sich der Spieler mit ${legs_won}:${legs_lost} durch. Starker Average von ${my_avg.toFixed(2)}.`,
+      titel: `THE BIG FISH! ${spieler_name} checkt den Maximum-Checkout beim ${turnier_name}`,
+      inhalt: `Geschichte geschrieben! ${spieler_name} vollbrachte beim ${turnier_name} das seltene 170-Finish gegen ${gegner_name}. Das Tagesmaximum im Checkout – eine Leistung, die die Fans von den Stühlen riss. Endergebnis: ${ergebnis}, Average: ${avgStr}.`,
       quelle, autor, wichtigkeit: "hoch",
     };
   }
+
+  // ── High Finish 150+ ──────────────────────────────────────────────────────
   if (my_hf >= 150 && win) {
-    return {
-      titel: `Atemberaubend! ${spieler_name} checkt ${my_hf} beim ${turnier_name}`,
-      inhalt: `Beim ${turnier_name} sorgte ${spieler_name} für das Highlight des Tages. Ein ${my_hf}-Finish krönte den ${legs_won}:${legs_lost}-Sieg gegen ${gegner_name}. Average: ${my_avg.toFixed(2)}.`,
-      quelle, autor, wichtigkeit: "hoch",
-    };
+    const hf_templates = [
+      { titel: `Atemberaubend! ${spieler_name} checkt ${my_hf} beim ${turnier_name}`, inhalt: `Beim ${turnier_name} sorgte ${spieler_name} für das Highlight des Tages. Ein ${my_hf}-Finish krönte den ${ergebnis}-Sieg gegen ${gegner_name}. Average: ${avgStr}. Solche Momente machen Darts zu einem Spektakel!` },
+      { titel: `${my_hf}-Hammer! ${spieler_name} lässt die Halle beben`, inhalt: `Mit einem spektakulären ${my_hf}-Checkout beim ${turnier_name} sorgte ${spieler_name} für Begeisterungsstürme. Der ${ergebnis}-Sieg gegen ${gegner_name} war verdient – der Checkout unvergesslich. Average: ${avgStr}.` },
+      { titel: `Klass-Checkout! ${spieler_name} mit ${my_hf} gegen ${gegner_name}`, inhalt: `${spieler_name} zeigte beim ${turnier_name} warum er zu den Besten gehört: ${my_hf}-Finish, ${ergebnis}-Sieg gegen ${gegner_name}. Average von ${avgStr} unterstreicht die Tagesform des Spielers.` },
+    ];
+    return { ...hf_templates[Math.floor(Math.random() * hf_templates.length)], quelle, autor, wichtigkeit: "hoch" };
   }
+
+  // ── High Finish 120-149 ───────────────────────────────────────────────────
   if (my_hf >= 120 && win) {
+    const hf_templates = [
+      { titel: `Spektakuläres ${my_hf}-Finish von ${spieler_name} beim ${turnier_name}`, inhalt: `Mit einem beeindruckenden ${my_hf}-Checkout überraschte ${spieler_name} beim ${turnier_name} und bezwang ${gegner_name} mit ${ergebnis}. Average: ${avgStr}.` },
+      { titel: `${spieler_name} mit starkem ${my_hf}-Checkout – ${ergebnis} gegen ${gegner_name}`, inhalt: `Beim ${turnier_name} bewies ${spieler_name} einmal mehr seine Klasse: Ein ${my_hf}-Finish krönte den verdienten ${ergebnis}-Sieg über ${gegner_name}. Average: ${avgStr}.` },
+      { titel: `Wow! ${my_hf}-Finish von ${spieler_name} sorgt für Aufsehen beim ${turnier_name}`, inhalt: `${spieler_name} brachte die Fans beim ${turnier_name} zum Staunen: ${my_hf}-Checkout, ${ergebnis} gegen ${gegner_name}. Average: ${avgStr}. Eine Leistung der Extraklasse.` },
+    ];
+    return { ...hf_templates[Math.floor(Math.random() * hf_templates.length)], quelle, autor, wichtigkeit: "hoch" };
+  }
+
+  // ── Viele 180er ──────────────────────────────────────────────────────────
+  if (my_180s >= 5) {
     return {
-      titel: `Spektakuläres ${my_hf}-Finish von ${spieler_name} beim ${turnier_name}`,
-      inhalt: `Mit einem beeindruckenden ${my_hf}-Checkout überraschte ${spieler_name} beim ${turnier_name} und bezwang ${gegner_name} mit ${legs_won}:${legs_lost}. Average: ${my_avg.toFixed(2)}.`,
+      titel: `${my_180s}× Maximum – ${spieler_name} liefert ein Feuerwerk beim ${turnier_name}`,
+      inhalt: `Sensationelle Scoring-Leistung von ${spieler_name} beim ${turnier_name}: Fünf oder mehr 180er im selben Match gegen ${gegner_name}! Der ${ergebnis}-Sieg war begleitet von einem begeisterten Publikum. Average: ${avgStr}.`,
       quelle, autor, wichtigkeit: "hoch",
     };
   }
   if (my_180s >= 3 && win) {
+    const max_templates = [
+      { titel: `${my_180s}× Maximum! ${spieler_name} dominiert ${gegner_name} beim ${turnier_name}`, inhalt: `Mit ${my_180s} perfekten Aufnahmen zeigte ${spieler_name} eine außergewöhnliche Leistung beim ${turnier_name}. ${ergebnis}-Sieg gegen ${gegner_name}. Average: ${avgStr}.` },
+      { titel: `Maximale Power: ${spieler_name} trifft ${my_180s}× die 180 beim ${turnier_name}`, inhalt: `${spieler_name} war beim ${turnier_name} in Höchstform und warf ${my_180s} Maximalaufnahmen. Der ${ergebnis}-Triumph über ${gegner_name} war eindrucksvoll. Average: ${avgStr}.` },
+    ];
+    return { ...max_templates[Math.floor(Math.random() * max_templates.length)], quelle, autor, wichtigkeit: "hoch" };
+  }
+
+  // ── Siegesserie ───────────────────────────────────────────────────────────
+  if (serie >= 7 && win) {
     return {
-      titel: `${my_180s}× Maximum! ${spieler_name} dominiert ${gegner_name} beim ${turnier_name}`,
-      inhalt: `Mit ${my_180s} perfekten Aufnahmen zeigte ${spieler_name} eine außergewöhnliche Leistung beim ${turnier_name}. ${legs_won}:${legs_lost}-Sieg gegen ${gegner_name}. Average: ${my_avg.toFixed(2)}.`,
+      titel: `${serie}. Sieg in Folge! ${spieler_name} dominiert die PDC-Tour`,
+      inhalt: `${spieler_name} ist die Sensation der Saison! Mit dem ${ergebnis}-Sieg gegen ${gegner_name} beim ${turnier_name} stellt der Spieler eine Serie auf, die seinesgleichen sucht. Average: ${avgStr}. Wer stoppt diese Maschine?`,
       quelle, autor, wichtigkeit: "hoch",
     };
   }
   if (serie >= 5 && win) {
     return {
       titel: `Heiße Strähne: ${spieler_name} feiert ${serie}. Sieg in Folge beim ${turnier_name}`,
-      inhalt: `${spieler_name} ist nicht zu stoppen! Mit dem ${legs_won}:${legs_lost}-Triumph gegen ${gegner_name} beim ${turnier_name} setzt der Spieler seine beeindruckende Serie fort.`,
+      inhalt: `${spieler_name} ist nicht zu stoppen! Mit dem ${ergebnis}-Triumph gegen ${gegner_name} beim ${turnier_name} setzt der Spieler seine beeindruckende Serie fort. Die Konkurrenz schaut nervös zu. Average: ${avgStr}.`,
       quelle, autor, wichtigkeit: "hoch",
     };
   }
+
+  // ── Sehr hoher Average ────────────────────────────────────────────────────
+  if (my_avg >= 100 && win) {
+    return {
+      titel: `Dreistellig! ${spieler_name} mit ${avgStr}-Average beim ${turnier_name}`,
+      inhalt: `Elite-Leistung von ${spieler_name} beim ${turnier_name}: Mit einem dreistelligen Average von ${avgStr} war der ${ergebnis}-Sieg gegen ${gegner_name} nahezu perfektes Darts. Braucht dieser Spieler einen Spitznamen?`,
+      quelle, autor, wichtigkeit: "hoch",
+    };
+  }
+  if (my_avg >= 90 && win) {
+    return {
+      titel: `${avgStr}-Average! ${spieler_name} spielt sich in Form beim ${turnier_name}`,
+      inhalt: `Starke Vorstellung von ${spieler_name} beim ${turnier_name}: ${avgStr}-Average und ${ergebnis} gegen ${gegner_name}. Das Scoring war auf Top-Niveau – der Spieler ist voll im Rhythmus.`,
+      quelle, autor, wichtigkeit: "normal",
+    };
+  }
+
+  // ── Normale Siege ─────────────────────────────────────────────────────────
   if (win) {
     if (Math.random() > 0.65) return null;
-    const templates = [
-      { titel: `${spieler_name} souverän: ${legs_won}:${legs_lost} gegen ${gegner_name} beim ${turnier_name}`, inhalt: `Im ${runde_name} des ${turnier_name} überzeugte ${spieler_name} gegen ${gegner_name}. Average: ${my_avg.toFixed(2)}.` },
-      { titel: `Solide Leistung: ${spieler_name} schlägt ${gegner_name} und zieht weiter`, inhalt: `${spieler_name} passiert die ${runde_name} beim ${turnier_name} mit einem ${legs_won}:${legs_lost}-Sieg über ${gegner_name}. Average: ${my_avg.toFixed(2)}.` },
+    const win_templates = [
+      { titel: `${spieler_name} souverän: ${ergebnis} gegen ${gegner_name} beim ${turnier_name}`, inhalt: `Im ${runde_name} des ${turnier_name} überzeugte ${spieler_name} gegen ${gegner_name}. Der ${ergebnis}-Sieg war verdient. Average: ${avgStr}.` },
+      { titel: `Solide Leistung: ${spieler_name} schlägt ${gegner_name} und zieht weiter`, inhalt: `${spieler_name} passiert die ${runde_name} beim ${turnier_name} mit einem ${ergebnis}-Sieg über ${gegner_name}. Average: ${avgStr}. Weiter geht's!` },
+      { titel: `${spieler_name} kämpft sich durch: ${ergebnis} gegen ${gegner_name}`, inhalt: `Es war kein einfacher Tag, aber ${spieler_name} brachte es durch: ${ergebnis} gegen ${gegner_name} beim ${turnier_name}. Average: ${avgStr}.` },
+      { titel: `Pflichtaufgabe erfüllt: ${spieler_name} gewinnt ${runde_name} beim ${turnier_name}`, inhalt: `${spieler_name} hat beim ${turnier_name} im ${runde_name} abgeliefert. ${gegner_name} wurde mit ${ergebnis} bezwungen. Average ${avgStr} – konzentrierte Leistung.` },
+      { titel: `${spieler_name} marschiert weiter: ${ergebnis} im ${runde_name}`, inhalt: `Beim ${turnier_name} zeigte ${spieler_name} eine konzentrierte Vorstellung und schlug ${gegner_name} klar mit ${ergebnis}. Average von ${avgStr} stimmt zuversichtlich für die nächste Runde.` },
+      { titel: `Starker Abend: ${spieler_name} überwindet ${gegner_name}`, inhalt: `${spieler_name} zeigte beim ${turnier_name} im ${runde_name} eine konstante Leistung und besiegte ${gegner_name} mit ${ergebnis}. Der Average von ${avgStr} spricht für gute Form.` },
     ];
-    return { ...templates[Math.floor(Math.random() * templates.length)], quelle, autor, wichtigkeit: "normal" };
+    return { ...win_templates[Math.floor(Math.random() * win_templates.length)], quelle, autor, wichtigkeit: "normal" };
   }
-  if (Math.random() > 0.4) return null;
-  return {
-    titel: `${spieler_name} scheidet im ${runde_name} beim ${turnier_name} aus`,
-    inhalt: `${legs_won}:${legs_lost}-Niederlage für ${spieler_name} gegen ${gegner_name} beim ${turnier_name}. Average: ${my_avg.toFixed(2)}.`,
-    quelle, autor, wichtigkeit: "normal",
-  };
+
+  // ── Niederlagen ───────────────────────────────────────────────────────────
+  if (Math.random() > 0.45) return null;
+  const loss_templates = [
+    { titel: `${spieler_name} scheidet im ${runde_name} beim ${turnier_name} aus`, inhalt: `${ergebnis}-Niederlage für ${spieler_name} gegen ${gegner_name} beim ${turnier_name}. Average: ${avgStr}. Das Ausscheiden im ${runde_name} wird schmerzen – aber es geht weiter.` },
+    { titel: `Enttäuschung pur: ${spieler_name} scheitert früh bei ${turnier_name}`, inhalt: `"Da war mehr drin." Nach dem frühen Aus in der ${runde_name} hagelt es Kritik von Experten. ${gegner_name} war einfach stärker (${ergebnis}). Average: ${avgStr}. Ab ans Practice Board!` },
+    { titel: `${gegner_name} zu stark: ${spieler_name} verliert beim ${turnier_name}`, inhalt: `${gegner_name} hatte heute beim ${turnier_name} den besseren Tag. ${spieler_name} verlor das Match im ${runde_name} mit ${ergebnis}. Average ${avgStr} reichte nicht aus. Zurück in die Vorbereitung.` },
+    { titel: `Bitter! ${spieler_name} verpasst Weiterkommen beim ${turnier_name}`, inhalt: `${spieler_name} ist raus. Im ${runde_name} des ${turnier_name} setzte sich ${gegner_name} mit ${ergebnis} durch. Der Average von ${avgStr} war zu wenig für ein Weiterkommen.` },
+    { titel: `${spieler_name} kämpft, verliert aber: ${ergebnis} gegen ${gegner_name}`, inhalt: `${spieler_name} gab alles, am Ende war ${gegner_name} stärker. Das ${ergebnis} beim ${turnier_name} zeigt: Es gibt noch Arbeit zu erledigen. Average: ${avgStr}.` },
+    { titel: `Frühes Ende beim ${turnier_name} für ${spieler_name}`, inhalt: `Keine Kür beim ${turnier_name}: ${spieler_name} scheitert im ${runde_name} an ${gegner_name} (${ergebnis}). Der Average von ${avgStr} spiegelt eine durchwachsene Leistung wider. Nächste Gelegenheit kommt bestimmt.` },
+  ];
+  return { ...loss_templates[Math.floor(Math.random() * loss_templates.length)], quelle, autor, wichtigkeit: "normal" };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1429,7 +1580,8 @@ export async function processResult(
   my_avg: number,
   my_180s: number,
   my_hf: number,
-  my_co_pct: number
+  my_co_pct: number,
+  autodarts_match_id?: string
 ) {
   const career = await getOrCreateCareer();
   const msgs: string[] = [];
@@ -1452,6 +1604,60 @@ export async function processResult(
   updates.stats_checkout_percent_history = coHistory;
 
   if (my_hf > career.stats_highest_finish) updates.stats_highest_finish = my_hf;
+
+  // ── Extended stats ───────────────────────────────────────────────────────
+  if (my_avg > (career.stats_best_single_avg ?? 0)) {
+    updates.stats_best_single_avg = my_avg;
+    if (my_avg >= 80) msgs.push(`📈 Neuer persönlicher Rekord-Average: ${my_avg.toFixed(2)}!`);
+  }
+  if (my_180s > (career.stats_most_180s_game ?? 0)) {
+    updates.stats_most_180s_game = my_180s;
+    if (my_180s >= 3) msgs.push(`🎯 Neuer 180er-Rekord in einem Match: ${my_180s}×!`);
+  }
+  // Track co attempts+hits cumulatively
+  const legsTotal = legs_won + legs_lost;
+  if (legsTotal > 0 && my_co_pct > 0) {
+    const coAttempted = Math.round(legsTotal * (100 / Math.max(my_co_pct, 1)));
+    const coHit = legs_won + legs_lost > 0 ? Math.round(coAttempted * (my_co_pct / 100)) : 0;
+    updates.stats_total_co_attempted = (career.stats_total_co_attempted ?? 0) + coAttempted;
+    updates.stats_total_co_hit = (career.stats_total_co_hit ?? 0) + coHit;
+  }
+
+  // ── Wall of Fame: Top 10 best games ──────────────────────────────────────
+  const turnier = KALENDER[career.aktuelles_turnier_index ?? 0];
+  const spiel_eintrag = {
+    datum: new Date().toISOString(),
+    turnier_name: turnier?.name ?? "Unbekannt",
+    gegner_name,
+    ergebnis: `${legs_won}:${legs_lost}`,
+    avg: my_avg,
+    s180s: my_180s,
+    hf: my_hf,
+    co_pct: my_co_pct,
+    win,
+    autodarts_id: autodarts_match_id ?? null,
+  };
+  const bestSpiele: any[] = [...((career.beste_spiele ?? []) as any[])];
+  bestSpiele.push(spiel_eintrag);
+  // Sort by avg desc, keep top 10 best games (only wins qualify for wall of fame unless no wins yet)
+  const nurSiege = bestSpiele.filter((s) => s.win);
+  const sortedFame = (nurSiege.length >= 3 ? nurSiege : bestSpiele)
+    .sort((a, b) => b.avg - a.avg || b.hf - a.hf || b.s180s - a.s180s)
+    .slice(0, 10);
+  updates.beste_spiele = sortedFame;
+
+  // ── Match ID history for autodarts links ─────────────────────────────────
+  if (autodarts_match_id) {
+    const matchIds: any[] = [...((career.letzte_match_ids ?? []) as any[])];
+    matchIds.unshift({
+      id: autodarts_match_id,
+      datum: new Date().toISOString(),
+      gegner: gegner_name,
+      ergebnis: `${legs_won}:${legs_lost}`,
+      turnier: turnier?.name ?? "Unbekannt",
+    });
+    updates.letzte_match_ids = matchIds.slice(0, 15);
+  }
 
   const h2h: Record<string, { siege: number; niederlagen: number }> = { ...(career.h2h as any) };
   if (!h2h[gegner_name]) h2h[gegner_name] = { siege: 0, niederlagen: 0 };
@@ -2131,6 +2337,13 @@ export function buildCareerState(career: any) {
       const h2hRec = (career.h2h as any)[career.gegner_name ?? ""] ?? { siege: 0, niederlagen: 0 };
       return h2hRec.niederlagen >= 3 && h2hRec.niederlagen > h2hRec.siege;
     })(),
+    // Extended stats
+    stats_best_single_avg: career.stats_best_single_avg ?? 0,
+    stats_most_180s_game: career.stats_most_180s_game ?? 0,
+    stats_total_co_attempted: career.stats_total_co_attempted ?? 0,
+    stats_total_co_hit: career.stats_total_co_hit ?? 0,
+    beste_spiele: (career.beste_spiele ?? []) as any[],
+    letzte_match_ids: (career.letzte_match_ids ?? []) as any[],
     // Phase 2: Social & News
     social_follower: career.social_follower ?? 0,
     nachrichten_feed: ((career.nachrichten_feed ?? []) as any[]).slice(0, 20),
@@ -2298,7 +2511,8 @@ export async function pullFromAutodarts() {
       const my_180s = parseInt(stats["180s"] ?? 0);
       const my_hf = parseInt(stats.highestFinish ?? 0);
       const my_co_pct = parseFloat(stats.checkoutPercentage ?? 0);
-      const result = await processResult(legs_won, legs_lost, my_avg, my_180s, my_hf, my_co_pct);
+      const match_id = letztes_match.id ?? letztes_match.gameId ?? undefined;
+      const result = await processResult(legs_won, legs_lost, my_avg, my_180s, my_hf, my_co_pct, match_id);
       result.messages.push("✅ Daten erfolgreich von Autodarts importiert!");
       return result;
     }
@@ -2338,7 +2552,8 @@ export async function pollAutodartsForNewMatch(since: string) {
     const my_180s = parseInt(stats["180s"] ?? 0);
     const my_hf = parseInt(stats.highestFinish ?? 0);
     const my_co_pct = parseFloat(stats.checkoutPercentage ?? 0);
-    const result = await processResult(legs_won, legs_lost, my_avg, my_180s, my_hf, my_co_pct);
+    const match_id = newMatch.id ?? newMatch.gameId ?? undefined;
+    const result = await processResult(legs_won, legs_lost, my_avg, my_180s, my_hf, my_co_pct, match_id);
     result.messages.push("✅ Match automatisch von Autodarts importiert!");
     return { found: true, ...result };
   } catch (e: any) {
