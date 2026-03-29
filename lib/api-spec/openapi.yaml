@@ -1,4 +1,4 @@
-openapi: 3.1.0
+openapi: 3.0.3
 info:
   title: Api
   version: 0.1.0
@@ -11,6 +11,8 @@ tags:
     description: Health operations
   - name: career
     description: Career management
+  - name: tour
+    description: Online Pro Tour tournament management
 paths:
   /healthz:
     get:
@@ -186,6 +188,276 @@ paths:
               schema:
                 $ref: "#/components/schemas/CareerResponse"
 
+  # ── Online Pro Tour ───────────────────────────────────────────────────────────
+  /tour/players:
+    get:
+      operationId: tourListPlayers
+      tags: [tour]
+      summary: List all tour players
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TourPlayer"
+    post:
+      operationId: tourRegisterPlayer
+      tags: [tour]
+      summary: Register a new player
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TourRegisterBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TourPlayer"
+
+  /tour/players/{id}:
+    get:
+      operationId: tourGetPlayer
+      tags: [tour]
+      summary: Get player profile with tournament history
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TourPlayerProfile"
+
+  /tour/tournaments:
+    get:
+      operationId: tourListTournaments
+      tags: [tour]
+      summary: List all tournaments
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TourTournament"
+    post:
+      operationId: tourCreateTournament
+      tags: [tour]
+      summary: Create a new tournament (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TourCreateTournamentBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TourTournament"
+
+  /tour/tournaments/{id}:
+    get:
+      operationId: tourGetTournament
+      tags: [tour]
+      summary: Get tournament with full bracket and matches
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TourTournamentDetail"
+    delete:
+      operationId: tourDeleteTournament
+      tags: [tour]
+      summary: Delete tournament (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TourOkResponse"
+
+  /tour/tournaments/{id}/entries:
+    post:
+      operationId: tourAddEntry
+      tags: [tour]
+      summary: Add player to tournament (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TourAddEntryBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TourTournamentDetail"
+    delete:
+      operationId: tourRemoveEntry
+      tags: [tour]
+      summary: Remove player from tournament (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TourRemoveEntryBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TourTournamentDetail"
+
+  /tour/tournaments/{id}/start:
+    post:
+      operationId: tourStartTournament
+      tags: [tour]
+      summary: Generate bracket and start tournament (admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TourTournamentDetail"
+
+  /tour/matches/{matchId}/result:
+    post:
+      operationId: tourSubmitResult
+      tags: [tour]
+      summary: Submit match result (admin)
+      parameters:
+        - name: matchId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TourResultBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TourTournamentDetail"
+
+  /tour/matches/{matchId}/autodarts:
+    post:
+      operationId: tourPullAutodarts
+      tags: [tour]
+      summary: Pull latest Autodarts result
+      parameters:
+        - name: matchId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TourAutodartsBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TourAutodartsPullResult"
+
+  /tour/oom:
+    get:
+      operationId: tourGetOom
+      tags: [tour]
+      summary: Get Order of Merit standings
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TourOomEntry"
+
+  /tour/admin/verify:
+    post:
+      operationId: tourAdminVerify
+      tags: [tour]
+      summary: Verify admin PIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TourAdminVerifyBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TourOkResponse"
 components:
   schemas:
     HealthStatus:
@@ -523,99 +795,333 @@ components:
             $ref: "#/components/schemas/RankingRecord"
         avg_bonus:
           type: number
-        checkout_bonus:
-          type: number
-        schwierigkeitsgrad:
-          type: integer
-      required:
-        - spieler_name
-        - name_set
-        - hat_tourcard
-        - q_school_punkte
-        - order_of_merit_geld
-        - bank_konto
-        - saison_jahr
-        - turnier_laeuft
-        - aktuelle_runde
-        - gegner_name
-        - gegner_avg
-        - gegner_form
-        - stats_spiele
-        - stats_siege
-        - stats_legs_won
-        - stats_legs_lost
-        - stats_180s
-        - stats_highest_finish
-        - achievements
-        - platz
-        - turnier_name
-        - quote
-        - gesamt_avg
-        - gesamt_co
-        - oom
-        - runden_info
-        - matchups
-        - h2h_siege
-        - h2h_niederlagen
-        - ranking_verlauf
-        - avg_bonus
-        - checkout_bonus
-
-    CareerResponse:
+          nullable: true
+    TourPlayer:
       type: object
       properties:
-        career:
-          $ref: "#/components/schemas/CareerState"
-        messages:
+        id:
+          type: integer
+        name:
+          type: string
+        autodarts_username:
+          type: string
+        created_at:
+          type: string
+        oom_points:
+          type: integer
+        oom_rank:
+          type: integer
+      required:
+        - id
+        - name
+        - autodarts_username
+        - created_at
+        - oom_points
+
+    TourPlayerTournamentResult:
+      type: object
+      properties:
+        tournament_id:
+          type: integer
+        tournament_name:
+          type: string
+        tournament_type:
+          type: string
+        best_round:
+          type: string
+        points:
+          type: integer
+      required:
+        - tournament_id
+        - tournament_name
+        - tournament_type
+        - best_round
+        - points
+
+    TourPlayerProfile:
+      type: object
+      properties:
+        player:
+          $ref: "#/components/schemas/TourPlayer"
+        tournament_results:
+          type: array
+          items:
+            $ref: "#/components/schemas/TourPlayerTournamentResult"
+        wins:
+          type: integer
+        losses:
+          type: integer
+      required:
+        - player
+        - tournament_results
+        - wins
+        - losses
+
+    TourRegisterBody:
+      type: object
+      properties:
+        name:
+          type: string
+        autodarts_username:
+          type: string
+        autodarts_refresh_token:
+          type: string
+      required:
+        - name
+        - autodarts_username
+
+    TourTournament:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        typ:
+          type: string
+          enum:
+            - players_championship
+            - european_tour
+            - world_series
+            - major
+        datum:
+          type: string
+        status:
+          type: string
+          enum:
+            - offen
+            - laufend
+            - abgeschlossen
+        legs_format:
+          type: integer
+        max_players:
+          type: integer
+        player_count:
+          type: integer
+        winner_name:
+          type: string
+      required:
+        - id
+        - name
+        - typ
+        - datum
+        - status
+        - legs_format
+        - max_players
+        - player_count
+
+    TourTournamentDetail:
+      type: object
+      properties:
+        tournament:
+          $ref: "#/components/schemas/TourTournament"
+        players:
+          type: array
+          items:
+            $ref: "#/components/schemas/TourPlayer"
+        matches:
+          type: array
+          items:
+            $ref: "#/components/schemas/TourMatch"
+        rounds:
           type: array
           items:
             type: string
       required:
-        - career
-        - messages
+        - tournament
+        - players
+        - matches
+        - rounds
 
-    TournamentHistoryResponse:
+    TourMatch:
       type: object
       properties:
-        history:
-          type: array
-          items:
-            $ref: "#/components/schemas/TournamentRecord"
+        id:
+          type: integer
+        tournament_id:
+          type: integer
+        runde:
+          type: string
+        match_nr:
+          type: integer
+        player1_id:
+          type: integer
+        player2_id:
+          type: integer
+        player1_name:
+          type: string
+        player2_name:
+          type: string
+        winner_id:
+          type: integer
+        score_p1:
+          type: integer
+        score_p2:
+          type: integer
+        status:
+          type: string
+          enum:
+            - ausstehend
+            - laufend
+            - abgeschlossen
+        is_bye:
+          type: boolean
       required:
-        - history
+        - id
+        - tournament_id
+        - runde
+        - match_nr
+        - status
+        - is_bye
 
-    H2HResponse:
+    TourCreateTournamentBody:
       type: object
       properties:
-        records:
-          type: array
-          items:
-            $ref: "#/components/schemas/H2HRecord"
+        name:
+          type: string
+        typ:
+          type: string
+          enum:
+            - players_championship
+            - european_tour
+            - world_series
+            - major
+        datum:
+          type: string
+        legs_format:
+          type: integer
+        max_players:
+          type: integer
+        admin_pin:
+          type: string
       required:
-        - records
+        - name
+        - typ
+        - datum
+        - legs_format
+        - max_players
+        - admin_pin
 
-    CalendarResponse:
+    TourResultBody:
       type: object
       properties:
-        entries:
+        winner_id:
+          type: integer
+        score_p1:
+          type: integer
+        score_p2:
+          type: integer
+        admin_pin:
+          type: string
+      required:
+        - winner_id
+        - score_p1
+        - score_p2
+        - admin_pin
+
+    TourOomEntry:
+      type: object
+      properties:
+        rank:
+          type: integer
+        player_id:
+          type: integer
+        player_name:
+          type: string
+        autodarts_username:
+          type: string
+        total_points:
+          type: integer
+        tournaments_played:
+          type: integer
+        best_result:
+          type: string
+        results:
           type: array
           items:
-            $ref: "#/components/schemas/CalendarEntry"
-        aktuelles_turnier_index:
+            $ref: "#/components/schemas/TourOomResult"
+      required:
+        - rank
+        - player_id
+        - player_name
+        - autodarts_username
+        - total_points
+        - tournaments_played
+        - results
+
+    TourOomResult:
+      type: object
+      properties:
+        tournament_name:
+          type: string
+        typ:
+          type: string
+        points:
+          type: integer
+        round:
+          type: string
+      required:
+        - tournament_name
+        - typ
+        - points
+        - round
+
+    TourOkResponse:
+      type: object
+      properties:
+        ok:
+          type: boolean
+      required:
+        - ok
+
+    TourAddEntryBody:
+      type: object
+      properties:
+        player_id:
+          type: integer
+        seed:
           type: integer
       required:
-        - entries
-        - aktuelles_turnier_index
+        - player_id
 
-    EquipmentResponse:
+    TourRemoveEntryBody:
       type: object
       properties:
-        items:
-          type: array
-          items:
-            $ref: "#/components/schemas/EquipmentItem"
-        bank_konto:
+        player_id:
           type: integer
       required:
-        - items
-        - bank_konto
+        - player_id
+
+    TourAutodartsBody:
+      type: object
+      properties:
+        admin_pin:
+          type: string
+      required:
+        - admin_pin
+
+    TourAdminVerifyBody:
+      type: object
+      properties:
+        pin:
+          type: string
+      required:
+        - pin
+
+    TourAutodartsPullResult:
+      type: object
+      properties:
+        found:
+          type: boolean
+        match_id:
+          type: string
+        player1_legs:
+          type: integer
+        player2_legs:
+          type: integer
+        player1_avg:
+          type: number
+        player2_avg:
+          type: number
+      required:
+        - found

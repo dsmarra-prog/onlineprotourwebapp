@@ -5,8 +5,7 @@
  * PDC Darts Career Mode API
  * OpenAPI spec version: 0.1.0
  */
-import type { H2HRecord } from "./h2HRecord";
 
-export interface H2HResponse {
-  records: H2HRecord[];
+export interface TourAdminVerifyBody {
+  pin: string;
 }

@@ -1,0 +1,55 @@
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
+import { Users, Loader2, User } from "lucide-react";
+import { apiFetch, TourPlayer } from "@/lib/api";
+
+export default function SpielerPage() {
+  const { data: players, isLoading } = useQuery<TourPlayer[]>({
+    queryKey: ["players"],
+    queryFn: () => apiFetch("/tour/players"),
+  });
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Users className="w-6 h-6 text-primary" /> Spieler
+        </h1>
+        <p className="text-muted-foreground text-sm mt-1">Registrierte Online Pro Tour Spieler</p>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+        </div>
+      ) : !players?.length ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <Users className="w-12 h-12 mx-auto mb-3 opacity-20" />
+          <p>Noch keine Spieler registriert.</p>
+          <Link href="/einstellungen" className="text-primary hover:underline text-sm mt-2 block">
+            Jetzt registrieren →
+          </Link>
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {players.map((p) => (
+            <Link key={p.id} href={`/spieler/${p.id}`} className="flex items-center gap-3 p-4 bg-card border border-border rounded-xl hover:border-primary/40 hover:bg-card/80 transition-all">
+
+                <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
+                  <User className="w-5 h-5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm">{p.name}</p>
+                  <p className="text-xs text-muted-foreground">@{p.autodarts_username}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">OOM</p>
+                  <p className="font-bold text-sm text-primary">£{(p.oom_points ?? 0).toLocaleString("en-GB")}</p>
+                </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

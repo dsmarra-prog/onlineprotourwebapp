@@ -8,5 +8,5 @@
 
 export interface SetNameRequest {
   name: string;
-  spieler_avg: number;
+  schwierigkeitsgrad: number;
 }

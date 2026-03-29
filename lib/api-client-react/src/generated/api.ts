@@ -26,6 +26,20 @@ import type {
   HealthStatus,
   MatchResult,
   SetNameRequest,
+  TourAddEntryBody,
+  TourAdminVerifyBody,
+  TourAutodartsBody,
+  TourAutodartsPullResult,
+  TourCreateTournamentBody,
+  TourOkResponse,
+  TourOomEntry,
+  TourPlayer,
+  TourPlayerProfile,
+  TourRegisterBody,
+  TourRemoveEntryBody,
+  TourResultBody,
+  TourTournament,
+  TourTournamentDetail,
   TournamentHistoryResponse,
 } from "./api.schemas";
 
@@ -967,4 +981,1181 @@ export const useBuyEquipment = <
   TContext
 > => {
   return useMutation(getBuyEquipmentMutationOptions(options));
+};
+
+/**
+ * @summary List all tour players
+ */
+export const getTourListPlayersUrl = () => {
+  return `/api/tour/players`;
+};
+
+export const tourListPlayers = async (
+  options?: RequestInit,
+): Promise<TourPlayer[]> => {
+  return customFetch<TourPlayer[]>(getTourListPlayersUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getTourListPlayersQueryKey = () => {
+  return [`/api/tour/players`] as const;
+};
+
+export const getTourListPlayersQueryOptions = <
+  TData = Awaited<ReturnType<typeof tourListPlayers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof tourListPlayers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getTourListPlayersQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof tourListPlayers>>> = ({
+    signal,
+  }) => tourListPlayers({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof tourListPlayers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type TourListPlayersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof tourListPlayers>>
+>;
+export type TourListPlayersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all tour players
+ */
+
+export function useTourListPlayers<
+  TData = Awaited<ReturnType<typeof tourListPlayers>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof tourListPlayers>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getTourListPlayersQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Register a new player
+ */
+export const getTourRegisterPlayerUrl = () => {
+  return `/api/tour/players`;
+};
+
+export const tourRegisterPlayer = async (
+  tourRegisterBody: TourRegisterBody,
+  options?: RequestInit,
+): Promise<TourPlayer> => {
+  return customFetch<TourPlayer>(getTourRegisterPlayerUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(tourRegisterBody),
+  });
+};
+
+export const getTourRegisterPlayerMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof tourRegisterPlayer>>,
+    TError,
+    { data: BodyType<TourRegisterBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof tourRegisterPlayer>>,
+  TError,
+  { data: BodyType<TourRegisterBody> },
+  TContext
+> => {
+  const mutationKey = ["tourRegisterPlayer"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof tourRegisterPlayer>>,
+    { data: BodyType<TourRegisterBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return tourRegisterPlayer(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TourRegisterPlayerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof tourRegisterPlayer>>
+>;
+export type TourRegisterPlayerMutationBody = BodyType<TourRegisterBody>;
+export type TourRegisterPlayerMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Register a new player
+ */
+export const useTourRegisterPlayer = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof tourRegisterPlayer>>,
+    TError,
+    { data: BodyType<TourRegisterBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof tourRegisterPlayer>>,
+  TError,
+  { data: BodyType<TourRegisterBody> },
+  TContext
+> => {
+  return useMutation(getTourRegisterPlayerMutationOptions(options));
+};
+
+/**
+ * @summary Get player profile with tournament history
+ */
+export const getTourGetPlayerUrl = (id: number) => {
+  return `/api/tour/players/${id}`;
+};
+
+export const tourGetPlayer = async (
+  id: number,
+  options?: RequestInit,
+): Promise<TourPlayerProfile> => {
+  return customFetch<TourPlayerProfile>(getTourGetPlayerUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getTourGetPlayerQueryKey = (id: number) => {
+  return [`/api/tour/players/${id}`] as const;
+};
+
+export const getTourGetPlayerQueryOptions = <
+  TData = Awaited<ReturnType<typeof tourGetPlayer>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof tourGetPlayer>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getTourGetPlayerQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof tourGetPlayer>>> = ({
+    signal,
+  }) => tourGetPlayer(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof tourGetPlayer>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type TourGetPlayerQueryResult = NonNullable<
+  Awaited<ReturnType<typeof tourGetPlayer>>
+>;
+export type TourGetPlayerQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get player profile with tournament history
+ */
+
+export function useTourGetPlayer<
+  TData = Awaited<ReturnType<typeof tourGetPlayer>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof tourGetPlayer>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getTourGetPlayerQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List all tournaments
+ */
+export const getTourListTournamentsUrl = () => {
+  return `/api/tour/tournaments`;
+};
+
+export const tourListTournaments = async (
+  options?: RequestInit,
+): Promise<TourTournament[]> => {
+  return customFetch<TourTournament[]>(getTourListTournamentsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getTourListTournamentsQueryKey = () => {
+  return [`/api/tour/tournaments`] as const;
+};
+
+export const getTourListTournamentsQueryOptions = <
+  TData = Awaited<ReturnType<typeof tourListTournaments>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof tourListTournaments>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getTourListTournamentsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof tourListTournaments>>
+  > = ({ signal }) => tourListTournaments({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof tourListTournaments>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type TourListTournamentsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof tourListTournaments>>
+>;
+export type TourListTournamentsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all tournaments
+ */
+
+export function useTourListTournaments<
+  TData = Awaited<ReturnType<typeof tourListTournaments>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof tourListTournaments>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getTourListTournamentsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create a new tournament (admin)
+ */
+export const getTourCreateTournamentUrl = () => {
+  return `/api/tour/tournaments`;
+};
+
+export const tourCreateTournament = async (
+  tourCreateTournamentBody: TourCreateTournamentBody,
+  options?: RequestInit,
+): Promise<TourTournament> => {
+  return customFetch<TourTournament>(getTourCreateTournamentUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(tourCreateTournamentBody),
+  });
+};
+
+export const getTourCreateTournamentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof tourCreateTournament>>,
+    TError,
+    { data: BodyType<TourCreateTournamentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof tourCreateTournament>>,
+  TError,
+  { data: BodyType<TourCreateTournamentBody> },
+  TContext
+> => {
+  const mutationKey = ["tourCreateTournament"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof tourCreateTournament>>,
+    { data: BodyType<TourCreateTournamentBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return tourCreateTournament(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TourCreateTournamentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof tourCreateTournament>>
+>;
+export type TourCreateTournamentMutationBody =
+  BodyType<TourCreateTournamentBody>;
+export type TourCreateTournamentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a new tournament (admin)
+ */
+export const useTourCreateTournament = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof tourCreateTournament>>,
+    TError,
+    { data: BodyType<TourCreateTournamentBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof tourCreateTournament>>,
+  TError,
+  { data: BodyType<TourCreateTournamentBody> },
+  TContext
+> => {
+  return useMutation(getTourCreateTournamentMutationOptions(options));
+};
+
+/**
+ * @summary Get tournament with full bracket and matches
+ */
+export const getTourGetTournamentUrl = (id: number) => {
+  return `/api/tour/tournaments/${id}`;
+};
+
+export const tourGetTournament = async (
+  id: number,
+  options?: RequestInit,
+): Promise<TourTournamentDetail> => {
+  return customFetch<TourTournamentDetail>(getTourGetTournamentUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getTourGetTournamentQueryKey = (id: number) => {
+  return [`/api/tour/tournaments/${id}`] as const;
+};
+
+export const getTourGetTournamentQueryOptions = <
+  TData = Awaited<ReturnType<typeof tourGetTournament>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof tourGetTournament>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getTourGetTournamentQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof tourGetTournament>>
+  > = ({ signal }) => tourGetTournament(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof tourGetTournament>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type TourGetTournamentQueryResult = NonNullable<
+  Awaited<ReturnType<typeof tourGetTournament>>
+>;
+export type TourGetTournamentQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get tournament with full bracket and matches
+ */
+
+export function useTourGetTournament<
+  TData = Awaited<ReturnType<typeof tourGetTournament>>,
+  TError = ErrorType<unknown>,
+>(
+  id: number,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof tourGetTournament>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getTourGetTournamentQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Delete tournament (admin)
+ */
+export const getTourDeleteTournamentUrl = (id: number) => {
+  return `/api/tour/tournaments/${id}`;
+};
+
+export const tourDeleteTournament = async (
+  id: number,
+  options?: RequestInit,
+): Promise<TourOkResponse> => {
+  return customFetch<TourOkResponse>(getTourDeleteTournamentUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getTourDeleteTournamentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof tourDeleteTournament>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof tourDeleteTournament>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["tourDeleteTournament"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof tourDeleteTournament>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return tourDeleteTournament(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TourDeleteTournamentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof tourDeleteTournament>>
+>;
+
+export type TourDeleteTournamentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete tournament (admin)
+ */
+export const useTourDeleteTournament = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof tourDeleteTournament>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof tourDeleteTournament>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getTourDeleteTournamentMutationOptions(options));
+};
+
+/**
+ * @summary Add player to tournament (admin)
+ */
+export const getTourAddEntryUrl = (id: number) => {
+  return `/api/tour/tournaments/${id}/entries`;
+};
+
+export const tourAddEntry = async (
+  id: number,
+  tourAddEntryBody: TourAddEntryBody,
+  options?: RequestInit,
+): Promise<TourTournamentDetail> => {
+  return customFetch<TourTournamentDetail>(getTourAddEntryUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(tourAddEntryBody),
+  });
+};
+
+export const getTourAddEntryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof tourAddEntry>>,
+    TError,
+    { id: number; data: BodyType<TourAddEntryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof tourAddEntry>>,
+  TError,
+  { id: number; data: BodyType<TourAddEntryBody> },
+  TContext
+> => {
+  const mutationKey = ["tourAddEntry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof tourAddEntry>>,
+    { id: number; data: BodyType<TourAddEntryBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return tourAddEntry(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TourAddEntryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof tourAddEntry>>
+>;
+export type TourAddEntryMutationBody = BodyType<TourAddEntryBody>;
+export type TourAddEntryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Add player to tournament (admin)
+ */
+export const useTourAddEntry = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof tourAddEntry>>,
+    TError,
+    { id: number; data: BodyType<TourAddEntryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof tourAddEntry>>,
+  TError,
+  { id: number; data: BodyType<TourAddEntryBody> },
+  TContext
+> => {
+  return useMutation(getTourAddEntryMutationOptions(options));
+};
+
+/**
+ * @summary Remove player from tournament (admin)
+ */
+export const getTourRemoveEntryUrl = (id: number) => {
+  return `/api/tour/tournaments/${id}/entries`;
+};
+
+export const tourRemoveEntry = async (
+  id: number,
+  tourRemoveEntryBody: TourRemoveEntryBody,
+  options?: RequestInit,
+): Promise<TourTournamentDetail> => {
+  return customFetch<TourTournamentDetail>(getTourRemoveEntryUrl(id), {
+    ...options,
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(tourRemoveEntryBody),
+  });
+};
+
+export const getTourRemoveEntryMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof tourRemoveEntry>>,
+    TError,
+    { id: number; data: BodyType<TourRemoveEntryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof tourRemoveEntry>>,
+  TError,
+  { id: number; data: BodyType<TourRemoveEntryBody> },
+  TContext
+> => {
+  const mutationKey = ["tourRemoveEntry"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof tourRemoveEntry>>,
+    { id: number; data: BodyType<TourRemoveEntryBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return tourRemoveEntry(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TourRemoveEntryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof tourRemoveEntry>>
+>;
+export type TourRemoveEntryMutationBody = BodyType<TourRemoveEntryBody>;
+export type TourRemoveEntryMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove player from tournament (admin)
+ */
+export const useTourRemoveEntry = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof tourRemoveEntry>>,
+    TError,
+    { id: number; data: BodyType<TourRemoveEntryBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof tourRemoveEntry>>,
+  TError,
+  { id: number; data: BodyType<TourRemoveEntryBody> },
+  TContext
+> => {
+  return useMutation(getTourRemoveEntryMutationOptions(options));
+};
+
+/**
+ * @summary Generate bracket and start tournament (admin)
+ */
+export const getTourStartTournamentUrl = (id: number) => {
+  return `/api/tour/tournaments/${id}/start`;
+};
+
+export const tourStartTournament = async (
+  id: number,
+  options?: RequestInit,
+): Promise<TourTournamentDetail> => {
+  return customFetch<TourTournamentDetail>(getTourStartTournamentUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getTourStartTournamentMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof tourStartTournament>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof tourStartTournament>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  const mutationKey = ["tourStartTournament"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof tourStartTournament>>,
+    { id: number }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return tourStartTournament(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TourStartTournamentMutationResult = NonNullable<
+  Awaited<ReturnType<typeof tourStartTournament>>
+>;
+
+export type TourStartTournamentMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Generate bracket and start tournament (admin)
+ */
+export const useTourStartTournament = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof tourStartTournament>>,
+    TError,
+    { id: number },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof tourStartTournament>>,
+  TError,
+  { id: number },
+  TContext
+> => {
+  return useMutation(getTourStartTournamentMutationOptions(options));
+};
+
+/**
+ * @summary Submit match result (admin)
+ */
+export const getTourSubmitResultUrl = (matchId: number) => {
+  return `/api/tour/matches/${matchId}/result`;
+};
+
+export const tourSubmitResult = async (
+  matchId: number,
+  tourResultBody: TourResultBody,
+  options?: RequestInit,
+): Promise<TourTournamentDetail> => {
+  return customFetch<TourTournamentDetail>(getTourSubmitResultUrl(matchId), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(tourResultBody),
+  });
+};
+
+export const getTourSubmitResultMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof tourSubmitResult>>,
+    TError,
+    { matchId: number; data: BodyType<TourResultBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof tourSubmitResult>>,
+  TError,
+  { matchId: number; data: BodyType<TourResultBody> },
+  TContext
+> => {
+  const mutationKey = ["tourSubmitResult"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof tourSubmitResult>>,
+    { matchId: number; data: BodyType<TourResultBody> }
+  > = (props) => {
+    const { matchId, data } = props ?? {};
+
+    return tourSubmitResult(matchId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TourSubmitResultMutationResult = NonNullable<
+  Awaited<ReturnType<typeof tourSubmitResult>>
+>;
+export type TourSubmitResultMutationBody = BodyType<TourResultBody>;
+export type TourSubmitResultMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Submit match result (admin)
+ */
+export const useTourSubmitResult = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof tourSubmitResult>>,
+    TError,
+    { matchId: number; data: BodyType<TourResultBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof tourSubmitResult>>,
+  TError,
+  { matchId: number; data: BodyType<TourResultBody> },
+  TContext
+> => {
+  return useMutation(getTourSubmitResultMutationOptions(options));
+};
+
+/**
+ * @summary Pull latest Autodarts result
+ */
+export const getTourPullAutodartsUrl = (matchId: number) => {
+  return `/api/tour/matches/${matchId}/autodarts`;
+};
+
+export const tourPullAutodarts = async (
+  matchId: number,
+  tourAutodartsBody: TourAutodartsBody,
+  options?: RequestInit,
+): Promise<TourAutodartsPullResult> => {
+  return customFetch<TourAutodartsPullResult>(
+    getTourPullAutodartsUrl(matchId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(tourAutodartsBody),
+    },
+  );
+};
+
+export const getTourPullAutodartsMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof tourPullAutodarts>>,
+    TError,
+    { matchId: number; data: BodyType<TourAutodartsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof tourPullAutodarts>>,
+  TError,
+  { matchId: number; data: BodyType<TourAutodartsBody> },
+  TContext
+> => {
+  const mutationKey = ["tourPullAutodarts"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof tourPullAutodarts>>,
+    { matchId: number; data: BodyType<TourAutodartsBody> }
+  > = (props) => {
+    const { matchId, data } = props ?? {};
+
+    return tourPullAutodarts(matchId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TourPullAutodartsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof tourPullAutodarts>>
+>;
+export type TourPullAutodartsMutationBody = BodyType<TourAutodartsBody>;
+export type TourPullAutodartsMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Pull latest Autodarts result
+ */
+export const useTourPullAutodarts = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof tourPullAutodarts>>,
+    TError,
+    { matchId: number; data: BodyType<TourAutodartsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof tourPullAutodarts>>,
+  TError,
+  { matchId: number; data: BodyType<TourAutodartsBody> },
+  TContext
+> => {
+  return useMutation(getTourPullAutodartsMutationOptions(options));
+};
+
+/**
+ * @summary Get Order of Merit standings
+ */
+export const getTourGetOomUrl = () => {
+  return `/api/tour/oom`;
+};
+
+export const tourGetOom = async (
+  options?: RequestInit,
+): Promise<TourOomEntry[]> => {
+  return customFetch<TourOomEntry[]>(getTourGetOomUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getTourGetOomQueryKey = () => {
+  return [`/api/tour/oom`] as const;
+};
+
+export const getTourGetOomQueryOptions = <
+  TData = Awaited<ReturnType<typeof tourGetOom>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof tourGetOom>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getTourGetOomQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof tourGetOom>>> = ({
+    signal,
+  }) => tourGetOom({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof tourGetOom>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type TourGetOomQueryResult = NonNullable<
+  Awaited<ReturnType<typeof tourGetOom>>
+>;
+export type TourGetOomQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get Order of Merit standings
+ */
+
+export function useTourGetOom<
+  TData = Awaited<ReturnType<typeof tourGetOom>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof tourGetOom>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getTourGetOomQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Verify admin PIN
+ */
+export const getTourAdminVerifyUrl = () => {
+  return `/api/tour/admin/verify`;
+};
+
+export const tourAdminVerify = async (
+  tourAdminVerifyBody: TourAdminVerifyBody,
+  options?: RequestInit,
+): Promise<TourOkResponse> => {
+  return customFetch<TourOkResponse>(getTourAdminVerifyUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(tourAdminVerifyBody),
+  });
+};
+
+export const getTourAdminVerifyMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof tourAdminVerify>>,
+    TError,
+    { data: BodyType<TourAdminVerifyBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof tourAdminVerify>>,
+  TError,
+  { data: BodyType<TourAdminVerifyBody> },
+  TContext
+> => {
+  const mutationKey = ["tourAdminVerify"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof tourAdminVerify>>,
+    { data: BodyType<TourAdminVerifyBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return tourAdminVerify(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TourAdminVerifyMutationResult = NonNullable<
+  Awaited<ReturnType<typeof tourAdminVerify>>
+>;
+export type TourAdminVerifyMutationBody = BodyType<TourAdminVerifyBody>;
+export type TourAdminVerifyMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Verify admin PIN
+ */
+export const useTourAdminVerify = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof tourAdminVerify>>,
+    TError,
+    { data: BodyType<TourAdminVerifyBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof tourAdminVerify>>,
+  TError,
+  { data: BodyType<TourAdminVerifyBody> },
+  TContext
+> => {
+  return useMutation(getTourAdminVerifyMutationOptions(options));
 };

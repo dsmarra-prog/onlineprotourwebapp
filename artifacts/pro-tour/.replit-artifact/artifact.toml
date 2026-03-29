@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/pro-tour/"
+title = "Online Pro Tour"
+version = "1.0.0"
+id = "artifacts/pro-tour"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/pro-tour/" ]
+localPort = 19720
+
+[services.development]
+run = "pnpm --filter @workspace/pro-tour run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/pro-tour", "run", "build" ]
+publicDir = "artifacts/pro-tour/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19720"
+BASE_PATH = "/pro-tour/"

@@ -18,35 +18,39 @@ export const HealthCheckResponse = zod.object({
  * @summary Get full career state
  */
 export const GetCareerResponse = zod.object({
-  spieler_name: zod.string(),
-  name_set: zod.boolean(),
-  hat_tourcard: zod.boolean(),
-  q_school_punkte: zod.number(),
-  order_of_merit_geld: zod.number(),
-  bank_konto: zod.number(),
-  saison_jahr: zod.number(),
-  turnier_laeuft: zod.boolean(),
-  aktuelle_runde: zod.number(),
-  gegner_name: zod.string(),
-  gegner_avg: zod.number(),
-  gegner_form: zod.object({
-    form: zod.string(),
-    bonus: zod.number(),
-  }),
-  stats_spiele: zod.number(),
-  stats_siege: zod.number(),
-  stats_legs_won: zod.number(),
-  stats_legs_lost: zod.number(),
-  stats_180s: zod.number(),
-  stats_highest_finish: zod.number(),
-  achievements: zod.record(
-    zod.string(),
-    zod.object({
-      name: zod.string(),
-      desc: zod.string(),
-      unlocked: zod.boolean(),
-    }),
-  ),
+  spieler_name: zod.string().optional(),
+  name_set: zod.boolean().optional(),
+  hat_tourcard: zod.boolean().optional(),
+  q_school_punkte: zod.number().optional(),
+  order_of_merit_geld: zod.number().optional(),
+  bank_konto: zod.number().optional(),
+  saison_jahr: zod.number().optional(),
+  turnier_laeuft: zod.boolean().optional(),
+  aktuelle_runde: zod.number().optional(),
+  gegner_name: zod.string().optional(),
+  gegner_avg: zod.number().optional(),
+  gegner_form: zod
+    .object({
+      form: zod.string(),
+      bonus: zod.number(),
+    })
+    .optional(),
+  stats_spiele: zod.number().optional(),
+  stats_siege: zod.number().optional(),
+  stats_legs_won: zod.number().optional(),
+  stats_legs_lost: zod.number().optional(),
+  stats_180s: zod.number().optional(),
+  stats_highest_finish: zod.number().optional(),
+  achievements: zod
+    .record(
+      zod.string(),
+      zod.object({
+        name: zod.string(),
+        desc: zod.string(),
+        unlocked: zod.boolean(),
+      }),
+    )
+    .optional(),
   aktiver_sponsor: zod
     .object({
       name: zod.string(),
@@ -64,146 +68,53 @@ export const GetCareerResponse = zod.object({
       text: zod.string(),
     })
     .nullish(),
-  platz: zod.number(),
-  turnier_name: zod.string(),
-  quote: zod.number(),
-  gesamt_avg: zod.number(),
-  gesamt_co: zod.number(),
-  oom: zod.array(
-    zod.object({
-      name: zod.string(),
-      geld: zod.number(),
-    }),
-  ),
-  runden_info: zod.object({
-    name: zod.string(),
-    first_to: zod.number(),
-    format: zod.string(),
-  }),
-  matchups: zod.array(
-    zod.object({
-      player1: zod.string(),
-      player2: zod.string(),
-    }),
-  ),
-  h2h_siege: zod.number(),
-  h2h_niederlagen: zod.number(),
-  walk_on_video: zod.string().nullish(),
-  ranking_verlauf: zod.array(
-    zod.object({
-      platz: zod.number(),
-      saison: zod.number(),
-      turnier: zod.string(),
-    }),
-  ),
-  avg_bonus: zod.number(),
-  checkout_bonus: zod.number(),
-  schwierigkeitsgrad: zod.number().optional(),
-  turnier_runden_log: zod.array(zod.any()).optional(),
-  aktuelle_serie: zod.number().optional(),
-  match_herausforderung: zod.record(zod.any()).nullable().optional(),
-  ist_angstgegner: zod.boolean().optional(),
-  social_follower: zod.number().optional(),
-  nachrichten_feed: zod.array(zod.any()).optional(),
-  gegner_social_post: zod.record(zod.any()).nullable().optional(),
-});
-
-/**
- * @summary Start the next tournament match
- */
-export const StartMatchResponse = zod.object({
-  career: zod.object({
-    spieler_name: zod.string(),
-    name_set: zod.boolean(),
-    hat_tourcard: zod.boolean(),
-    q_school_punkte: zod.number(),
-    order_of_merit_geld: zod.number(),
-    bank_konto: zod.number(),
-    saison_jahr: zod.number(),
-    turnier_laeuft: zod.boolean(),
-    aktuelle_runde: zod.number(),
-    gegner_name: zod.string(),
-    gegner_avg: zod.number(),
-    gegner_form: zod.object({
-      form: zod.string(),
-      bonus: zod.number(),
-    }),
-    stats_spiele: zod.number(),
-    stats_siege: zod.number(),
-    stats_legs_won: zod.number(),
-    stats_legs_lost: zod.number(),
-    stats_180s: zod.number(),
-    stats_highest_finish: zod.number(),
-    achievements: zod.record(
-      zod.string(),
-      zod.object({
-        name: zod.string(),
-        desc: zod.string(),
-        unlocked: zod.boolean(),
-      }),
-    ),
-    aktiver_sponsor: zod
-      .object({
-        name: zod.string(),
-        ziel_typ: zod.string(),
-        ziel_wert: zod.number(),
-        aktuell: zod.number(),
-        turniere_zeit: zod.number(),
-        belohnung: zod.number(),
-        text: zod.string(),
-      })
-      .nullish(),
-    letzte_schlagzeile: zod
-      .object({
-        titel: zod.string(),
-        text: zod.string(),
-      })
-      .nullish(),
-    platz: zod.number(),
-    turnier_name: zod.string(),
-    quote: zod.number(),
-    gesamt_avg: zod.number(),
-    gesamt_co: zod.number(),
-    oom: zod.array(
+  platz: zod.number().optional(),
+  turnier_name: zod.string().optional(),
+  quote: zod.number().optional(),
+  gesamt_avg: zod.number().optional(),
+  gesamt_co: zod.number().optional(),
+  oom: zod
+    .array(
       zod.object({
         name: zod.string(),
         geld: zod.number(),
       }),
-    ),
-    runden_info: zod.object({
+    )
+    .optional(),
+  runden_info: zod
+    .object({
       name: zod.string(),
       first_to: zod.number(),
       format: zod.string(),
-    }),
-    matchups: zod.array(
+    })
+    .optional(),
+  matchups: zod
+    .array(
       zod.object({
         player1: zod.string(),
         player2: zod.string(),
       }),
-    ),
-    h2h_siege: zod.number(),
-    h2h_niederlagen: zod.number(),
-    walk_on_video: zod.string().nullish(),
-    ranking_verlauf: zod.array(
+    )
+    .optional(),
+  h2h_siege: zod.number().optional(),
+  h2h_niederlagen: zod.number().optional(),
+  walk_on_video: zod.string().nullish(),
+  ranking_verlauf: zod
+    .array(
       zod.object({
         platz: zod.number(),
         saison: zod.number(),
         turnier: zod.string(),
       }),
-    ),
-    avg_bonus: zod.number(),
-    checkout_bonus: zod.number(),
-    schwierigkeitsgrad: zod.number().optional(),
-    turnier_runden_log: zod.array(zod.any()).optional(),
-  aktuelle_serie: zod.number().optional(),
-  match_herausforderung: zod.record(zod.any()).nullable().optional(),
-  ist_angstgegner: zod.boolean().optional(),
-  social_follower: zod.number().optional(),
-  nachrichten_feed: zod.array(zod.any()).optional(),
-  gegner_social_post: zod.record(zod.any()).nullable().optional(),
-  }),
-  messages: zod.array(zod.string()),
+    )
+    .optional(),
+  avg_bonus: zod.number().nullish(),
 });
+
+/**
+ * @summary Start the next tournament match
+ */
+export const StartMatchResponse = zod.unknown();
 
 /**
  * @summary Submit match result
@@ -217,463 +128,47 @@ export const SubmitResultBody = zod.object({
   my_co_pct: zod.number().optional(),
 });
 
-export const SubmitResultResponse = zod.object({
-  career: zod.object({
-    spieler_name: zod.string(),
-    name_set: zod.boolean(),
-    hat_tourcard: zod.boolean(),
-    q_school_punkte: zod.number(),
-    order_of_merit_geld: zod.number(),
-    bank_konto: zod.number(),
-    saison_jahr: zod.number(),
-    turnier_laeuft: zod.boolean(),
-    aktuelle_runde: zod.number(),
-    gegner_name: zod.string(),
-    gegner_avg: zod.number(),
-    gegner_form: zod.object({
-      form: zod.string(),
-      bonus: zod.number(),
-    }),
-    stats_spiele: zod.number(),
-    stats_siege: zod.number(),
-    stats_legs_won: zod.number(),
-    stats_legs_lost: zod.number(),
-    stats_180s: zod.number(),
-    stats_highest_finish: zod.number(),
-    achievements: zod.record(
-      zod.string(),
-      zod.object({
-        name: zod.string(),
-        desc: zod.string(),
-        unlocked: zod.boolean(),
-      }),
-    ),
-    aktiver_sponsor: zod
-      .object({
-        name: zod.string(),
-        ziel_typ: zod.string(),
-        ziel_wert: zod.number(),
-        aktuell: zod.number(),
-        turniere_zeit: zod.number(),
-        belohnung: zod.number(),
-        text: zod.string(),
-      })
-      .nullish(),
-    letzte_schlagzeile: zod
-      .object({
-        titel: zod.string(),
-        text: zod.string(),
-      })
-      .nullish(),
-    platz: zod.number(),
-    turnier_name: zod.string(),
-    quote: zod.number(),
-    gesamt_avg: zod.number(),
-    gesamt_co: zod.number(),
-    oom: zod.array(
-      zod.object({
-        name: zod.string(),
-        geld: zod.number(),
-      }),
-    ),
-    runden_info: zod.object({
-      name: zod.string(),
-      first_to: zod.number(),
-      format: zod.string(),
-    }),
-    matchups: zod.array(
-      zod.object({
-        player1: zod.string(),
-        player2: zod.string(),
-      }),
-    ),
-    h2h_siege: zod.number(),
-    h2h_niederlagen: zod.number(),
-    walk_on_video: zod.string().nullish(),
-    ranking_verlauf: zod.array(
-      zod.object({
-        platz: zod.number(),
-        saison: zod.number(),
-        turnier: zod.string(),
-      }),
-    ),
-    avg_bonus: zod.number(),
-    checkout_bonus: zod.number(),
-    schwierigkeitsgrad: zod.number().optional(),
-    turnier_runden_log: zod.array(zod.any()).optional(),
-  aktuelle_serie: zod.number().optional(),
-  match_herausforderung: zod.record(zod.any()).nullable().optional(),
-  ist_angstgegner: zod.boolean().optional(),
-  social_follower: zod.number().optional(),
-  nachrichten_feed: zod.array(zod.any()).optional(),
-  gegner_social_post: zod.record(zod.any()).nullable().optional(),
-  }),
-  messages: zod.array(zod.string()),
-});
+export const SubmitResultResponse = zod.unknown();
 
 /**
  * @summary Pull latest match result from Autodarts API
  */
-export const PullAutodartsResponse = zod.object({
-  career: zod.object({
-    spieler_name: zod.string(),
-    name_set: zod.boolean(),
-    hat_tourcard: zod.boolean(),
-    q_school_punkte: zod.number(),
-    order_of_merit_geld: zod.number(),
-    bank_konto: zod.number(),
-    saison_jahr: zod.number(),
-    turnier_laeuft: zod.boolean(),
-    aktuelle_runde: zod.number(),
-    gegner_name: zod.string(),
-    gegner_avg: zod.number(),
-    gegner_form: zod.object({
-      form: zod.string(),
-      bonus: zod.number(),
-    }),
-    stats_spiele: zod.number(),
-    stats_siege: zod.number(),
-    stats_legs_won: zod.number(),
-    stats_legs_lost: zod.number(),
-    stats_180s: zod.number(),
-    stats_highest_finish: zod.number(),
-    achievements: zod.record(
-      zod.string(),
-      zod.object({
-        name: zod.string(),
-        desc: zod.string(),
-        unlocked: zod.boolean(),
-      }),
-    ),
-    aktiver_sponsor: zod
-      .object({
-        name: zod.string(),
-        ziel_typ: zod.string(),
-        ziel_wert: zod.number(),
-        aktuell: zod.number(),
-        turniere_zeit: zod.number(),
-        belohnung: zod.number(),
-        text: zod.string(),
-      })
-      .nullish(),
-    letzte_schlagzeile: zod
-      .object({
-        titel: zod.string(),
-        text: zod.string(),
-      })
-      .nullish(),
-    platz: zod.number(),
-    turnier_name: zod.string(),
-    quote: zod.number(),
-    gesamt_avg: zod.number(),
-    gesamt_co: zod.number(),
-    oom: zod.array(
-      zod.object({
-        name: zod.string(),
-        geld: zod.number(),
-      }),
-    ),
-    runden_info: zod.object({
-      name: zod.string(),
-      first_to: zod.number(),
-      format: zod.string(),
-    }),
-    matchups: zod.array(
-      zod.object({
-        player1: zod.string(),
-        player2: zod.string(),
-      }),
-    ),
-    h2h_siege: zod.number(),
-    h2h_niederlagen: zod.number(),
-    walk_on_video: zod.string().nullish(),
-    ranking_verlauf: zod.array(
-      zod.object({
-        platz: zod.number(),
-        saison: zod.number(),
-        turnier: zod.string(),
-      }),
-    ),
-    avg_bonus: zod.number(),
-    checkout_bonus: zod.number(),
-    schwierigkeitsgrad: zod.number().optional(),
-    turnier_runden_log: zod.array(zod.any()).optional(),
-  aktuelle_serie: zod.number().optional(),
-  match_herausforderung: zod.record(zod.any()).nullable().optional(),
-  ist_angstgegner: zod.boolean().optional(),
-  social_follower: zod.number().optional(),
-  nachrichten_feed: zod.array(zod.any()).optional(),
-  gegner_social_post: zod.record(zod.any()).nullable().optional(),
-  }),
-  messages: zod.array(zod.string()),
-});
+export const PullAutodartsResponse = zod.unknown();
 
 /**
  * @summary Reset career to beginning
  */
-export const ResetCareerResponse = zod.object({
-  career: zod.object({
-    spieler_name: zod.string(),
-    name_set: zod.boolean(),
-    hat_tourcard: zod.boolean(),
-    q_school_punkte: zod.number(),
-    order_of_merit_geld: zod.number(),
-    bank_konto: zod.number(),
-    saison_jahr: zod.number(),
-    turnier_laeuft: zod.boolean(),
-    aktuelle_runde: zod.number(),
-    gegner_name: zod.string(),
-    gegner_avg: zod.number(),
-    gegner_form: zod.object({
-      form: zod.string(),
-      bonus: zod.number(),
-    }),
-    stats_spiele: zod.number(),
-    stats_siege: zod.number(),
-    stats_legs_won: zod.number(),
-    stats_legs_lost: zod.number(),
-    stats_180s: zod.number(),
-    stats_highest_finish: zod.number(),
-    achievements: zod.record(
-      zod.string(),
-      zod.object({
-        name: zod.string(),
-        desc: zod.string(),
-        unlocked: zod.boolean(),
-      }),
-    ),
-    aktiver_sponsor: zod
-      .object({
-        name: zod.string(),
-        ziel_typ: zod.string(),
-        ziel_wert: zod.number(),
-        aktuell: zod.number(),
-        turniere_zeit: zod.number(),
-        belohnung: zod.number(),
-        text: zod.string(),
-      })
-      .nullish(),
-    letzte_schlagzeile: zod
-      .object({
-        titel: zod.string(),
-        text: zod.string(),
-      })
-      .nullish(),
-    platz: zod.number(),
-    turnier_name: zod.string(),
-    quote: zod.number(),
-    gesamt_avg: zod.number(),
-    gesamt_co: zod.number(),
-    oom: zod.array(
-      zod.object({
-        name: zod.string(),
-        geld: zod.number(),
-      }),
-    ),
-    runden_info: zod.object({
-      name: zod.string(),
-      first_to: zod.number(),
-      format: zod.string(),
-    }),
-    matchups: zod.array(
-      zod.object({
-        player1: zod.string(),
-        player2: zod.string(),
-      }),
-    ),
-    h2h_siege: zod.number(),
-    h2h_niederlagen: zod.number(),
-    walk_on_video: zod.string().nullish(),
-    ranking_verlauf: zod.array(
-      zod.object({
-        platz: zod.number(),
-        saison: zod.number(),
-        turnier: zod.string(),
-      }),
-    ),
-    avg_bonus: zod.number(),
-    checkout_bonus: zod.number(),
-    schwierigkeitsgrad: zod.number().optional(),
-    turnier_runden_log: zod.array(zod.any()).optional(),
-  aktuelle_serie: zod.number().optional(),
-  match_herausforderung: zod.record(zod.any()).nullable().optional(),
-  ist_angstgegner: zod.boolean().optional(),
-  social_follower: zod.number().optional(),
-  nachrichten_feed: zod.array(zod.any()).optional(),
-  gegner_social_post: zod.record(zod.any()).nullable().optional(),
-  }),
-  messages: zod.array(zod.string()),
-});
+export const ResetCareerResponse = zod.unknown();
 
 /**
  * @summary Set player name (first-time setup)
  */
 export const SetPlayerNameBody = zod.object({
   name: zod.string(),
-  spieler_avg: zod.number().optional(),
-  schwierigkeitsgrad: zod.number().optional(),
+  schwierigkeitsgrad: zod.number(),
 });
 
-export const SetPlayerNameResponse = zod.object({
-  career: zod.object({
-    spieler_name: zod.string(),
-    name_set: zod.boolean(),
-    hat_tourcard: zod.boolean(),
-    q_school_punkte: zod.number(),
-    order_of_merit_geld: zod.number(),
-    bank_konto: zod.number(),
-    saison_jahr: zod.number(),
-    turnier_laeuft: zod.boolean(),
-    aktuelle_runde: zod.number(),
-    gegner_name: zod.string(),
-    gegner_avg: zod.number(),
-    gegner_form: zod.object({
-      form: zod.string(),
-      bonus: zod.number(),
-    }),
-    stats_spiele: zod.number(),
-    stats_siege: zod.number(),
-    stats_legs_won: zod.number(),
-    stats_legs_lost: zod.number(),
-    stats_180s: zod.number(),
-    stats_highest_finish: zod.number(),
-    achievements: zod.record(
-      zod.string(),
-      zod.object({
-        name: zod.string(),
-        desc: zod.string(),
-        unlocked: zod.boolean(),
-      }),
-    ),
-    aktiver_sponsor: zod
-      .object({
-        name: zod.string(),
-        ziel_typ: zod.string(),
-        ziel_wert: zod.number(),
-        aktuell: zod.number(),
-        turniere_zeit: zod.number(),
-        belohnung: zod.number(),
-        text: zod.string(),
-      })
-      .nullish(),
-    letzte_schlagzeile: zod
-      .object({
-        titel: zod.string(),
-        text: zod.string(),
-      })
-      .nullish(),
-    platz: zod.number(),
-    turnier_name: zod.string(),
-    quote: zod.number(),
-    gesamt_avg: zod.number(),
-    gesamt_co: zod.number(),
-    oom: zod.array(
-      zod.object({
-        name: zod.string(),
-        geld: zod.number(),
-      }),
-    ),
-    runden_info: zod.object({
-      name: zod.string(),
-      first_to: zod.number(),
-      format: zod.string(),
-    }),
-    matchups: zod.array(
-      zod.object({
-        player1: zod.string(),
-        player2: zod.string(),
-      }),
-    ),
-    h2h_siege: zod.number(),
-    h2h_niederlagen: zod.number(),
-    walk_on_video: zod.string().nullish(),
-    ranking_verlauf: zod.array(
-      zod.object({
-        platz: zod.number(),
-        saison: zod.number(),
-        turnier: zod.string(),
-      }),
-    ),
-    avg_bonus: zod.number(),
-    checkout_bonus: zod.number(),
-    schwierigkeitsgrad: zod.number().optional(),
-    turnier_runden_log: zod.array(zod.any()).optional(),
-  aktuelle_serie: zod.number().optional(),
-  match_herausforderung: zod.record(zod.any()).nullable().optional(),
-  ist_angstgegner: zod.boolean().optional(),
-  social_follower: zod.number().optional(),
-  nachrichten_feed: zod.array(zod.any()).optional(),
-  gegner_social_post: zod.record(zod.any()).nullable().optional(),
-  }),
-  messages: zod.array(zod.string()),
-});
+export const SetPlayerNameResponse = zod.unknown();
 
 /**
  * @summary Get full tournament history
  */
-export const GetTournamentHistoryResponse = zod.object({
-  history: zod.array(
-    zod.object({
-      name: zod.string(),
-      typ: zod.string(),
-      runde: zod.string(),
-      ergebnis: zod.string(),
-      preisgeld: zod.number(),
-      saison: zod.number(),
-      avg: zod.number(),
-    }),
-  ),
-});
+export const GetTournamentHistoryResponse = zod.unknown();
 
 /**
  * @summary Get all H2H records
  */
-export const GetH2HResponse = zod.object({
-  records: zod.array(
-    zod.object({
-      name: zod.string(),
-      siege: zod.number(),
-      niederlagen: zod.number(),
-    }),
-  ),
-});
+export const GetH2HResponse = zod.unknown();
 
 /**
  * @summary Get full season calendar with status
  */
-export const GetCalendarResponse = zod.object({
-  entries: zod.array(
-    zod.object({
-      index: zod.number(),
-      name: zod.string(),
-      typ: zod.string(),
-      format: zod.string(),
-      min_platz: zod.number().nullish(),
-      status: zod.string(),
-      qualifiziert: zod.boolean(),
-    }),
-  ),
-  aktuelles_turnier_index: zod.number(),
-});
+export const GetCalendarResponse = zod.unknown();
 
 /**
  * @summary Get available equipment and owned items
  */
-export const GetEquipmentResponse = zod.object({
-  items: zod.array(
-    zod.object({
-      id: zod.string(),
-      name: zod.string(),
-      beschreibung: zod.string(),
-      preis: zod.number(),
-      kategorie: zod.string(),
-      bonus_typ: zod.string(),
-      bonus_wert: zod.number(),
-      owned: zod.boolean(),
-    }),
-  ),
-  bank_konto: zod.number(),
-});
+export const GetEquipmentResponse = zod.unknown();
 
 /**
  * @summary Buy an equipment item
@@ -682,96 +177,471 @@ export const BuyEquipmentBody = zod.object({
   id: zod.string(),
 });
 
-export const BuyEquipmentResponse = zod.object({
-  career: zod.object({
-    spieler_name: zod.string(),
-    name_set: zod.boolean(),
-    hat_tourcard: zod.boolean(),
-    q_school_punkte: zod.number(),
-    order_of_merit_geld: zod.number(),
-    bank_konto: zod.number(),
-    saison_jahr: zod.number(),
-    turnier_laeuft: zod.boolean(),
-    aktuelle_runde: zod.number(),
-    gegner_name: zod.string(),
-    gegner_avg: zod.number(),
-    gegner_form: zod.object({
-      form: zod.string(),
-      bonus: zod.number(),
-    }),
-    stats_spiele: zod.number(),
-    stats_siege: zod.number(),
-    stats_legs_won: zod.number(),
-    stats_legs_lost: zod.number(),
-    stats_180s: zod.number(),
-    stats_highest_finish: zod.number(),
-    achievements: zod.record(
-      zod.string(),
-      zod.object({
-        name: zod.string(),
-        desc: zod.string(),
-        unlocked: zod.boolean(),
-      }),
-    ),
-    aktiver_sponsor: zod
-      .object({
-        name: zod.string(),
-        ziel_typ: zod.string(),
-        ziel_wert: zod.number(),
-        aktuell: zod.number(),
-        turniere_zeit: zod.number(),
-        belohnung: zod.number(),
-        text: zod.string(),
-      })
-      .nullish(),
-    letzte_schlagzeile: zod
-      .object({
-        titel: zod.string(),
-        text: zod.string(),
-      })
-      .nullish(),
-    platz: zod.number(),
-    turnier_name: zod.string(),
-    quote: zod.number(),
-    gesamt_avg: zod.number(),
-    gesamt_co: zod.number(),
-    oom: zod.array(
-      zod.object({
-        name: zod.string(),
-        geld: zod.number(),
-      }),
-    ),
-    runden_info: zod.object({
-      name: zod.string(),
-      first_to: zod.number(),
-      format: zod.string(),
-    }),
-    matchups: zod.array(
-      zod.object({
-        player1: zod.string(),
-        player2: zod.string(),
-      }),
-    ),
-    h2h_siege: zod.number(),
-    h2h_niederlagen: zod.number(),
-    walk_on_video: zod.string().nullish(),
-    ranking_verlauf: zod.array(
-      zod.object({
-        platz: zod.number(),
-        saison: zod.number(),
-        turnier: zod.string(),
-      }),
-    ),
-    avg_bonus: zod.number(),
-    checkout_bonus: zod.number(),
-    schwierigkeitsgrad: zod.number().optional(),
-    turnier_runden_log: zod.array(zod.any()).optional(),
-  aktuelle_serie: zod.number().optional(),
-  match_herausforderung: zod.record(zod.any()).nullable().optional(),
-  ist_angstgegner: zod.boolean().optional(),
-  social_follower: zod.number().optional(),
-  nachrichten_feed: zod.array(zod.any()).optional(),
-  gegner_social_post: zod.record(zod.any()).nullable().optional(),
+export const BuyEquipmentResponse = zod.unknown();
+
+/**
+ * @summary List all tour players
+ */
+export const TourListPlayersResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  autodarts_username: zod.string(),
+  created_at: zod.string(),
+  oom_points: zod.number(),
+  oom_rank: zod.number().optional(),
+});
+export const TourListPlayersResponse = zod.array(TourListPlayersResponseItem);
+
+/**
+ * @summary Register a new player
+ */
+export const TourRegisterPlayerBody = zod.object({
+  name: zod.string(),
+  autodarts_username: zod.string(),
+  autodarts_refresh_token: zod.string().optional(),
+});
+
+export const TourRegisterPlayerResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  autodarts_username: zod.string(),
+  created_at: zod.string(),
+  oom_points: zod.number(),
+  oom_rank: zod.number().optional(),
+});
+
+/**
+ * @summary Get player profile with tournament history
+ */
+export const TourGetPlayerParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const TourGetPlayerResponse = zod.object({
+  player: zod.object({
+    id: zod.number(),
+    name: zod.string(),
+    autodarts_username: zod.string(),
+    created_at: zod.string(),
+    oom_points: zod.number(),
+    oom_rank: zod.number().optional(),
   }),
-  messages: zod.array(zod.string()),
+  tournament_results: zod.array(
+    zod.object({
+      tournament_id: zod.number(),
+      tournament_name: zod.string(),
+      tournament_type: zod.string(),
+      best_round: zod.string(),
+      points: zod.number(),
+    }),
+  ),
+  wins: zod.number(),
+  losses: zod.number(),
+});
+
+/**
+ * @summary List all tournaments
+ */
+export const TourListTournamentsResponseItem = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  typ: zod.enum([
+    "players_championship",
+    "european_tour",
+    "world_series",
+    "major",
+  ]),
+  datum: zod.string(),
+  status: zod.enum(["offen", "laufend", "abgeschlossen"]),
+  legs_format: zod.number(),
+  max_players: zod.number(),
+  player_count: zod.number(),
+  winner_name: zod.string().optional(),
+});
+export const TourListTournamentsResponse = zod.array(
+  TourListTournamentsResponseItem,
+);
+
+/**
+ * @summary Create a new tournament (admin)
+ */
+export const TourCreateTournamentBody = zod.object({
+  name: zod.string(),
+  typ: zod.enum([
+    "players_championship",
+    "european_tour",
+    "world_series",
+    "major",
+  ]),
+  datum: zod.string(),
+  legs_format: zod.number(),
+  max_players: zod.number(),
+  admin_pin: zod.string(),
+});
+
+export const TourCreateTournamentResponse = zod.object({
+  id: zod.number(),
+  name: zod.string(),
+  typ: zod.enum([
+    "players_championship",
+    "european_tour",
+    "world_series",
+    "major",
+  ]),
+  datum: zod.string(),
+  status: zod.enum(["offen", "laufend", "abgeschlossen"]),
+  legs_format: zod.number(),
+  max_players: zod.number(),
+  player_count: zod.number(),
+  winner_name: zod.string().optional(),
+});
+
+/**
+ * @summary Get tournament with full bracket and matches
+ */
+export const TourGetTournamentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const TourGetTournamentResponse = zod.object({
+  tournament: zod.object({
+    id: zod.number(),
+    name: zod.string(),
+    typ: zod.enum([
+      "players_championship",
+      "european_tour",
+      "world_series",
+      "major",
+    ]),
+    datum: zod.string(),
+    status: zod.enum(["offen", "laufend", "abgeschlossen"]),
+    legs_format: zod.number(),
+    max_players: zod.number(),
+    player_count: zod.number(),
+    winner_name: zod.string().optional(),
+  }),
+  players: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      autodarts_username: zod.string(),
+      created_at: zod.string(),
+      oom_points: zod.number(),
+      oom_rank: zod.number().optional(),
+    }),
+  ),
+  matches: zod.array(
+    zod.object({
+      id: zod.number(),
+      tournament_id: zod.number(),
+      runde: zod.string(),
+      match_nr: zod.number(),
+      player1_id: zod.number().optional(),
+      player2_id: zod.number().optional(),
+      player1_name: zod.string().optional(),
+      player2_name: zod.string().optional(),
+      winner_id: zod.number().optional(),
+      score_p1: zod.number().optional(),
+      score_p2: zod.number().optional(),
+      status: zod.enum(["ausstehend", "laufend", "abgeschlossen"]),
+      is_bye: zod.boolean(),
+    }),
+  ),
+  rounds: zod.array(zod.string()),
+});
+
+/**
+ * @summary Delete tournament (admin)
+ */
+export const TourDeleteTournamentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const TourDeleteTournamentResponse = zod.object({
+  ok: zod.boolean(),
+});
+
+/**
+ * @summary Add player to tournament (admin)
+ */
+export const TourAddEntryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const TourAddEntryBody = zod.object({
+  player_id: zod.number(),
+  seed: zod.number().optional(),
+});
+
+export const TourAddEntryResponse = zod.object({
+  tournament: zod.object({
+    id: zod.number(),
+    name: zod.string(),
+    typ: zod.enum([
+      "players_championship",
+      "european_tour",
+      "world_series",
+      "major",
+    ]),
+    datum: zod.string(),
+    status: zod.enum(["offen", "laufend", "abgeschlossen"]),
+    legs_format: zod.number(),
+    max_players: zod.number(),
+    player_count: zod.number(),
+    winner_name: zod.string().optional(),
+  }),
+  players: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      autodarts_username: zod.string(),
+      created_at: zod.string(),
+      oom_points: zod.number(),
+      oom_rank: zod.number().optional(),
+    }),
+  ),
+  matches: zod.array(
+    zod.object({
+      id: zod.number(),
+      tournament_id: zod.number(),
+      runde: zod.string(),
+      match_nr: zod.number(),
+      player1_id: zod.number().optional(),
+      player2_id: zod.number().optional(),
+      player1_name: zod.string().optional(),
+      player2_name: zod.string().optional(),
+      winner_id: zod.number().optional(),
+      score_p1: zod.number().optional(),
+      score_p2: zod.number().optional(),
+      status: zod.enum(["ausstehend", "laufend", "abgeschlossen"]),
+      is_bye: zod.boolean(),
+    }),
+  ),
+  rounds: zod.array(zod.string()),
+});
+
+/**
+ * @summary Remove player from tournament (admin)
+ */
+export const TourRemoveEntryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const TourRemoveEntryBody = zod.object({
+  player_id: zod.number(),
+});
+
+export const TourRemoveEntryResponse = zod.object({
+  tournament: zod.object({
+    id: zod.number(),
+    name: zod.string(),
+    typ: zod.enum([
+      "players_championship",
+      "european_tour",
+      "world_series",
+      "major",
+    ]),
+    datum: zod.string(),
+    status: zod.enum(["offen", "laufend", "abgeschlossen"]),
+    legs_format: zod.number(),
+    max_players: zod.number(),
+    player_count: zod.number(),
+    winner_name: zod.string().optional(),
+  }),
+  players: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      autodarts_username: zod.string(),
+      created_at: zod.string(),
+      oom_points: zod.number(),
+      oom_rank: zod.number().optional(),
+    }),
+  ),
+  matches: zod.array(
+    zod.object({
+      id: zod.number(),
+      tournament_id: zod.number(),
+      runde: zod.string(),
+      match_nr: zod.number(),
+      player1_id: zod.number().optional(),
+      player2_id: zod.number().optional(),
+      player1_name: zod.string().optional(),
+      player2_name: zod.string().optional(),
+      winner_id: zod.number().optional(),
+      score_p1: zod.number().optional(),
+      score_p2: zod.number().optional(),
+      status: zod.enum(["ausstehend", "laufend", "abgeschlossen"]),
+      is_bye: zod.boolean(),
+    }),
+  ),
+  rounds: zod.array(zod.string()),
+});
+
+/**
+ * @summary Generate bracket and start tournament (admin)
+ */
+export const TourStartTournamentParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const TourStartTournamentResponse = zod.object({
+  tournament: zod.object({
+    id: zod.number(),
+    name: zod.string(),
+    typ: zod.enum([
+      "players_championship",
+      "european_tour",
+      "world_series",
+      "major",
+    ]),
+    datum: zod.string(),
+    status: zod.enum(["offen", "laufend", "abgeschlossen"]),
+    legs_format: zod.number(),
+    max_players: zod.number(),
+    player_count: zod.number(),
+    winner_name: zod.string().optional(),
+  }),
+  players: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      autodarts_username: zod.string(),
+      created_at: zod.string(),
+      oom_points: zod.number(),
+      oom_rank: zod.number().optional(),
+    }),
+  ),
+  matches: zod.array(
+    zod.object({
+      id: zod.number(),
+      tournament_id: zod.number(),
+      runde: zod.string(),
+      match_nr: zod.number(),
+      player1_id: zod.number().optional(),
+      player2_id: zod.number().optional(),
+      player1_name: zod.string().optional(),
+      player2_name: zod.string().optional(),
+      winner_id: zod.number().optional(),
+      score_p1: zod.number().optional(),
+      score_p2: zod.number().optional(),
+      status: zod.enum(["ausstehend", "laufend", "abgeschlossen"]),
+      is_bye: zod.boolean(),
+    }),
+  ),
+  rounds: zod.array(zod.string()),
+});
+
+/**
+ * @summary Submit match result (admin)
+ */
+export const TourSubmitResultParams = zod.object({
+  matchId: zod.coerce.number(),
+});
+
+export const TourSubmitResultBody = zod.object({
+  winner_id: zod.number(),
+  score_p1: zod.number(),
+  score_p2: zod.number(),
+  admin_pin: zod.string(),
+});
+
+export const TourSubmitResultResponse = zod.object({
+  tournament: zod.object({
+    id: zod.number(),
+    name: zod.string(),
+    typ: zod.enum([
+      "players_championship",
+      "european_tour",
+      "world_series",
+      "major",
+    ]),
+    datum: zod.string(),
+    status: zod.enum(["offen", "laufend", "abgeschlossen"]),
+    legs_format: zod.number(),
+    max_players: zod.number(),
+    player_count: zod.number(),
+    winner_name: zod.string().optional(),
+  }),
+  players: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      autodarts_username: zod.string(),
+      created_at: zod.string(),
+      oom_points: zod.number(),
+      oom_rank: zod.number().optional(),
+    }),
+  ),
+  matches: zod.array(
+    zod.object({
+      id: zod.number(),
+      tournament_id: zod.number(),
+      runde: zod.string(),
+      match_nr: zod.number(),
+      player1_id: zod.number().optional(),
+      player2_id: zod.number().optional(),
+      player1_name: zod.string().optional(),
+      player2_name: zod.string().optional(),
+      winner_id: zod.number().optional(),
+      score_p1: zod.number().optional(),
+      score_p2: zod.number().optional(),
+      status: zod.enum(["ausstehend", "laufend", "abgeschlossen"]),
+      is_bye: zod.boolean(),
+    }),
+  ),
+  rounds: zod.array(zod.string()),
+});
+
+/**
+ * @summary Pull latest Autodarts result
+ */
+export const TourPullAutodartsParams = zod.object({
+  matchId: zod.coerce.number(),
+});
+
+export const TourPullAutodartsBody = zod.object({
+  admin_pin: zod.string(),
+});
+
+export const TourPullAutodartsResponse = zod.object({
+  found: zod.boolean(),
+  match_id: zod.string().optional(),
+  player1_legs: zod.number().optional(),
+  player2_legs: zod.number().optional(),
+  player1_avg: zod.number().optional(),
+  player2_avg: zod.number().optional(),
+});
+
+/**
+ * @summary Get Order of Merit standings
+ */
+export const TourGetOomResponseItem = zod.object({
+  rank: zod.number(),
+  player_id: zod.number(),
+  player_name: zod.string(),
+  autodarts_username: zod.string(),
+  total_points: zod.number(),
+  tournaments_played: zod.number(),
+  best_result: zod.string().optional(),
+  results: zod.array(
+    zod.object({
+      tournament_name: zod.string(),
+      typ: zod.string(),
+      points: zod.number(),
+      round: zod.string(),
+    }),
+  ),
+});
+export const TourGetOomResponse = zod.array(TourGetOomResponseItem);
+
+/**
+ * @summary Verify admin PIN
+ */
+export const TourAdminVerifyBody = zod.object({
+  pin: zod.string(),
+});
+
+export const TourAdminVerifyResponse = zod.object({
+  ok: zod.boolean(),
 });

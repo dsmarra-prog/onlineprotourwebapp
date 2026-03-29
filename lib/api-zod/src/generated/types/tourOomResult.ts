@@ -5,9 +5,10 @@
  * PDC Darts Career Mode API
  * OpenAPI spec version: 0.1.0
  */
-import type { CareerState } from "./careerState";
 
-export interface CareerResponse {
-  career: CareerState;
-  messages: string[];
+export interface TourOomResult {
+  tournament_name: string;
+  typ: string;
+  points: number;
+  round: string;
 }

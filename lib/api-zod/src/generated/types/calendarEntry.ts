@@ -11,6 +11,7 @@ export interface CalendarEntry {
   name: string;
   typ: string;
   format: string;
+  /** @nullable */
   min_platz?: number | null;
   status: string;
   qualifiziert: boolean;

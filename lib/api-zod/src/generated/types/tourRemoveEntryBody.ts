@@ -5,8 +5,7 @@
  * PDC Darts Career Mode API
  * OpenAPI spec version: 0.1.0
  */
-import type { TournamentRecord } from "./tournamentRecord";
 
-export interface TournamentHistoryResponse {
-  history: TournamentRecord[];
+export interface TourRemoveEntryBody {
+  player_id: number;
 }

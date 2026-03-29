@@ -96,6 +96,7 @@ export interface CalendarEntry {
   name: string;
   typ: string;
   format: string;
+  /** @nullable */
   min_platz?: number | null;
   status: string;
   qualifiziert: boolean;
@@ -115,63 +116,207 @@ export interface GegnerForm {
 export type CareerStateAchievements = { [key: string]: Achievement };
 
 export interface CareerState {
-  spieler_name: string;
-  name_set: boolean;
-  hat_tourcard: boolean;
-  q_school_punkte: number;
-  order_of_merit_geld: number;
-  bank_konto: number;
-  saison_jahr: number;
-  turnier_laeuft: boolean;
-  aktuelle_runde: number;
-  gegner_name: string;
-  gegner_avg: number;
-  gegner_form: GegnerForm;
-  stats_spiele: number;
-  stats_siege: number;
-  stats_legs_won: number;
-  stats_legs_lost: number;
-  stats_180s: number;
-  stats_highest_finish: number;
-  achievements: CareerStateAchievements;
+  spieler_name?: string;
+  name_set?: boolean;
+  hat_tourcard?: boolean;
+  q_school_punkte?: number;
+  order_of_merit_geld?: number;
+  bank_konto?: number;
+  saison_jahr?: number;
+  turnier_laeuft?: boolean;
+  aktuelle_runde?: number;
+  gegner_name?: string;
+  gegner_avg?: number;
+  gegner_form?: GegnerForm;
+  stats_spiele?: number;
+  stats_siege?: number;
+  stats_legs_won?: number;
+  stats_legs_lost?: number;
+  stats_180s?: number;
+  stats_highest_finish?: number;
+  achievements?: CareerStateAchievements;
   aktiver_sponsor?: Sponsor | null;
   letzte_schlagzeile?: Headline | null;
-  platz: number;
-  turnier_name: string;
-  quote: number;
-  gesamt_avg: number;
-  gesamt_co: number;
-  oom: OomEntry[];
-  runden_info: RoundInfo;
-  matchups: Matchup[];
-  h2h_siege: number;
-  h2h_niederlagen: number;
+  platz?: number;
+  turnier_name?: string;
+  quote?: number;
+  gesamt_avg?: number;
+  gesamt_co?: number;
+  oom?: OomEntry[];
+  runden_info?: RoundInfo;
+  matchups?: Matchup[];
+  h2h_siege?: number;
+  h2h_niederlagen?: number;
+  /** @nullable */
   walk_on_video?: string | null;
-  ranking_verlauf: RankingRecord[];
-  avg_bonus: number;
-  checkout_bonus: number;
-  schwierigkeitsgrad?: number;
+  ranking_verlauf?: RankingRecord[];
+  /** @nullable */
+  avg_bonus?: number | null;
 }
 
-export interface CareerResponse {
-  career: CareerState;
-  messages: string[];
+export interface TourPlayer {
+  id: number;
+  name: string;
+  autodarts_username: string;
+  created_at: string;
+  oom_points: number;
+  oom_rank?: number;
 }
 
-export interface TournamentHistoryResponse {
-  history: TournamentRecord[];
+export interface TourPlayerTournamentResult {
+  tournament_id: number;
+  tournament_name: string;
+  tournament_type: string;
+  best_round: string;
+  points: number;
 }
 
-export interface H2HResponse {
-  records: H2HRecord[];
+export interface TourPlayerProfile {
+  player: TourPlayer;
+  tournament_results: TourPlayerTournamentResult[];
+  wins: number;
+  losses: number;
 }
 
-export interface CalendarResponse {
-  entries: CalendarEntry[];
-  aktuelles_turnier_index: number;
+export interface TourRegisterBody {
+  name: string;
+  autodarts_username: string;
+  autodarts_refresh_token?: string;
 }
 
-export interface EquipmentResponse {
-  items: EquipmentItem[];
-  bank_konto: number;
+export type TourTournamentTyp =
+  (typeof TourTournamentTyp)[keyof typeof TourTournamentTyp];
+
+export const TourTournamentTyp = {
+  players_championship: "players_championship",
+  european_tour: "european_tour",
+  world_series: "world_series",
+  major: "major",
+} as const;
+
+export type TourTournamentStatus =
+  (typeof TourTournamentStatus)[keyof typeof TourTournamentStatus];
+
+export const TourTournamentStatus = {
+  offen: "offen",
+  laufend: "laufend",
+  abgeschlossen: "abgeschlossen",
+} as const;
+
+export interface TourTournament {
+  id: number;
+  name: string;
+  typ: TourTournamentTyp;
+  datum: string;
+  status: TourTournamentStatus;
+  legs_format: number;
+  max_players: number;
+  player_count: number;
+  winner_name?: string;
+}
+
+export type TourMatchStatus =
+  (typeof TourMatchStatus)[keyof typeof TourMatchStatus];
+
+export const TourMatchStatus = {
+  ausstehend: "ausstehend",
+  laufend: "laufend",
+  abgeschlossen: "abgeschlossen",
+} as const;
+
+export interface TourMatch {
+  id: number;
+  tournament_id: number;
+  runde: string;
+  match_nr: number;
+  player1_id?: number;
+  player2_id?: number;
+  player1_name?: string;
+  player2_name?: string;
+  winner_id?: number;
+  score_p1?: number;
+  score_p2?: number;
+  status: TourMatchStatus;
+  is_bye: boolean;
+}
+
+export interface TourTournamentDetail {
+  tournament: TourTournament;
+  players: TourPlayer[];
+  matches: TourMatch[];
+  rounds: string[];
+}
+
+export type TourCreateTournamentBodyTyp =
+  (typeof TourCreateTournamentBodyTyp)[keyof typeof TourCreateTournamentBodyTyp];
+
+export const TourCreateTournamentBodyTyp = {
+  players_championship: "players_championship",
+  european_tour: "european_tour",
+  world_series: "world_series",
+  major: "major",
+} as const;
+
+export interface TourCreateTournamentBody {
+  name: string;
+  typ: TourCreateTournamentBodyTyp;
+  datum: string;
+  legs_format: number;
+  max_players: number;
+  admin_pin: string;
+}
+
+export interface TourResultBody {
+  winner_id: number;
+  score_p1: number;
+  score_p2: number;
+  admin_pin: string;
+}
+
+export interface TourOomResult {
+  tournament_name: string;
+  typ: string;
+  points: number;
+  round: string;
+}
+
+export interface TourOomEntry {
+  rank: number;
+  player_id: number;
+  player_name: string;
+  autodarts_username: string;
+  total_points: number;
+  tournaments_played: number;
+  best_result?: string;
+  results: TourOomResult[];
+}
+
+export interface TourOkResponse {
+  ok: boolean;
+}
+
+export interface TourAddEntryBody {
+  player_id: number;
+  seed?: number;
+}
+
+export interface TourRemoveEntryBody {
+  player_id: number;
+}
+
+export interface TourAutodartsBody {
+  admin_pin: string;
+}
+
+export interface TourAdminVerifyBody {
+  pin: string;
+}
+
+export interface TourAutodartsPullResult {
+  found: boolean;
+  match_id?: string;
+  player1_legs?: number;
+  player2_legs?: number;
+  player1_avg?: number;
+  player2_avg?: number;
 }
