@@ -8,6 +8,17 @@ const OPT_ICON = "https://onlineprotour.eu/images/opt-logo.png";
 // ─── Settings ────────────────────────────────────────────────────────────────
 // Priority: DB value (set via admin panel) → environment variable fallback
 
+// Extract numeric channel ID from a full Discord URL or plain snowflake
+function normalizeChannelId(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  // https://discord.com/channels/GUILD_ID/CHANNEL_ID  → last segment
+  const urlMatch = raw.match(/\/channels\/\d+\/(\d+)/);
+  if (urlMatch) return urlMatch[1];
+  // plain numeric ID
+  if (/^\d+$/.test(raw.trim())) return raw.trim();
+  return null;
+}
+
 export async function getDiscordSettings() {
   try {
     const rows = await db.select().from(systemSettingsTable);
@@ -15,14 +26,15 @@ export async function getDiscordSettings() {
 
     const webhookUrl = (map["discord_webhook_url"] || "") || process.env["DISCORD_WEBHOOK_URL"] || null;
     const botToken   = (map["discord_bot_token"]   || "") || process.env["DISCORD_BOT_TOKEN"]   || null;
-    const channelId  = (map["discord_channel_id"]  || "") || process.env["DISCORD_CHANNEL_ID"]  || null;
+    const rawChannel = (map["discord_channel_id"]  || "") || process.env["DISCORD_CHANNEL_ID"]  || null;
+    const channelId  = normalizeChannelId(rawChannel);
 
     return { webhookUrl, botToken, channelId };
   } catch {
     return {
       webhookUrl: process.env["DISCORD_WEBHOOK_URL"] ?? null,
       botToken:   process.env["DISCORD_BOT_TOKEN"]   ?? null,
-      channelId:  process.env["DISCORD_CHANNEL_ID"]  ?? null,
+      channelId:  normalizeChannelId(process.env["DISCORD_CHANNEL_ID"] ?? null),
     };
   }
 }
