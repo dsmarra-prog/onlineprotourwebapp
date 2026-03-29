@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Settings, CheckCircle, Loader2, Target, KeyRound, RefreshCw, ShieldCheck, LogOut,
-  User, Link2, Link2Off, Copy, Check, ChevronDown, Wifi, WifiOff,
+  User, Link2, Link2Off, ChevronDown, Wifi, WifiOff, ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api";
 import { usePlayer } from "@/context/PlayerContext";
+
+function generateCodeVerifier(): string {
+  const array = new Uint8Array(48);
+  crypto.getRandomValues(array);
+  return btoa(String.fromCharCode(...array))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
+
+async function generateCodeChallenge(verifier: string): Promise<string> {
+  const data = new TextEncoder().encode(verifier);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return btoa(String.fromCharCode(...new Uint8Array(digest)))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+}
 
 export default function EinstellungenPage() {
   const { toast } = useToast();
@@ -38,9 +52,9 @@ export default function EinstellungenPage() {
   const canUpdateToken = tokenForm.pin.length >= 4 && tokenForm.refresh_token.trim().length > 20;
 
   // ── Player Autodarts connection ──────────────────────────────────────────
-  const [copied, setCopied] = useState(false);
   const [disconnectPin, setDisconnectPin] = useState("");
   const [connectPin, setConnectPin] = useState("");
+  const [oauthLoading, setOauthLoading] = useState(false);
 
   const { data: adStatus, isLoading: statusLoading } = useQuery({
     queryKey: ["autodarts-status", currentPlayer?.id],
@@ -63,19 +77,35 @@ export default function EinstellungenPage() {
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
-  // The console command that the player runs on play.autodarts.io.
-  // PIN is embedded directly – no prompt() needed (browsers block it in async fetch handlers).
-  const apiOrigin = window.location.origin;
-  const connectCommand = currentPlayer && connectPin.length >= 4
-    ? `(async()=>{let sent=false;const orig=window.fetch;window.fetch=async function(u,o){const r=await orig.apply(this,arguments);if(!sent&&typeof u==='string'&&u.includes('openid-connect/token')){try{const d=await r.clone().json();if(d.refresh_token){sent=true;window.fetch=orig;const res=await orig('${apiOrigin}/api/tour/players/${currentPlayer.id}/autodarts-connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:d.refresh_token,pin:'${connectPin}'})});const j=await res.json();console.log(j.ok?'✅ Autodarts erfolgreich verbunden!':'❌ Fehler: '+(j.error||'Unbekannt'));}}catch(e){console.error('❌ Fehler:',e);}}return r;};let forced=false;for(const k of Object.keys(window)){try{const o=window[k];if(o&&typeof o==='object'&&typeof o.updateToken==='function'){o.updateToken(99999);forced=true;break;}}catch{}}console.log(forced?'⏳ Token-Abfang aktiv – warte kurz...':'⏳ Token-Abfang aktiv – navigiere kurz auf der Seite...');})();`
-    : "";
+  const handleOAuthConnect = async () => {
+    if (!currentPlayer || connectPin.length < 4) return;
+    setOauthLoading(true);
+    try {
+      const codeVerifier = generateCodeVerifier();
+      const codeChallenge = await generateCodeChallenge(codeVerifier);
+      const redirectUri = `${window.location.origin}${import.meta.env.BASE_URL}autodarts-callback`.replace(/\/\//g, "/").replace(":/", "://");
 
-  const handleCopy = () => {
-    if (!connectCommand) return;
-    navigator.clipboard.writeText(connectCommand).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+      sessionStorage.setItem("autodarts_oauth", JSON.stringify({
+        code_verifier: codeVerifier,
+        player_id: currentPlayer.id,
+        pin: connectPin,
+        redirect_uri: redirectUri,
+      }));
+
+      const params = new URLSearchParams({
+        client_id: "autodarts-play",
+        redirect_uri: redirectUri,
+        response_type: "code",
+        scope: "openid",
+        code_challenge: codeChallenge,
+        code_challenge_method: "S256",
+      });
+
+      window.location.href = `https://login.autodarts.io/realms/autodarts/protocol/openid-connect/auth?${params}`;
+    } catch (e) {
+      toast({ title: "Fehler", description: String(e), variant: "destructive" });
+      setOauthLoading(false);
+    }
   };
 
   const isConnected = adStatus?.connected ?? false;
@@ -179,16 +209,10 @@ export default function EinstellungenPage() {
                 </Button>
               </div>
 
-              <p className="text-xs text-muted-foreground border-t border-border pt-3">
-                Token abgelaufen? Führe einfach die Anleitung unten nochmal durch um ihn zu erneuern.
-              </p>
-              <ConnectInstructions
-                command={connectCommand}
-                copied={copied}
-                onCopy={handleCopy}
-                pin={connectPin}
-                onPinChange={setConnectPin}
-              />
+              <div className="border-t border-border pt-3 space-y-2">
+                <p className="text-xs text-muted-foreground">Token abgelaufen? Hier neu verbinden:</p>
+                <OAuthConnectForm pin={connectPin} onPinChange={setConnectPin} onConnect={handleOAuthConnect} loading={oauthLoading} />
+              </div>
             </>
           ) : (
             <>
@@ -196,13 +220,7 @@ export default function EinstellungenPage() {
                 Verbinde deinen Autodarts-Account, um Lobby-Links für deine Matches selbst zu erstellen —
                 auch wenn der Admin nicht online ist.
               </p>
-              <ConnectInstructions
-                command={connectCommand}
-                copied={copied}
-                onCopy={handleCopy}
-                pin={connectPin}
-                onPinChange={setConnectPin}
-              />
+              <OAuthConnectForm pin={connectPin} onPinChange={setConnectPin} onConnect={handleOAuthConnect} loading={oauthLoading} />
             </>
           )}
         </div>
@@ -288,80 +306,42 @@ export default function EinstellungenPage() {
   );
 }
 
-function ConnectInstructions({ command, copied, onCopy, pin, onPinChange }: {
-  command: string;
-  copied: boolean;
-  onCopy: () => void;
+function OAuthConnectForm({ pin, onPinChange, onConnect, loading }: {
   pin: string;
   onPinChange: (v: string) => void;
+  onConnect: () => void;
+  loading: boolean;
 }) {
   const pinReady = pin.length >= 4;
 
   return (
     <div className="space-y-3">
-      <p className="text-xs font-semibold text-foreground">So verbindest du deinen Account:</p>
-      <ol className="text-xs text-muted-foreground space-y-2.5">
-        <li className="flex gap-2">
-          <span className="text-primary font-bold shrink-0">1.</span>
-          <div className="flex flex-col gap-1.5 w-full">
-            <span>Gib hier zuerst deinen Pro Tour PIN ein:</span>
-            <Input
-              type="password"
-              placeholder="PIN eingeben"
-              value={pin}
-              onChange={(e) => onPinChange(e.target.value)}
-              className="max-w-[140px] h-8 text-sm"
-            />
-          </div>
-        </li>
-        <li className="flex gap-2">
-          <span className="text-primary font-bold shrink-0">2.</span>
-          <span>Öffne <span className="font-mono text-foreground">play.autodarts.io</span> im Browser und logge dich ein</span>
-        </li>
-        <li className="flex gap-2">
-          <span className="text-primary font-bold shrink-0">3.</span>
-          <span>
-            Drücke <span className="font-mono bg-muted px-1 rounded">F12</span> — ein Panel öffnet sich. Klicke oben auf den Reiter <span className="font-mono bg-muted px-1 rounded">Console</span> (deutsch: <span className="font-mono bg-muted px-1 rounded">Konsole</span>)
-          </span>
-        </li>
-        <li className="flex gap-2">
-          <span className="text-primary font-bold shrink-0">4.</span>
-          <span>
-            Kopiere den Befehl unten, füge ihn in die Konsole ein (Eingabezeile mit <span className="font-mono bg-muted px-1 rounded">&gt;</span>) und drücke <span className="font-mono bg-muted px-1 rounded">Enter</span>
-          </span>
-        </li>
-        <li className="flex gap-2">
-          <span className="text-primary font-bold shrink-0">5.</span>
-          <span>
-            Die Konsole zeigt <span className="font-mono bg-muted px-1 rounded text-primary">⏳ Token-Abfang aktiv</span> — warte kurz. Falls nichts passiert, klicke einmal irgendwo auf play.autodarts.io. Am Ende erscheint in der Konsole <span className="font-mono bg-muted px-1 rounded text-green-400">✅ Autodarts erfolgreich verbunden!</span>
-          </span>
-        </li>
-      </ol>
+      <div className="space-y-1.5">
+        <Label className="text-xs">Pro Tour PIN eingeben</Label>
+        <Input
+          type="password"
+          placeholder="PIN eingeben"
+          value={pin}
+          onChange={(e) => onPinChange(e.target.value)}
+          className="max-w-[160px]"
+        />
+      </div>
 
-      <button
-        onClick={onCopy}
-        disabled={!pinReady}
-        className={`w-full flex items-center justify-between gap-2 p-3 rounded-lg border transition-colors ${
-          pinReady
-            ? "bg-muted/50 hover:bg-muted border-border hover:border-primary/30 cursor-pointer"
-            : "bg-muted/20 border-border opacity-50 cursor-not-allowed"
-        }`}
+      <Button
+        className="w-full gap-2"
+        disabled={!pinReady || loading}
+        onClick={onConnect}
       >
-        <span className="font-mono text-xs text-muted-foreground truncate text-left">
-          {pinReady ? `${command.slice(0, 60)}…` : "Erst PIN eingeben (Schritt 1)…"}
-        </span>
-        <span className="shrink-0 flex items-center gap-1.5 text-xs font-semibold text-primary">
-          {copied ? (
-            <><Check className="w-4 h-4" /> Kopiert!</>
-          ) : (
-            <><Copy className="w-4 h-4" /> Kopieren</>
-          )}
-        </span>
-      </button>
+        {loading ? (
+          <><Loader2 className="w-4 h-4 animate-spin" /> Weiterleitung…</>
+        ) : (
+          <><ExternalLink className="w-4 h-4" /> Mit Autodarts verbinden</>
+        )}
+      </Button>
 
       <p className="text-xs text-muted-foreground/60 italic">
-        Der Befehl liest deinen Autodarts-Token automatisch aus und sendet ihn sicher an die Pro Tour.
-        Dein Passwort wird dabei nie übertragen.
+        Du wirst zu autodarts.io weitergeleitet und automatisch zurückgeleitet.
+        Dein Passwort wird dabei nie an die Pro Tour übertragen.
       </p>
     </div>
   );

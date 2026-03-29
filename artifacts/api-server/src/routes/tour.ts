@@ -1393,6 +1393,55 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
   }
 });
 
+// POST /tour/players/:id/autodarts-oauth-callback — exchange OAuth2 code for Autodarts token
+router.post("/tour/players/:id/autodarts-oauth-callback", async (req, res) => {
+  try {
+    const playerId = parseInt(req.params.id);
+    const { code, code_verifier, redirect_uri, pin } = req.body;
+    if (!code || !code_verifier || !redirect_uri || !pin) {
+      return res.status(400).json({ error: "code, code_verifier, redirect_uri und pin erforderlich" });
+    }
+
+    const pinHash = crypto.createHash("sha256").update(String(pin)).digest("hex");
+    const player = await db.select().from(tourPlayersTable)
+      .where(eq(tourPlayersTable.id, playerId)).limit(1);
+    if (!player[0]) return res.status(404).json({ error: "Spieler nicht gefunden" });
+    if (player[0].pin_hash !== pinHash) return res.status(403).json({ error: "Ungültiger PIN" });
+
+    // Exchange authorization code for tokens via Keycloak
+    const tokenRes = await fetch(
+      "https://login.autodarts.io/realms/autodarts/protocol/openid-connect/token",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          client_id: "autodarts-play",
+          code,
+          code_verifier,
+          redirect_uri,
+        }),
+      }
+    );
+    if (!tokenRes.ok) {
+      const errText = await tokenRes.text();
+      return res.status(400).json({ error: "Autodarts-Authentifizierung fehlgeschlagen: " + errText });
+    }
+    const tokenData: any = await tokenRes.json();
+    const refreshToken = tokenData.refresh_token;
+    if (!refreshToken) return res.status(400).json({ error: "Kein Refresh-Token erhalten" });
+
+    await db.update(tourPlayersTable)
+      .set({ autodarts_refresh_token: refreshToken })
+      .where(eq(tourPlayersTable.id, playerId));
+    playerTokenCache.delete(playerId);
+
+    res.json({ ok: true, message: "Autodarts-Account erfolgreich verbunden" });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // POST /tour/players/:id/autodarts-connect — player stores own Autodarts refresh token
 router.post("/tour/players/:id/autodarts-connect", async (req, res) => {
   try {

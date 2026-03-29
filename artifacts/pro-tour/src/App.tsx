@@ -13,6 +13,7 @@ import EinstellungenPage from "@/pages/einstellungen";
 import HomeDashboard from "@/pages/home";
 import SpielplanPage from "@/pages/spielplan";
 import Portal from "@/pages/portal";
+import AutodartsCallback from "@/pages/autodarts-callback";
 import { PlayerProvider, usePlayer } from "@/context/PlayerContext";
 
 const queryClient = new QueryClient({
@@ -80,7 +81,12 @@ function NavBar() {
 }
 
 function Router() {
+  const [location] = useLocation();
   const { currentPlayer, isLoading } = usePlayer();
+
+  if (location === "/autodarts-callback") {
+    return <AutodartsCallback />;
+  }
 
   if (isLoading) {
     return (
