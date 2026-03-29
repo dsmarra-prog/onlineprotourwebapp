@@ -1287,10 +1287,15 @@ router.post("/tour/admin/autodarts-token", async (req, res) => {
   try {
     const { pin, refresh_token } = req.body;
     if (!pin || !refresh_token) return res.status(400).json({ error: "pin und refresh_token erforderlich" });
+    // Accept any registered player's PIN (all are trusted admins in this closed system)
     const pinHash = crypto.createHash("sha256").update(String(pin)).digest("hex");
-    const players = await db.select().from(tourPlayersTable).limit(10);
+    const players = await db.select().from(tourPlayersTable).limit(20);
     const isAdmin = players.some((p) => p.pin_hash === pinHash);
-    if (!isAdmin) return res.status(403).json({ error: "Ungültige PIN" });
+    // Also accept the env-level admin override
+    const adminOverride = process.env.ADMIN_PIN
+      ? crypto.createHash("sha256").update(process.env.ADMIN_PIN).digest("hex") === pinHash
+      : false;
+    if (!isAdmin && !adminOverride) return res.status(403).json({ error: "Ungültige PIN" });
     // Reset in-memory state and persist to DB
     activeRefreshToken = refresh_token;
     cachedToken = null;
