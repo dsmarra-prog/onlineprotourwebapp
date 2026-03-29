@@ -45,10 +45,11 @@ export async function saveDiscordSettings(settings: {
   channelId?: string;
 }) {
   const entries = [
-    { key: "discord_webhook_url", value: settings.webhookUrl ?? "" },
-    { key: "discord_bot_token", value: settings.botToken ?? "" },
-    { key: "discord_channel_id", value: settings.channelId ?? "" },
-  ];
+    { key: "discord_webhook_url", value: settings.webhookUrl },
+    { key: "discord_bot_token",   value: settings.botToken },
+    { key: "discord_channel_id",  value: settings.channelId },
+  ].filter((e) => e.value !== undefined) as { key: string; value: string }[];
+
   for (const e of entries) {
     await db.insert(systemSettingsTable)
       .values({ key: e.key, value: e.value, updated_at: new Date() })

@@ -807,10 +807,11 @@ router.post("/tour/admin/discord-settings", async (req, res) => {
       return res.status(403).json({ error: "Falscher Admin-PIN" });
     }
 
+    // Skip masked values (shown as *** in the frontend) — don't overwrite with them
     await saveDiscordSettings({
-      webhookUrl: webhook_url ?? "",
-      botToken: bot_token ?? "",
-      channelId: channel_id ?? "",
+      webhookUrl: (webhook_url && !webhook_url.includes("***")) ? webhook_url : undefined,
+      botToken: (bot_token && bot_token.trim().length > 10) ? bot_token : undefined,
+      channelId: channel_id ? channel_id : undefined,
     });
 
     res.json({ ok: true });

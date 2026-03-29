@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Settings, CheckCircle, Loader2, Target, KeyRound, RefreshCw, ShieldCheck, LogOut,
@@ -66,6 +66,17 @@ export default function EinstellungenPage() {
     onSuccess: () => toast({ title: "Testnachricht gesendet!", description: "Schau in deinen Discord-Channel." }),
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
+
+  // Pre-fill form with current saved values when panel opens or data loads
+  useEffect(() => {
+    if (!discordStatus) return;
+    setDiscordForm((f) => ({
+      ...f,
+      webhook_url: discordStatus.webhook_url || f.webhook_url,
+      channel_id: discordStatus.channel_id || f.channel_id,
+      // bot_token left empty intentionally — never returned from server
+    }));
+  }, [discordStatus]);
 
   const tokenMut = useMutation({
     mutationFn: () =>
@@ -396,7 +407,7 @@ export default function EinstellungenPage() {
               <Label className="text-xs">Bot-Token <span className="text-muted-foreground font-normal">(optional, für Match-Threads)</span></Label>
               <Input
                 type="password"
-                placeholder={discordStatus?.bot_token_set ? "••••••• (gesetzt)" : "MTI3..."}
+                placeholder={discordStatus?.bot_token_set ? "✓ Token bereits gesetzt — nur eingeben um zu ändern" : "MTI3..."}
                 value={discordForm.bot_token}
                 onChange={(e) => setDiscordForm((f) => ({ ...f, bot_token: e.target.value }))}
                 className="font-mono text-xs"
