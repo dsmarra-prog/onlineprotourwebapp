@@ -2504,14 +2504,9 @@ const AUTODARTS_LOBBIES_URL = "https://api.autodarts.io/gs/v0/lobbies";
 
 let _cachedToken: string | null = null;
 let _tokenExpiresAt: number = 0;
+let _cachedRefreshTokenSource: string | null = null; // which refresh token we cached for
 
-async function getAutodartsToken(): Promise<string> {
-  const now = Date.now();
-  if (_cachedToken && now < _tokenExpiresAt - 30_000) return _cachedToken;
-
-  const refreshToken = process.env.AUTODARTS_REFRESH_TOKEN;
-  if (!refreshToken) throw new Error("AUTODARTS_REFRESH_TOKEN nicht konfiguriert");
-
+async function fetchNewToken(refreshToken: string): Promise<{ access_token: string; expires_in: number }> {
   const resp = await fetch(AUTODARTS_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -2525,10 +2520,53 @@ async function getAutodartsToken(): Promise<string> {
     const text = await resp.text();
     throw new Error(`Token-Refresh fehlgeschlagen (${resp.status}): ${text}`);
   }
-  const data = await resp.json();
+  return resp.json();
+}
+
+async function getAutodartsToken(): Promise<string> {
+  const now = Date.now();
+
+  // Prefer user-stored refresh token from DB; fall back to env secret
+  const career = await getOrCreateCareer();
+  const refreshToken = career.autodarts_refresh_token ?? process.env.AUTODARTS_REFRESH_TOKEN ?? null;
+  if (!refreshToken) throw new Error("Kein Autodarts-Account verbunden. Bitte unter Einstellungen verbinden.");
+
+  // Invalidate cache if the refresh token source changed
+  if (_cachedToken && now < _tokenExpiresAt - 30_000 && _cachedRefreshTokenSource === refreshToken) {
+    return _cachedToken;
+  }
+
+  const data = await fetchNewToken(refreshToken);
   _cachedToken = data.access_token as string;
   _tokenExpiresAt = now + (data.expires_in ?? 300) * 1000;
+  _cachedRefreshTokenSource = refreshToken;
   return _cachedToken;
+}
+
+export async function connectAutodarts(refreshToken: string, username: string) {
+  // Test the token first
+  const data = await fetchNewToken(refreshToken.trim());
+  if (!data.access_token) throw new Error("Ungültiger Refresh-Token");
+  // Invalidate cache so new token is used immediately
+  _cachedToken = null;
+  _cachedRefreshTokenSource = null;
+  await saveCareer({
+    autodarts_refresh_token: refreshToken.trim(),
+    autodarts_username: username.trim() || null,
+    spieler_name: username.trim() || undefined,
+    name_set: username.trim() ? true : undefined,
+  });
+  return { ok: true };
+}
+
+export async function getAutodartsConnectionStatus() {
+  const career = await getOrCreateCareer();
+  const hasToken = !!(career.autodarts_refresh_token ?? process.env.AUTODARTS_REFRESH_TOKEN);
+  return {
+    connected: hasToken,
+    username: career.autodarts_username ?? (hasToken ? career.spieler_name : null),
+    using_env: !career.autodarts_refresh_token && !!process.env.AUTODARTS_REFRESH_TOKEN,
+  };
 }
 
 async function autodartsGet(url: string): Promise<any> {

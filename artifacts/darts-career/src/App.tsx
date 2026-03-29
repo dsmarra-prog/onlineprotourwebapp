@@ -11,6 +11,7 @@ import CalendarPage from "@/pages/calendar";
 import HistoryPage from "@/pages/history";
 import HallOfFamePage from "@/pages/hall-of-fame";
 import OrderOfMeritPage from "@/pages/order-of-merit";
+import EinstellungenPage from "@/pages/einstellungen";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -32,6 +33,7 @@ function Router() {
       <Route path="/history" component={HistoryPage} />
       <Route path="/hall-of-fame" component={HallOfFamePage} />
       <Route path="/order-of-merit" component={OrderOfMeritPage} />
+      <Route path="/einstellungen" component={EinstellungenPage} />
       <Route component={NotFound} />
     </Switch>
   );

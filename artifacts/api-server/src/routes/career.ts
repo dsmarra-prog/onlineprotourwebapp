@@ -17,6 +17,8 @@ import {
   ermittlePlatz,
   acceptSponsor,
   saveCareer,
+  connectAutodarts,
+  getAutodartsConnectionStatus,
 } from "../lib/career-engine.js";
 import { SubmitResultBody, BuyEquipmentBody, SetPlayerNameBody } from "@workspace/api-zod";
 
@@ -252,6 +254,33 @@ router.post("/career/sponsor", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Error accepting sponsor");
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/career/autodarts/status – check current connection status
+router.get("/career/autodarts/status", async (req, res) => {
+  try {
+    const status = await getAutodartsConnectionStatus();
+    res.json(status);
+  } catch (err) {
+    req.log.error({ err }, "Error checking autodarts status");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/career/autodarts/connect – save user's own refresh token + username
+router.post("/career/autodarts/connect", async (req, res) => {
+  try {
+    const { refresh_token, username } = req.body as { refresh_token: string; username: string };
+    if (!refresh_token?.trim()) {
+      return res.status(400).json({ error: "Refresh-Token darf nicht leer sein" });
+    }
+    await connectAutodarts(refresh_token, username ?? "");
+    const status = await getAutodartsConnectionStatus();
+    res.json({ ok: true, ...status });
+  } catch (err: any) {
+    req.log.error({ err }, "Error connecting autodarts");
+    res.status(400).json({ error: err.message ?? "Verbindung fehlgeschlagen" });
   }
 });
 

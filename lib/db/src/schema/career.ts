@@ -64,6 +64,9 @@ export const careerTable = pgTable("career", {
   letzter_rang: integer("letzter_rang"),
   // Opponent reaction quote after last match
   letzte_gegner_reaktion: jsonb("letzte_gegner_reaktion"),
+  // User-supplied Autodarts credentials (replaces hardcoded env secret)
+  autodarts_refresh_token: text("autodarts_refresh_token"),
+  autodarts_username: text("autodarts_username"),
 });
 
 export const insertCareerSchema = createInsertSchema(careerTable);

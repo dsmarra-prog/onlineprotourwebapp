@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Trophy, Home, Settings, BarChart2, Users, Calendar,
-  BookOpen, ListOrdered,
+  BookOpen, ListOrdered, RotateCcw,
 } from "lucide-react";
 import { useCareerActions } from "@/hooks/use-career";
 
@@ -14,6 +14,7 @@ const navItems = [
   { href: "/h2h", label: "H2H", icon: Users },
   { href: "/history", label: "Verlauf", icon: BookOpen },
   { href: "/hall-of-fame", label: "Hall of Fame", icon: Trophy },
+  { href: "/einstellungen", label: "Einstellungen", icon: Settings },
 ];
 
 export function Layout({ children }: { children: ReactNode }) {
@@ -57,7 +58,7 @@ export function Layout({ children }: { children: ReactNode }) {
               disabled={isResetting}
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
             >
-              <Settings className="w-4 h-4" />
+              <RotateCcw className="w-4 h-4" />
               <span className="hidden md:inline">Reset</span>
             </button>
           </nav>
