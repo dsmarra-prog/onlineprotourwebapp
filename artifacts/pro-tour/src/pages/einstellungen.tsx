@@ -62,9 +62,12 @@ export default function EinstellungenPage() {
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
-  // The console command that the player runs on play.autodarts.io
+  // The console command that the player runs on play.autodarts.io.
+  // Strategy: patch window.fetch to intercept the next Keycloak token-refresh response,
+  // then immediately force a refresh by calling keycloak.updateToken(99999) on any
+  // found Keycloak instance. This works regardless of where the token is stored.
   const connectCommand = currentPlayer
-    ? `(async()=>{let t=null;try{t=window.__keycloak?.refreshToken||window.keycloak?.refreshToken}catch{}if(!t){for(const k of Object.keys(localStorage)){try{const v=JSON.parse(localStorage.getItem(k));if(v?.refresh_token){t=v.refresh_token;break}}catch{}}}if(!t){alert('Token nicht gefunden – bitte neu einloggen und nochmal versuchen');return}const r=await fetch('${window.location.origin}/api/tour/players/${currentPlayer.id}/autodarts-connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:t,pin:prompt('Dein Online Pro Tour PIN:')})});const d=await r.json();alert(d.ok?'✅ Autodarts erfolgreich verbunden!':'❌ '+d.error)})();`
+    ? `(async()=>{let sent=false;const orig=window.fetch;window.fetch=async function(u,o){const r=await orig.apply(this,arguments);if(!sent&&typeof u==='string'&&u.includes('openid-connect/token')){try{const d=await r.clone().json();if(d.refresh_token){sent=true;window.fetch=orig;const p=prompt('✅ Token gefunden! Gib deinen Pro Tour PIN ein:');if(p){const res=await orig('${window.location.origin}/api/tour/players/${currentPlayer.id}/autodarts-connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:d.refresh_token,pin:p})});const j=await res.json();alert(j.ok?'✅ Autodarts erfolgreich verbunden!':'❌ '+j.error);}}}catch{}}return r;};let forced=false;for(const k of Object.keys(window)){try{const o=window[k];if(o&&typeof o==='object'&&typeof o.updateToken==='function'){o.updateToken(99999);forced=true;break;}}catch{}}console.log(forced?'⏳ Token-Abfang aktiv – warte kurz...':'⏳ Token-Abfang aktiv – navigiere kurz auf der Seite (z.B. klicke irgendwo)...');})();`
     : "";
 
   const handleCopy = () => {
@@ -288,28 +291,26 @@ function ConnectInstructions({ command, copied, onCopy }: {
         <li className="flex gap-2">
           <span className="text-primary font-bold shrink-0">2.</span>
           <span>
-            Drücke die Taste <span className="font-mono bg-muted px-1 rounded">F12</span> auf deiner Tastatur — ein graues Panel öffnet sich am Rand des Browsers
+            Drücke <span className="font-mono bg-muted px-1 rounded">F12</span> — ein Panel öffnet sich. Klicke oben auf den Reiter <span className="font-mono bg-muted px-1 rounded">Console</span> (deutsch: <span className="font-mono bg-muted px-1 rounded">Konsole</span>)
           </span>
         </li>
         <li className="flex gap-2">
           <span className="text-primary font-bold shrink-0">3.</span>
           <span>
-            Klicke oben im Panel auf den Reiter <span className="font-mono bg-muted px-1 rounded">Console</span> (auf Deutsch: <span className="font-mono bg-muted px-1 rounded">Konsole</span>)
+            Klicke unten im Panel in die Eingabezeile (die mit <span className="font-mono bg-muted px-1 rounded">&gt;</span> beginnt), füge den Befehl mit <span className="font-mono bg-muted px-1 rounded">Strg+V</span> ein und drücke <span className="font-mono bg-muted px-1 rounded">Enter</span>
           </span>
         </li>
         <li className="flex gap-2">
           <span className="text-primary font-bold shrink-0">4.</span>
           <span>
-            Unten siehst du eine Eingabezeile die mit <span className="font-mono bg-muted px-1 rounded">&gt;</span> beginnt — klicke dort hinein
+            Die Konsole zeigt <span className="font-mono bg-muted px-1 rounded text-primary">⏳ Token-Abfang aktiv</span> — warte kurz. Falls nach 30 Sekunden nichts passiert, klicke einmal irgendwo auf play.autodarts.io
           </span>
         </li>
         <li className="flex gap-2">
           <span className="text-primary font-bold shrink-0">5.</span>
-          <span>Füge den kopierten Befehl mit <span className="font-mono bg-muted px-1 rounded">Strg+V</span> ein und drücke <span className="font-mono bg-muted px-1 rounded">Enter</span></span>
-        </li>
-        <li className="flex gap-2">
-          <span className="text-primary font-bold shrink-0">6.</span>
-          <span>Ein Fenster fragt nach deinem PIN — eingeben und bestätigen. Fertig!</span>
+          <span>
+            Ein Popup erscheint automatisch mit <span className="text-foreground font-medium">"✅ Token gefunden!"</span> — gib dort deinen PIN ein und bestätige
+          </span>
         </li>
       </ol>
 
