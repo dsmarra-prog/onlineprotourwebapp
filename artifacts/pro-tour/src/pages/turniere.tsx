@@ -27,6 +27,7 @@ export default function TourniereListe() {
     legs_format: "5",
     max_players: "32",
     admin_pin: "",
+    is_test: false,
   });
 
   const createMut = useMutation({
@@ -37,12 +38,13 @@ export default function TourniereListe() {
           ...form,
           legs_format: parseInt(form.legs_format),
           max_players: parseInt(form.max_players),
+          is_test: form.is_test,
         }),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tournaments"] });
       setOpen(false);
-      setForm({ name: "", typ: "pc", datum: new Date().toISOString().slice(0, 10), legs_format: "5", max_players: "32", admin_pin: "" });
+      setForm({ name: "", typ: "pc", datum: new Date().toISOString().slice(0, 10), legs_format: "5", max_players: "32", admin_pin: "", is_test: false });
       toast({ title: "Turnier erstellt" });
     },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
@@ -128,6 +130,15 @@ export default function TourniereListe() {
                 <Label className="flex items-center gap-1"><Lock className="w-3 h-3" /> Admin-PIN (für Verwaltung)</Label>
                 <Input type="password" value={form.admin_pin} onChange={(e) => setForm((f) => ({ ...f, admin_pin: e.target.value }))} placeholder="PIN festlegen" />
               </div>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={form.is_test}
+                  onChange={(e) => setForm((f) => ({ ...f, is_test: e.target.checked }))}
+                  className="w-4 h-4 rounded border-border accent-primary"
+                />
+                <span className="text-sm text-muted-foreground">Testturnier (keine OOM-Punkte)</span>
+              </label>
               <Button className="w-full" onClick={() => createMut.mutate()} disabled={createMut.isPending || !form.name || !form.admin_pin}>
                 {createMut.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Erstellen...</> : "Turnier erstellen"}
               </Button>
@@ -152,11 +163,16 @@ export default function TourniereListe() {
 
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h3 className="font-semibold truncate">{t.name}</h3>
                       <span className={`text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 ${statusColor(t.status)}`}>
                         {statusLabel(t.status)}
                       </span>
+                      {(t as any).is_test && (
+                        <span className="text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 text-orange-400 bg-orange-400/10 border-orange-400/30">
+                          Test
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1"><Trophy className="w-3 h-3" />{TYP_LABELS[t.typ]}</span>

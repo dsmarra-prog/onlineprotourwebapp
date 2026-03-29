@@ -3,7 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import {
   ArrowLeft, Play, UserPlus, UserMinus, Check, Loader2, Lock, Target,
-  Zap, Radio, CheckCircle2, Search, MonitorPlay, ExternalLink,
+  Zap, Radio, CheckCircle2, Search, MonitorPlay, ExternalLink, Activity,
+  TrendingUp, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -22,6 +23,128 @@ type SyncMatchStatus =
 
 type SyncResult = { synced: number; matches: SyncMatchStatus[]; error?: string };
 
+// ─── Live Match Detail Modal ───────────────────────────────────────────────────
+
+function LiveMatchModal({
+  match,
+  liveData,
+  legsFormat,
+  onClose,
+  onManualResult,
+}: {
+  match: TourMatch;
+  liveData: Extract<SyncMatchStatus, { status: "live" }>;
+  legsFormat: number;
+  onClose: () => void;
+  onManualResult: () => void;
+}) {
+  const winLegs = Math.ceil(legsFormat / 2);
+  const lobbyUrl = match.autodarts_match_id
+    ? `https://play.autodarts.io/lobbies/${match.autodarts_match_id}`
+    : null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-card border border-primary/40 rounded-2xl shadow-[0_0_40px_rgba(0,210,255,0.15)] w-full max-w-sm p-6 space-y-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Radio className="w-4 h-4 text-primary animate-pulse" />
+            <span className="text-sm font-semibold text-primary">Live Match</span>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Score Display */}
+        <div className="bg-primary/5 border border-primary/20 rounded-xl p-5">
+          <div className="text-xs text-muted-foreground text-center mb-3">
+            Best of {legsFormat} · Erster zu {winLegs} Legs
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            {/* Player 1 */}
+            <div className={`flex-1 text-center ${liveData.legs1 > liveData.legs2 ? "opacity-100" : "opacity-60"}`}>
+              <div className={`text-5xl font-black tabular-nums ${liveData.legs1 > liveData.legs2 ? "text-primary" : "text-foreground"}`}>
+                {liveData.legs1}
+              </div>
+              <div className="text-xs font-semibold mt-1 truncate">{match.player1_name}</div>
+              {liveData.avg1 > 0 && (
+                <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center justify-center gap-1">
+                  <TrendingUp className="w-2.5 h-2.5" />
+                  ⌀ {liveData.avg1}
+                </div>
+              )}
+            </div>
+            {/* Divider */}
+            <div className="text-2xl font-black text-muted-foreground/40">:</div>
+            {/* Player 2 */}
+            <div className={`flex-1 text-center ${liveData.legs2 > liveData.legs1 ? "opacity-100" : "opacity-60"}`}>
+              <div className={`text-5xl font-black tabular-nums ${liveData.legs2 > liveData.legs1 ? "text-primary" : "text-foreground"}`}>
+                {liveData.legs2}
+              </div>
+              <div className="text-xs font-semibold mt-1 truncate">{match.player2_name}</div>
+              {liveData.avg2 > 0 && (
+                <div className="text-[10px] text-muted-foreground mt-0.5 flex items-center justify-center gap-1">
+                  <TrendingUp className="w-2.5 h-2.5" />
+                  ⌀ {liveData.avg2}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Averages info */}
+        {(liveData.avg1 > 0 || liveData.avg2 > 0) && (
+          <div className="bg-accent/30 rounded-lg px-4 py-2.5">
+            <div className="text-xs text-muted-foreground mb-1.5 flex items-center gap-1">
+              <Activity className="w-3 h-3" /> Autodarts Average (gesamt)
+            </div>
+            <div className="flex justify-between text-xs">
+              <div>
+                <span className="font-medium">{match.player1_name}</span>
+                {liveData.avg1 > 0 && <span className="ml-2 text-primary font-bold">{liveData.avg1}</span>}
+              </div>
+              <div>
+                {liveData.avg2 > 0 && <span className="mr-2 text-primary font-bold">{liveData.avg2}</span>}
+                <span className="font-medium">{match.player2_name}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="space-y-2">
+          {lobbyUrl && (
+            <a
+              href={lobbyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full text-sm font-semibold rounded-xl py-2.5 px-4 bg-primary text-black hover:bg-primary/90 transition-colors"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Autodarts öffnen
+            </a>
+          )}
+          <button
+            onClick={onManualResult}
+            className="flex items-center justify-center gap-2 w-full text-sm text-muted-foreground hover:text-foreground rounded-xl py-2 px-4 border border-border/50 hover:border-border transition-colors"
+          >
+            Ergebnis manuell eintragen
+          </button>
+        </div>
+
+        <p className="text-[10px] text-muted-foreground/50 text-center">
+          Wird automatisch alle 15 Sek. aktualisiert
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function TurnierDetail() {
@@ -30,6 +153,7 @@ export default function TurnierDetail() {
   const qc = useQueryClient();
   const [adminPin, setAdminPin] = useState("");
   const [resultOpen, setResultOpen] = useState<number | null>(null);
+  const [liveModalMatch, setLiveModalMatch] = useState<number | null>(null);
   const [resultForm, setResultForm] = useState({ winner_id: "", score_p1: "", score_p2: "" });
   const [addPlayerOpen, setAddPlayerOpen] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState("");
@@ -74,6 +198,11 @@ export default function TurnierDetail() {
       }
       qc.invalidateQueries({ queryKey: ["tournament", id] });
       qc.invalidateQueries({ queryKey: ["oom"] });
+      // Close live modal if the match was auto-completed
+      if (liveModalMatch !== null) {
+        const wasCompleted = completed.some((m) => m.match_id === liveModalMatch);
+        if (wasCompleted) setLiveModalMatch(null);
+      }
     }
     prevSyncedRef.current = syncResult.synced;
   }, [syncResult]);
@@ -143,8 +272,27 @@ export default function TurnierDetail() {
   ).length;
   const liveCount = [...liveStatus.values()].filter((s) => s.status === "live").length;
 
+  // Live modal data
+  const liveModalMatchData = liveModalMatch !== null ? matches.find((m) => m.id === liveModalMatch) : null;
+  const liveModalStatus = liveModalMatch !== null ? liveStatus.get(liveModalMatch) : undefined;
+
   return (
     <div className="space-y-6">
+      {/* Live Match Modal */}
+      {liveModalMatchData && liveModalStatus?.status === "live" && (
+        <LiveMatchModal
+          match={liveModalMatchData}
+          liveData={liveModalStatus as Extract<SyncMatchStatus, { status: "live" }>}
+          legsFormat={tournament.legs_format}
+          onClose={() => setLiveModalMatch(null)}
+          onManualResult={() => {
+            setLiveModalMatch(null);
+            setResultOpen(liveModalMatchData.id);
+            setResultForm({ winner_id: "", score_p1: "", score_p2: "" });
+          }}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link href="/turniere" className="p-1.5 rounded-lg hover:bg-accent transition-colors">
@@ -156,6 +304,11 @@ export default function TurnierDetail() {
             <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${statusBadge}`}>
               {tournament.status === "laufend" ? "Laufend" : tournament.status === "abgeschlossen" ? "Abgeschlossen" : "Offen"}
             </span>
+            {(tournament as any).is_test && (
+              <span className="text-xs px-2 py-0.5 rounded-full border font-medium text-orange-400 bg-orange-400/10 border-orange-400/30">
+                Testturnier · kein OOM
+              </span>
+            )}
             {isRunning && (
               <span className="text-xs text-primary flex items-center gap-1">
                 <Radio className="w-3 h-3 animate-pulse" />
@@ -289,6 +442,7 @@ export default function TurnierDetail() {
                             setResultOpen(match.id);
                             setResultForm({ winner_id: "", score_p1: "", score_p2: "" });
                           }}
+                          onLiveClick={() => setLiveModalMatch(match.id)}
                         />
                       ))}
                     </div>
@@ -316,6 +470,11 @@ export default function TurnierDetail() {
                       <Radio className="w-3.5 h-3.5 text-primary animate-pulse" />
                       <span className="text-primary font-medium">Live erkannt:</span>
                       <span>{match.player1_name} {(live as any).legs1} : {(live as any).legs2} {match.player2_name}</span>
+                      {((live as any).avg1 > 0 || (live as any).avg2 > 0) && (
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          ⌀ {(live as any).avg1} / {(live as any).avg2}
+                        </span>
+                      )}
                     </div>
                   )}
                   <div className="space-y-1">
@@ -366,13 +525,14 @@ function MatchCard({
   legsFormat,
   liveStatus,
   onResult,
+  onLiveClick,
 }: {
   match: TourMatch;
   legsFormat: number;
   liveStatus?: SyncMatchStatus;
   onResult: () => void;
+  onLiveClick: () => void;
 }) {
-  // Use persisted lobby ID from DB so both players see the same link
   const persistedLobbyUrl = match.status !== "abgeschlossen" && match.autodarts_match_id
     ? `https://play.autodarts.io/lobbies/${match.autodarts_match_id}`
     : null;
@@ -407,30 +567,38 @@ function MatchCard({
   const isLive = liveStatus?.status === "live";
   const live = isLive ? (liveStatus as any) : null;
 
-  // Border styling
   let borderClass = "border-border";
   if (isComplete) borderClass = "border-border/50";
   else if (isLive) borderClass = "border-primary/60 shadow-[0_0_8px_rgba(0,210,255,0.15)]";
   else if (isPending) borderClass = "border-border/30";
 
-  // Background
   let bgClass = "bg-card";
   if (isComplete) bgClass = "bg-accent/20";
   else if (isLive) bgClass = "bg-primary/5";
   else if (isPending) bgClass = "bg-card opacity-60";
+
+  const handleClick = () => {
+    if (isComplete || isPending) return;
+    if (isLive) {
+      onLiveClick();
+    } else {
+      onResult();
+    }
+  };
 
   return (
     <div
       className={`p-3 rounded-lg border transition-all ${bgClass} ${borderClass} ${
         !isComplete && !isPending ? "hover:border-primary/40 cursor-pointer" : ""
       }`}
-      onClick={() => !isComplete && !isPending && onResult()}
+      onClick={handleClick}
     >
       {/* Live indicator */}
       {isLive && (
         <div className="flex items-center gap-1 mb-2 text-xs text-primary">
           <Radio className="w-3 h-3 animate-pulse" />
-          <span className="font-medium">Live erkannt</span>
+          <span className="font-medium">Live</span>
+          <span className="text-[10px] text-muted-foreground ml-1">· klicken für Details</span>
           <span className="ml-auto font-bold tabular-nums">
             {live.legs1} : {live.legs2}
           </span>
@@ -449,7 +617,7 @@ function MatchCard({
         <PlayerRow
           name={match.player1_name ?? "TBD"}
           score={isLive ? live.legs1 : match.score_p1}
-          avg={isLive ? live.avg1 : null}
+          avg={isLive && live.avg1 > 0 ? live.avg1 : null}
           isWinner={match.winner_id === match.player1_id}
           isComplete={isComplete}
           isLive={isLive}
@@ -457,7 +625,7 @@ function MatchCard({
         <PlayerRow
           name={match.player2_name ?? "TBD"}
           score={isLive ? live.legs2 : match.score_p2}
-          avg={isLive ? live.avg2 : null}
+          avg={isLive && live.avg2 > 0 ? live.avg2 : null}
           isWinner={match.winner_id === match.player2_id}
           isComplete={isComplete}
           isLive={isLive}
@@ -472,7 +640,7 @@ function MatchCard({
           {match.autodarts_match_id && <span className="ml-auto text-[10px]">via Autodarts</span>}
         </div>
       )}
-      {/* Lobby button / join URL — only for scheduled matches with both players */}
+      {/* Lobby button / join URL */}
       {!isComplete && !isPending && (
         <div className="mt-2 pt-2 border-t border-border/30" onClick={(e) => e.stopPropagation()}>
           {lobbyUrl ? (
@@ -517,12 +685,12 @@ function PlayerRow({
 }) {
   return (
     <div className={`flex items-center justify-between ${isWinner ? "text-foreground" : isComplete ? "text-muted-foreground" : ""}`}>
-      <span className={`text-sm ${isWinner ? "font-semibold" : "font-normal"}`}>
+      <span className={`text-sm ${isWinner ? "font-semibold" : "font-normal"} truncate max-w-[120px]`}>
         {isWinner && <span className="text-primary mr-1">●</span>}
         {name}
       </span>
       <div className="flex items-center gap-2">
-        {avg !== null && avg > 0 && (
+        {avg !== null && (
           <span className="text-[10px] text-muted-foreground tabular-nums">⌀{avg}</span>
         )}
         {score !== null && (

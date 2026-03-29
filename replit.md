@@ -72,12 +72,15 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 React + Vite frontend for the **Online Pro Tour Manager** — multi-player tournament platform for onlineprotour.eu.
 
 - **Spielplan**: Phase-organized Season 1 calendar (23 events: PC1–PC9, Spring Open, Dev Cups 1–6, April Major, etc.)
-- **OOM**: Order of Merit with 119 imported real players from onlineprotour.eu (Stand 26.03.2026). Compact + Detail view with per-tournament columns. DB: `tour_oom_standings` table.
-- **Turniere**: Admin creates/manages tournaments with bracket generation
+- **OOM**: Order of Merit with 119 imported real players from onlineprotour.eu (Stand 26.03.2026). Compact + Detail view with per-tournament columns. DB: `tour_oom_standings` table. Testturniere (is_test=true) sind ausgeschlossen.
+- **Turniere**: Admin creates/manages tournaments with bracket generation. `is_test=true` → no OOM points, orange "Test" badge shown.
 - **Spieler**: Player registration with Autodarts account linking
+- **Live-Match-Erkennung**: 3-stufiger Sync via `gs/v0/lobbies/{id}` (Lobby-Phase, 0:0) → `gs/v0/matches/{id}` (Spielphase, echte Scores + Averages) → `as/v0/matches/{id}` (Abschluss, finales Ergebnis). Privat-Lobbies werden via stored ID direkt abgefragt.
+- **LiveMatchModal**: Klick auf laufendes Match → großes Score-Display, Averages, "Autodarts öffnen"-Button.
 - API URL: `/api` (shared API server at port 8080)
 - Important: `apiFetch` uses `BASE = "/api"` (not prefixed with artifact base path)
 - Tournament types: `pc` | `m1` (Major) | `m2` (Final) | `dev_cup` | `dev_major`
+- `tour_tournaments.is_test` (boolean, default false) → true = Testturnier, keine OOM-Punkte
 
 ### `artifacts/darts-career` (`@workspace/darts-career`)
 

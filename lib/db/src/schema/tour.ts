@@ -51,6 +51,7 @@ export const tourTournamentsTable = pgTable("tour_tournaments", {
   admin_pin: text("admin_pin").notNull(),
   schedule_id: integer("schedule_id"),
   created_at: timestamp("created_at").defaultNow().notNull(),
+  is_test: boolean("is_test").notNull().default(false),
 });
 
 export const tourMatchesTable = pgTable("tour_matches", {

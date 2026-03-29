@@ -294,6 +294,7 @@ async function buildTournamentDetail(tournamentId: number) {
       status: tournament[0].status,
       legs_format: tournament[0].legs_format,
       max_players: tournament[0].max_players,
+      is_test: tournament[0].is_test,
     },
     players: entries.map((e) => ({
       player_id: e.player_id,
@@ -744,7 +745,7 @@ router.get("/tour/tournaments", async (_req, res) => {
 // POST /tour/tournaments
 router.post("/tour/tournaments", async (req, res) => {
   try {
-    const { name, typ, tour_type, datum, legs_format, max_players, admin_pin, schedule_id, phase } = req.body;
+    const { name, typ, tour_type, datum, legs_format, max_players, admin_pin, schedule_id, phase, is_test } = req.body;
     if (!name || !typ || !datum || !admin_pin) {
       return res.status(400).json({ error: "name, typ, datum, admin_pin erforderlich" });
     }
@@ -760,6 +761,7 @@ router.post("/tour/tournaments", async (req, res) => {
         max_players: max_players ?? 32,
         admin_pin: hashPin(String(admin_pin)),
         schedule_id: schedule_id || null,
+        is_test: is_test === true || is_test === "true" ? true : false,
       })
       .returning();
 
@@ -1152,8 +1154,18 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
             }
           }
 
-          // Still in progress — check gs/v0/matches/{id} (works for private matches, has live scores)
-          // This is the game-server live match endpoint; populated once the match starts (lobby consumed).
+          // Lobby exists → match is in lobby phase (players waiting, game not yet started)
+          // Show as "live" with 0:0 score; actual scores come once gs/v0/matches is available.
+          if (lobbyRes.status === "fulfilled" && lobbyRes.value.ok) {
+            const lobby = await lobbyRes.value.json();
+            if (lobby?.id) {
+              results.push({ match_id: match.id, status: "live", legs1: 0, legs2: 0, avg1: 0, avg2: 0, autodarts_id: lobby.id });
+              continue;
+            }
+          }
+
+          // Game in progress — check gs/v0/matches/{id} (works for private matches, has live leg scores + averages)
+          // This is the game-server live match endpoint; populated once the match starts (lobby consumed → 404).
           const liveMatchRes = await fetch(
             `https://api.autodarts.io/gs/v0/matches/${match.autodarts_match_id}`,
             { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" } }
@@ -1166,7 +1178,11 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
               const idx2 = liveMatch.players.findIndex((p: any) => p.name?.toLowerCase() === u2.toLowerCase());
               const legs1 = idx1 >= 0 ? (liveMatch.scores?.[idx1]?.legs ?? 0) : 0;
               const legs2 = idx2 >= 0 ? (liveMatch.scores?.[idx2]?.legs ?? 0) : 0;
-              results.push({ match_id: match.id, status: "live", legs1, legs2, avg1: 0, avg2: 0, autodarts_id: liveMatch.id });
+              const p1obj = idx1 >= 0 ? liveMatch.players[idx1] : null;
+              const p2obj = idx2 >= 0 ? liveMatch.players[idx2] : null;
+              const avg1 = Math.round((p1obj?.user?.average ?? p1obj?.average ?? 0) * 10) / 10;
+              const avg2 = Math.round((p2obj?.user?.average ?? p2obj?.average ?? 0) * 10) / 10;
+              results.push({ match_id: match.id, status: "live", legs1, legs2, avg1, avg2, autodarts_id: liveMatch.id });
               continue;
             }
           }
@@ -1421,7 +1437,7 @@ router.get("/tour/oom", async (_req, res) => {
   try {
     const players = await db.select().from(tourPlayersTable);
     const tournaments = await db.select().from(tourTournamentsTable)
-      .where(eq(tourTournamentsTable.status, "abgeschlossen"))
+      .where(and(eq(tourTournamentsTable.status, "abgeschlossen"), eq(tourTournamentsTable.is_test, false)))
       .orderBy(tourTournamentsTable.datum);
     const allMatches = await db.select().from(tourMatchesTable);
     const allBonus = await db.select().from(tourBonusPointsTable);
