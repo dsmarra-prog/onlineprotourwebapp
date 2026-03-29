@@ -83,12 +83,26 @@ export const KALENDER = [
   { name: "PDC World Championship", typ: "Major", min_platz: 96, format: "sets" },
 ];
 
+// Real PDC prize structures — each tier entry = prize for losing in that round
+// index 0 = Last 128 exit, 1 = Last 64, 2 = Last 32, 3 = Last 16, 4 = QF, 5 = SF, 6 = Final (runner-up)
 const PRIZE_MONEY: Record<string, { win: number; rd_exit: (round: number) => number }> = {
-  ProTour: { win: 15000, rd_exit: (r) => r * 500 },
-  Major: { win: 150000, rd_exit: (r) => r * 5000 },
-  EuropeanTour: { win: 25000, rd_exit: (r) => r * 1000 },
-  WorldSeries: { win: 40000, rd_exit: (r) => r * 1500 },
-  PremierLeague: { win: 35000, rd_exit: () => 5000 },
+  ProTour: {
+    win: 15000,
+    rd_exit: (r) => ([0, 250, 500, 1000, 2000, 4000, 7500][r] ?? 7500),
+  },
+  Major: {
+    win: 500000,
+    rd_exit: (r) => ([0, 5000, 10000, 20000, 40000, 100000, 250000][r] ?? 250000),
+  },
+  EuropeanTour: {
+    win: 25000,
+    rd_exit: (r) => ([0, 500, 1000, 2000, 4000, 8000, 12500][r] ?? 12500),
+  },
+  WorldSeries: {
+    win: 40000,
+    rd_exit: (r) => ([0, 1000, 2000, 4000, 8000, 15000, 20000][r] ?? 20000),
+  },
+  PremierLeague: { win: 275000, rd_exit: () => 25000 },
 };
 
 // Premier League – Preisgeld nach Platzierung (4 Spieler)
