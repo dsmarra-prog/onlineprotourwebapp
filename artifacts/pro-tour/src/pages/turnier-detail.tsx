@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useParams, Link } from "wouter";
+import { useParams, Link, useLocation } from "wouter";
 import {
   ArrowLeft, Play, UserPlus, UserMinus, Check, Loader2, Lock, Target,
   Zap, Radio, CheckCircle2, Search, MonitorPlay, ExternalLink, Activity,
-  TrendingUp, X,
+  TrendingUp, X, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -158,10 +158,12 @@ function LiveMatchModal({
 
 export default function TurnierDetail() {
   const { id } = useParams<{ id: string }>();
+  const [, navigate] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
   const { currentPlayer } = usePlayer();
   const [adminPin, setAdminPin] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState<number | null>(null);
   const [liveModalMatch, setLiveModalMatch] = useState<number | null>(null);
   const [resultForm, setResultForm] = useState({ winner_id: "", score_p1: "", score_p2: "" });
@@ -245,6 +247,19 @@ export default function TurnierDetail() {
       body: JSON.stringify({ admin_pin: adminPin }),
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tournament", id] }); toast({ title: "Spieler entfernt" }); },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: () => apiFetch(`/tour/tournaments/${id}`, {
+      method: "DELETE",
+      body: JSON.stringify({ admin_pin: adminPin }),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tournaments"] });
+      toast({ title: "Turnier gelöscht" });
+      navigate("/turniere");
+    },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
@@ -379,14 +394,53 @@ export default function TurnierDetail() {
           <Lock className="w-4 h-4 text-muted-foreground" />
           <span className="text-sm font-medium">Admin-PIN (für manuelle Eingabe)</span>
         </div>
-        <Input
-          type="password"
-          value={adminPin}
-          onChange={(e) => setAdminPin(e.target.value)}
-          placeholder="PIN eingeben"
-          className="max-w-xs"
-        />
+        <div className="flex items-center gap-3">
+          <Input
+            type="password"
+            value={adminPin}
+            onChange={(e) => setAdminPin(e.target.value)}
+            placeholder="PIN eingeben"
+            className="max-w-xs"
+          />
+          {adminPin && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-red-400 hover:text-red-300 hover:bg-red-400/10 border border-red-400/30 gap-1.5"
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Turnier löschen
+            </Button>
+          )}
+        </div>
       </div>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="text-red-400">Turnier wirklich löschen?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <p className="text-sm text-muted-foreground">
+              Das Turnier <span className="text-foreground font-medium">{tournament?.name}</span> wird zusammen mit allen Anmeldungen und Spielen <span className="text-red-400 font-medium">unwiderruflich gelöscht</span>.
+            </p>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setDeleteOpen(false)}>
+                Abbrechen
+              </Button>
+              <Button
+                className="flex-1 bg-red-500/20 text-red-400 border border-red-400/30 hover:bg-red-500/30"
+                disabled={deleteMut.isPending}
+                onClick={() => deleteMut.mutate()}
+              >
+                {deleteMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Trash2 className="w-4 h-4 mr-1.5" />Endgültig löschen</>}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Self-register banner for open tournaments */}
       {canSelfRegister && (

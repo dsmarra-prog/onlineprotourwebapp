@@ -1097,6 +1097,29 @@ router.post("/tour/tournaments", async (req, res) => {
   }
 });
 
+// DELETE /tour/tournaments/:id — admin only, deletes all related data
+router.delete("/tour/tournaments/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { admin_pin } = req.body;
+
+    const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, id)).limit(1);
+    if (!t[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
+    if (!admin_pin || !verifyPin(String(admin_pin), t[0].admin_pin)) {
+      return res.status(403).json({ error: "Falscher Admin-PIN" });
+    }
+
+    // Delete all related data first (FK order)
+    await db.delete(tourMatchesTable).where(eq(tourMatchesTable.tournament_id, id));
+    await db.delete(tourEntriesTable).where(eq(tourEntriesTable.tournament_id, id));
+    await db.delete(tourTournamentsTable).where(eq(tourTournamentsTable.id, id));
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // GET /tour/tournaments/:id
 router.get("/tour/tournaments/:id", async (req, res) => {
   try {
