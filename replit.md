@@ -84,6 +84,14 @@ React + Vite frontend for the **Online Pro Tour Manager** — multi-player tourn
 - Important: `apiFetch` uses `BASE = "/api"` (not prefixed with artifact base path)
 - Tournament types: `pc` | `m1` (Major) | `m2` (Final) | `dev_cup` | `dev_major`
 - `tour_tournaments.is_test` (boolean, default false) → true = Testturnier, keine OOM-Punkte
+- `tour_tournaments.schedule_id` → FK auf `SEASON1_SCHEDULE[].external_id` (verhindert Duplikate beim Seeden)
+- Dev Tour OOM: separate `tour_dev_oom_standings` Tabelle; GET `/tour/dev-oom`, POST `/tour/dev-oom/seed`, POST `/tour/dev-oom/update`
+- Tournament seeding: POST `/tour/tournaments/seed-from-schedule` → legt alle `upcoming` Schedule-Einträge als Turniere an (idempotent via schedule_id)
+- Tournament list sort: Echte open/laufend first by date ASC, then completed by date DESC, then test last
+- Home page filters `is_test: false` for upcoming/active tournament display
+- Nav: "Pro OOM" = `/oom`, "Dev OOM" = `/dev-oom` (Swords icon)
+- Spielplan page has "Turniere anlegen" admin button (POST seed-from-schedule with admin PIN)
+- DEV_OOM_SEED_DATA is empty by default; admin fills in actual data from onlineprotour.eu and it's inserted via POST /tour/dev-oom/seed
 
 ### `artifacts/darts-career` (`@workspace/darts-career`)
 

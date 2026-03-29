@@ -49,6 +49,8 @@ export type TourTournament = {
   legs_format: number;
   max_players: number;
   player_count: number;
+  is_test: boolean;
+  schedule_id: number | null;
 };
 
 export type TourMatch = {

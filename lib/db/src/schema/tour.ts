@@ -88,6 +88,19 @@ export const tourBonusPointsTable = pgTable("tour_bonus_points", {
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Development Tour OOM standings (separate from Pro Tour OOM)
+export const tourDevOomStandingsTable = pgTable("tour_dev_oom_standings", {
+  id: serial("id").primaryKey(),
+  season: integer("season").notNull().default(1),
+  rank: integer("rank").notNull(),
+  autodarts_username: text("autodarts_username").notNull(),
+  total_points: integer("total_points").notNull(),
+  bonus_points: integer("bonus_points").notNull().default(0),
+  tournaments_played: integer("tournaments_played").notNull(),
+  tournament_breakdown: text("tournament_breakdown").notNull().default("{}"),
+  last_updated: text("last_updated").notNull(),
+});
+
 export type TourPlayer = typeof tourPlayersTable.$inferSelect;
 export const systemSettingsTable = pgTable("system_settings", {
   key: text("key").primaryKey(),
@@ -101,3 +114,4 @@ export type TourTournament = typeof tourTournamentsTable.$inferSelect;
 export type TourMatch = typeof tourMatchesTable.$inferSelect;
 export type TourEntry = typeof tourEntriesTable.$inferSelect;
 export type TourBonusPoints = typeof tourBonusPointsTable.$inferSelect;
+export type TourDevOomStanding = typeof tourDevOomStandingsTable.$inferSelect;

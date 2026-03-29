@@ -4,6 +4,7 @@ import {
   tourPlayersTable,
   tourScheduleTable,
   tourOomStandingsTable,
+  tourDevOomStandingsTable,
   tourTournamentsTable,
   tourMatchesTable,
   tourEntriesTable,
@@ -69,6 +70,23 @@ const BONUS_POINTS: Record<string, number> = {
   "9darter": 500,
   bigfish: 100,
 };
+
+// Parse German date DD.MM.YYYY or ISO YYYY-MM-DD to ISO string for sorting
+function parseDatumToISO(datum: string): string {
+  if (/^\d{2}\.\d{2}\.\d{4}$/.test(datum)) {
+    const [d, m, y] = datum.split(".");
+    return `${y}-${m}-${d}`;
+  }
+  return datum;
+}
+
+// ─── Development Tour OOM Seed Data ─────────────────────────────────────────
+// DC1–DC6 abgeschlossen. Daten werden vom Admin über /tour/dev-oom/seed importiert.
+const DEV_OOM_SEED_DATA: {
+  season: number; rank: number; autodarts_username: string; total_points: number;
+  bonus_points: number; tournaments_played: number; tournament_breakdown: string; last_updated: string;
+}[] = [];
+// Admin kann hier die tatsächlichen Dev Tour OOM-Daten hinterlegen (analog zu OOM_SEED_DATA).
 
 // ─── Season 1 Schedule Data ─────────────────────────────────────────────────
 const SEASON1_SCHEDULE = [
@@ -607,6 +625,190 @@ router.post("/tour/oom/seed", async (_req, res) => {
   }
 });
 
+// GET /tour/dev-oom - Development Tour OOM standings (imported)
+router.get("/tour/dev-oom", async (_req, res) => {
+  try {
+    const standings = await db
+      .select()
+      .from(tourDevOomStandingsTable)
+      .orderBy(tourDevOomStandingsTable.rank);
+
+    if (standings.length > 0) {
+      const result = standings.map((s) => {
+        const breakdown = JSON.parse(s.tournament_breakdown || "{}");
+        const results = Object.entries(breakdown).map(([name, points]) => ({
+          tournament_name: name,
+          points: points as number,
+        }));
+        return {
+          rank: s.rank,
+          player_id: s.id,
+          player_name: s.autodarts_username,
+          autodarts_username: s.autodarts_username,
+          total_points: s.total_points,
+          bonus_total: s.bonus_points,
+          tournaments_played: s.tournaments_played,
+          last_updated: s.last_updated,
+          results: results.map((r) => ({
+            tournament_id: 0,
+            tournament_name: r.tournament_name,
+            typ: "dev_cup",
+            points: r.points,
+            bonus: 0,
+            round: devPtsToBestRound(r.points),
+          })),
+        };
+      });
+      return res.json(result);
+    }
+
+    // Fallback: calculate live from DB tournaments (tour_type = "development")
+    const players = await db.select().from(tourPlayersTable);
+    const devTournaments = await db.select().from(tourTournamentsTable)
+      .where(and(eq(tourTournamentsTable.status, "abgeschlossen"), eq(tourTournamentsTable.is_test, false)));
+    const devTs = devTournaments.filter((t) => t.tour_type === "development");
+
+    if (devTs.length === 0) {
+      return res.json([]);
+    }
+
+    const allMatches = await db.select().from(tourMatchesTable);
+    const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
+
+    const oomData = players.map((player) => {
+      const results: any[] = [];
+      for (const t of devTs) {
+        const tMatches = allMatches.filter((m) => m.tournament_id === t.id);
+        const playerMatches = tMatches.filter(
+          (m) => (m.player1_id === player.id || m.player2_id === player.id) && m.status === "abgeschlossen" && !m.is_bye
+        );
+        if (playerMatches.length === 0) continue;
+        const deepest = playerMatches.sort(
+          (a, b) => roundOrder.indexOf(b.runde) - roundOrder.indexOf(a.runde)
+        )[0];
+        const isWinner = deepest.runde === "F" && deepest.winner_id === player.id;
+        const roundKey = isWinner ? "Sieger" : roundToOomKey(deepest.runde);
+        const points = OOM_POINTS[t.typ]?.[roundKey] ?? 0;
+        results.push({ tournament_id: t.id, tournament_name: t.name, typ: t.typ, points, bonus: 0, round: roundKey });
+      }
+      const totalPoints = results.reduce((s, r) => s + r.points, 0);
+      return { player_id: player.id, player_name: player.name, autodarts_username: player.autodarts_username, total_points: totalPoints, bonus_total: 0, tournaments_played: results.length, best_result: "-", results };
+    }).filter((p) => p.tournaments_played > 0);
+
+    oomData.sort((a, b) => b.total_points - a.total_points);
+    res.json(oomData.map((p, i) => ({ rank: i + 1, ...p })));
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+function devPtsToBestRound(pts: number): string {
+  if (pts >= 750) return "Sieger";
+  if (pts >= 500) return "Sieger";
+  if (pts >= 450) return "Finale";
+  if (pts >= 300) return "Finale";
+  if (pts >= 188) return "Viertelfinale";
+  if (pts >= 200) return "Halbfinale";
+  if (pts >= 125) return "Viertelfinale";
+  if (pts >= 113) return "Achtelfinale";
+  if (pts >= 75) return "Achtelfinale";
+  if (pts >= 60) return "Letzte 32";
+  if (pts >= 40) return "Letzte 32";
+  return "Teilnahme";
+}
+
+// POST /tour/dev-oom/seed - seed Development Tour OOM standings
+router.post("/tour/dev-oom/seed", async (_req, res) => {
+  try {
+    const existing = await db.select().from(tourDevOomStandingsTable).limit(1);
+    if (existing.length > 0) {
+      return res.json({ ok: true, message: "Dev OOM bereits befüllt", count: existing.length });
+    }
+    if (DEV_OOM_SEED_DATA.length === 0) {
+      return res.json({ ok: false, message: "Keine Seed-Daten vorhanden. Bitte DEV_OOM_SEED_DATA in tour.ts befüllen." });
+    }
+    await db.insert(tourDevOomStandingsTable).values(DEV_OOM_SEED_DATA);
+    res.json({ ok: true, inserted: DEV_OOM_SEED_DATA.length });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/dev-oom/update - replace all Dev OOM standings (admin)
+router.post("/tour/dev-oom/update", async (req, res) => {
+  try {
+    const { standings } = req.body;
+    if (!Array.isArray(standings) || standings.length === 0) {
+      return res.status(400).json({ error: "standings array erforderlich" });
+    }
+    await db.delete(tourDevOomStandingsTable);
+    const rows = standings.map((s: any, i: number) => ({
+      season: 1,
+      rank: i + 1,
+      autodarts_username: s.autodarts_username,
+      total_points: s.total_points,
+      bonus_points: s.bonus_points ?? 0,
+      tournaments_played: s.tournaments_played ?? 1,
+      tournament_breakdown: JSON.stringify(s.tournament_breakdown ?? {}),
+      last_updated: s.last_updated ?? new Date().toLocaleDateString("de-DE"),
+    }));
+    await db.insert(tourDevOomStandingsTable).values(rows);
+    res.json({ ok: true, inserted: rows.length });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/tournaments/seed-from-schedule - create tournament entries for all upcoming schedule events
+router.post("/tour/tournaments/seed-from-schedule", async (req, res) => {
+  try {
+    const { admin_pin } = req.body;
+    if (!admin_pin) {
+      return res.status(400).json({ error: "admin_pin erforderlich" });
+    }
+
+    const upcoming = SEASON1_SCHEDULE.filter((s) => s.status === "upcoming");
+    const existing = await db.select().from(tourTournamentsTable);
+    const existingScheduleIds = new Set(existing.map((t) => t.schedule_id).filter(Boolean));
+
+    const created: string[] = [];
+    const skipped: string[] = [];
+
+    for (const sched of upcoming) {
+      if (existingScheduleIds.has(sched.external_id)) {
+        skipped.push(sched.event_name);
+        continue;
+      }
+
+      const legsFormat =
+        sched.kategorie === "dev_cup" ? 3 :
+        sched.kategorie === "m1" ? 11 :
+        sched.kategorie === "m2" ? 11 : 5;
+
+      const maxPlayers =
+        sched.qualification ? 32 : 64;
+
+      await db.insert(tourTournamentsTable).values({
+        name: sched.event_name,
+        typ: sched.kategorie,
+        tour_type: sched.tour_type,
+        phase: sched.phase,
+        datum: sched.datum,
+        legs_format: legsFormat,
+        max_players: maxPlayers,
+        admin_pin: hashPin(String(admin_pin)),
+        schedule_id: sched.external_id,
+        is_test: false,
+      });
+      created.push(sched.event_name);
+    }
+
+    res.json({ ok: true, created, skipped });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // ─── Player Routes ────────────────────────────────────────────────────────────
 
 // GET /tour/players
@@ -753,11 +955,23 @@ router.get("/tour/players/:id", async (req, res) => {
 // GET /tour/tournaments
 router.get("/tour/tournaments", async (_req, res) => {
   try {
-    const tournaments = await db.select().from(tourTournamentsTable).orderBy(desc(tourTournamentsTable.created_at));
+    const tournaments = await db.select().from(tourTournamentsTable);
     const enriched = await Promise.all(tournaments.map(async (t) => {
       const entries = await db.select().from(tourEntriesTable).where(eq(tourEntriesTable.tournament_id, t.id));
       return { ...t, player_count: entries.length };
     }));
+    // Sort: upcoming/open first (by date ascending), then closed (by date descending), then test last
+    enriched.sort((a, b) => {
+      const aTest = a.is_test ? 1 : 0;
+      const bTest = b.is_test ? 1 : 0;
+      if (aTest !== bTest) return aTest - bTest;
+      const aOpen = (a.status === "offen" || a.status === "laufend") ? 0 : 1;
+      const bOpen = (b.status === "offen" || b.status === "laufend") ? 0 : 1;
+      if (aOpen !== bOpen) return aOpen - bOpen;
+      const aDate = parseDatumToISO(a.datum);
+      const bDate = parseDatumToISO(b.datum);
+      return aOpen === 0 ? aDate.localeCompare(bDate) : bDate.localeCompare(aDate);
+    });
     res.json(enriched);
   } catch (e) {
     res.status(500).json({ error: String(e) });

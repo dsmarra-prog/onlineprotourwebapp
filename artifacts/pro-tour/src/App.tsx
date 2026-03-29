@@ -2,11 +2,12 @@ import { Switch, Route, Router as WouterRouter, Link, useLocation } from "wouter
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Trophy, Users, BarChart3, Settings, Home, Target, CalendarDays, LogOut } from "lucide-react";
+import { Trophy, Users, BarChart3, Settings, Home, Target, CalendarDays, LogOut, Swords } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import TourniereListe from "@/pages/turniere";
 import TurnierDetail from "@/pages/turnier-detail";
 import OomPage from "@/pages/oom";
+import DevOomPage from "@/pages/dev-oom";
 import SpielerPage from "@/pages/spieler";
 import SpielerProfil from "@/pages/spieler-profil";
 import EinstellungenPage from "@/pages/einstellungen";
@@ -25,7 +26,8 @@ const NAV_ITEMS = [
   { href: "/spielplan", label: "Spielplan", icon: CalendarDays },
   { href: "/turniere", label: "Turniere", icon: Trophy },
   { href: "/spieler", label: "Spieler", icon: Users },
-  { href: "/oom", label: "OOM", icon: BarChart3 },
+  { href: "/oom", label: "Pro OOM", icon: BarChart3 },
+  { href: "/dev-oom", label: "Dev OOM", icon: Swords },
   { href: "/einstellungen", label: "Mein Account", icon: Settings },
 ];
 
@@ -117,6 +119,7 @@ function Router() {
           <Route path="/turniere" component={TourniereListe} />
           <Route path="/turniere/:id" component={TurnierDetail} />
           <Route path="/oom" component={OomPage} />
+          <Route path="/dev-oom" component={DevOomPage} />
           <Route path="/spieler" component={SpielerPage} />
           <Route path="/spieler/:id" component={SpielerProfil} />
           <Route path="/einstellungen" component={EinstellungenPage} />

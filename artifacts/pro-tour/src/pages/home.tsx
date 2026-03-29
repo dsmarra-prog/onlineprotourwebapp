@@ -14,8 +14,8 @@ export default function HomeDashboard() {
     queryFn: () => apiFetch("/tour/oom"),
   });
 
-  const laufend = tournaments?.filter((t) => t.status === "laufend") ?? [];
-  const offen = tournaments?.filter((t) => t.status === "offen") ?? [];
+  const laufend = tournaments?.filter((t) => t.status === "laufend" && !t.is_test) ?? [];
+  const offen = tournaments?.filter((t) => t.status === "offen" && !t.is_test) ?? [];
   const top5 = oom?.slice(0, 5) ?? [];
 
   return (

@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import { Calendar, CheckCircle2, Clock, Trophy, Zap, Star, ChevronRight } from "lucide-react";
+import { Calendar, CheckCircle2, Clock, Trophy, Zap, Star, ChevronRight, PlusCircle, Lock } from "lucide-react";
+import { useState } from "react";
 
 type ScheduleEntry = {
   id: number;
@@ -81,9 +82,21 @@ function parseDatum(datum: string): Date {
 }
 
 export default function SpielplanPage() {
+  const qc = useQueryClient();
   const { data: schedule, isLoading } = useQuery<ScheduleEntry[]>({
     queryKey: ["schedule"],
     queryFn: () => apiFetch("/tour/schedule"),
+  });
+
+  const [adminPin, setAdminPin] = useState("");
+  const [showSeedPanel, setShowSeedPanel] = useState(false);
+
+  const seedTournamentsMutation = useMutation({
+    mutationFn: (pin: string) =>
+      apiFetch("/tour/tournaments/seed-from-schedule", { method: "POST", body: JSON.stringify({ admin_pin: pin }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tournaments"] });
+    },
   });
 
   const today = new Date();
@@ -120,14 +133,66 @@ export default function SpielplanPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Calendar className="w-6 h-6 text-primary" /> Spielplan – Season 1
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1">
-          Tourkalender 2026 · Pro Tour & Development Tour
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Calendar className="w-6 h-6 text-primary" /> Spielplan – Season 1
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Tourkalender 2026 · Pro Tour & Development Tour
+          </p>
+        </div>
+        <button
+          onClick={() => setShowSeedPanel((v) => !v)}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary border border-border hover:border-primary/30 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
+        >
+          <PlusCircle className="w-3.5 h-3.5" />
+          Turniere anlegen
+        </button>
       </div>
+
+      {showSeedPanel && (
+        <div className="bg-card border border-border rounded-xl p-4">
+          <h2 className="font-semibold text-sm mb-3 flex items-center gap-2">
+            <Lock className="w-4 h-4 text-primary" /> Anstehende Turniere aus Kalender anlegen
+          </h2>
+          <p className="text-xs text-muted-foreground mb-4">
+            Legt alle noch nicht vorhandenen "upcoming" Turniere aus dem Spielplan in der Datenbank an, sodass Spieler sich registrieren können.
+          </p>
+          <div className="flex gap-2 items-end">
+            <div className="flex-1">
+              <label className="text-xs text-muted-foreground block mb-1">Admin-PIN</label>
+              <input
+                type="password"
+                value={adminPin}
+                onChange={(e) => setAdminPin(e.target.value)}
+                placeholder="Admin-PIN eingeben"
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary"
+              />
+            </div>
+            <button
+              onClick={() => { if (adminPin) seedTournamentsMutation.mutate(adminPin); }}
+              disabled={!adminPin || seedTournamentsMutation.isPending}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+            >
+              Anlegen
+            </button>
+          </div>
+          {seedTournamentsMutation.data && (
+            <div className="mt-3 text-xs">
+              {(seedTournamentsMutation.data as any).created?.length > 0 && (
+                <p className="text-green-400">✓ Angelegt: {(seedTournamentsMutation.data as any).created.join(", ")}</p>
+              )}
+              {(seedTournamentsMutation.data as any).skipped?.length > 0 && (
+                <p className="text-muted-foreground">↷ Bereits vorhanden: {(seedTournamentsMutation.data as any).skipped.join(", ")}</p>
+              )}
+            </div>
+          )}
+          {seedTournamentsMutation.isError && (
+            <p className="mt-2 text-xs text-red-400">Fehler beim Anlegen der Turniere.</p>
+          )}
+        </div>
+      )}
 
       {nextEvent && (
         <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center gap-4">
