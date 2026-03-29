@@ -467,24 +467,31 @@ function getBotAvg(name: string, botRangliste: any[], botForm: Record<string, nu
   const sorted = [...botRangliste].sort((a, b) => b.geld - a.geld);
   const formBonus = botForm[name] ?? 0;
   const rank = sorted.findIndex((b) => b.name === name);
-  let base: number;
+  const total = sorted.length || 127;
+
+  // All bot averages are anchored to the player's own average.
+  // Top bots are ~20 pts above; bottom bots are ~20 pts below.
+  // This ensures the player always has a realistic path to the top
+  // regardless of their absolute average level.
+  let offset: number;
   if (rank < 0) {
-    base = rand(65, 75);
+    offset = rand(-5, 5);                       // unknown bot ≈ player level
   } else if (rank < 8) {
-    base = rand(98, 108);
+    offset = rand(18, 25);                      // top 8: clearly stronger
   } else if (rank < 16) {
-    base = rand(94, 103);
+    offset = rand(13, 20);                      // top 16
   } else if (rank < 32) {
-    base = rand(89, 97);
+    offset = rand(7, 15);                       // top 32
   } else if (rank < 64) {
-    base = rand(84, 92);
+    offset = rand(1, 9);                        // top 64: slightly above player
+  } else if (rank < Math.floor(total * 0.75)) {
+    offset = rand(-7, 3);                       // mid-field: around player's level
   } else {
-    base = rand(76, 86);
+    offset = rand(-20, -7);                     // bottom quarter: weaker
   }
-  // Scale PDC pro avg toward the player's level so climbing the rankings is achievable.
-  // At playerAvg ≥ 90 pros are at full strength; at playerAvg 30 they play at ~65% of their base.
-  const scaleFactor = spielerAvg >= 90 ? 1.0 : Math.max(0.65, 0.65 + (spielerAvg - 30) / (90 - 30) * 0.35);
-  return Math.round((base * scaleFactor + formBonus) * 10) / 10;
+
+  const base = spielerAvg + offset;
+  return Math.round((Math.max(15, Math.min(125, base)) + formBonus) * 10) / 10;
 }
 
 // Helper: get avg from level for named bots (not using name pattern)
