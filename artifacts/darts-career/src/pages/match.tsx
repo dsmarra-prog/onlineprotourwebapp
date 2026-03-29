@@ -77,6 +77,7 @@ function PlayerAvatar({ name, size = 48 }: { name: string; size?: number }) {
           width={size}
           height={size}
           className="rounded-full object-cover w-full h-full"
+          style={{ objectPosition: "center 15%" }}
           onError={(e) => {
             const el = e.target as HTMLImageElement;
             if (el.src !== fallbackUrl) el.src = fallbackUrl;
@@ -410,6 +411,108 @@ function DrawAnimation({ players, onDone, onSoundTrigger }: { players: string[];
   );
 }
 
+// Walk-On screen — forces user click so browser allows audio playback
+function WalkOnScreen({
+  career,
+  onStart,
+}: {
+  career: any;
+  onStart: () => void;
+}) {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setReady(true), 600);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center overflow-hidden"
+    >
+      {/* Atmospheric scanlines */}
+      <div className="absolute inset-0 pointer-events-none"
+        style={{
+          background: "repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,210,255,0.015) 2px, rgba(0,210,255,0.015) 4px)",
+        }}
+      />
+      {/* Glow rings */}
+      <div className="absolute w-[600px] h-[600px] rounded-full border border-primary/10 animate-ping" style={{ animationDuration: "3s" }} />
+      <div className="absolute w-[400px] h-[400px] rounded-full border border-primary/15 animate-ping" style={{ animationDuration: "2.2s", animationDelay: "0.5s" }} />
+
+      <div className="relative z-10 flex flex-col items-center gap-8 text-center px-8 max-w-lg w-full">
+        {/* Tournament label */}
+        <motion.p
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+          className="text-xs uppercase tracking-[0.3em] text-primary/70 font-semibold"
+        >
+          {career.turnier_name} · {career.runden_info?.name}
+        </motion.p>
+
+        {/* VS block */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.85 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ delay: 0.35, type: "spring", stiffness: 200 }}
+          className="flex items-center gap-6 w-full justify-center"
+        >
+          {/* Player side */}
+          <div className="flex flex-col items-center gap-2">
+            <div className="w-16 h-16 rounded-full bg-primary/20 border-2 border-primary flex items-center justify-center shadow-[0_0_20px_rgba(0,210,255,0.4)]">
+              <span className="text-2xl font-bold text-primary">{career.spieler_name?.charAt(0)}</span>
+            </div>
+            <span className="text-sm font-bold text-primary truncate max-w-[120px]">{career.spieler_name}</span>
+          </div>
+
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-3xl font-display font-black text-white/60 tracking-widest">VS</span>
+          </div>
+
+          {/* Opponent side */}
+          <div className="flex flex-col items-center gap-2">
+            <PlayerAvatar name={career.gegner_name} size={64} />
+            <span className="text-sm font-bold text-white truncate max-w-[120px]">{career.gegner_name}</span>
+          </div>
+        </motion.div>
+
+        {/* Walk-on text */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.6 }}
+          className="space-y-1"
+        >
+          <p className="text-lg font-display font-bold uppercase tracking-[0.2em] text-white">
+            Betritt die Bühne
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {career.runden_info?.first_to} {career.runden_info?.format === "sets" ? "Sets" : "Legs"} · First to
+          </p>
+        </motion.div>
+
+        {/* Start button */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: ready ? 1 : 0, y: ready ? 0 : 20 }}
+          transition={{ type: "spring", stiffness: 250, damping: 22 }}
+        >
+          <button
+            onClick={onStart}
+            className="relative px-10 py-4 rounded-2xl font-display font-black text-xl uppercase tracking-widest text-black bg-primary shadow-[0_0_40px_rgba(0,210,255,0.6)] hover:shadow-[0_0_60px_rgba(0,210,255,0.9)] hover:scale-105 active:scale-95 transition-all duration-150"
+          >
+            🎯 Spiel beginnen!
+          </button>
+        </motion.div>
+      </div>
+    </motion.div>
+  );
+}
+
 // Opponent profile card
 function GegnerProfil({ career }: { career: any }) {
   const {
@@ -518,6 +621,7 @@ export default function MatchView() {
   const { data: career, isLoading, refetch: refetchCareer } = useGetCareer();
   const { submitResult, isSubmitting, pullAutodarts, isPulling } = useCareerActions();
   const [, setLocation] = useLocation();
+  const [showWalkOn, setShowWalkOn] = useState(false);
   const [showDraw, setShowDraw] = useState(false);
   const [drawShown, setDrawShown] = useState(false);
   const { playMatchStart, playDrawAnimation } = useDartsSounds();
@@ -612,16 +716,23 @@ export default function MatchView() {
     defaultValues: { legs_won: 0, legs_lost: 0, my_avg: 0, my_180s: 0, my_hf: 0, my_co_pct: 0 },
   });
 
-  // Show draw animation only on first round of a new tournament
+  // Walk-on & draw animation — only for the very first match of a new tournament
   useEffect(() => {
-    if (!isLoading && career && career.turnier_laeuft && !drawShown && career.aktuelle_runde === 0) {
-      setShowDraw(true);
-      setDrawShown(true);
-      playMatchStart();
-    } else if (!isLoading && career && career.turnier_laeuft && !drawShown && career.aktuelle_runde > 0) {
-      setDrawShown(true);
+    if (!isLoading && career && career.turnier_laeuft && !drawShown) {
+      if (career.aktuelle_runde === 0) {
+        setShowWalkOn(true);
+        setDrawShown(true);
+      } else {
+        setDrawShown(true);
+      }
     }
   }, [career, isLoading]);
+
+  const handleWalkOnStart = useCallback(() => {
+    setShowWalkOn(false);
+    playMatchStart(); // safe here — inside a user click handler
+    setShowDraw(true);
+  }, [playMatchStart]);
 
   useEffect(() => {
     if (!isLoading && career && !career.turnier_laeuft) {
@@ -651,7 +762,14 @@ export default function MatchView() {
 
   return (
     <Layout>
-      {/* Draw animation */}
+      {/* Walk-On screen (requires user click — enables audio) */}
+      <AnimatePresence>
+        {showWalkOn && career && (
+          <WalkOnScreen career={career} onStart={handleWalkOnStart} />
+        )}
+      </AnimatePresence>
+
+      {/* Draw animation (plays after walk-on click) */}
       <AnimatePresence>
         {showDraw && (
           <DrawAnimation
