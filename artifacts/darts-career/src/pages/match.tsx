@@ -902,9 +902,11 @@ export default function MatchView() {
                   <p className="text-sm text-muted-foreground">
                     Erstelle eine private Lobby mit den richtigen Turniereinstellungen — Autodarts öffnet sie direkt.
                   </p>
-                  <div className="flex gap-2 text-xs text-muted-foreground/70">
+                  <div className="flex gap-2 text-xs text-muted-foreground/70 flex-wrap">
                     <span className="bg-secondary px-2 py-0.5 rounded">501</span>
-                    <span className="bg-secondary px-2 py-0.5 rounded">Best of {career.hat_tourcard ? "5" : "3"}</span>
+                    <span className="bg-secondary px-2 py-0.5 rounded">
+                      First to {career.runden_info?.first_to ?? (career.hat_tourcard ? 6 : 5)} {career.runden_info?.format === "sets" ? "Sets" : "Legs"}
+                    </span>
                     {(career as any).turnier_modus === "double_in_out" && (
                       <span className="bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded">Double-In</span>
                     )}

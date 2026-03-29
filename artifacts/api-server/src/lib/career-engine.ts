@@ -382,6 +382,8 @@ function buildDefaultBotRangliste() {
     { name: "Danny Baggish", geld: 1100 },
     { name: "Dean Rock", geld: 1050 },
     { name: "Mark McGeeney", geld: 1000 },
+    { name: "Gary Stone", geld: 950 },
+    { name: "Ian White", geld: 900 },
   ];
 }
 
@@ -1509,6 +1511,11 @@ export async function processResult(
   for (let i = 0; i < turnier_baum.length; i += 2) {
     const bot1 = turnier_baum[i];
     const bot2 = turnier_baum[i + 1];
+    // Safety guard: odd-sized bracket → bye round, player advances automatically
+    if (!bot2) {
+      neuerBaum.push(bot1);
+      continue;
+    }
     if (bot1.name === career.spieler_name || bot2.name === career.spieler_name) {
       const playerIsP1 = bot1.name === career.spieler_name;
       const winner = win ? (playerIsP1 ? bot1 : bot2) : (playerIsP1 ? bot2 : bot1);
@@ -2086,7 +2093,12 @@ export async function createAutodartsLobby() {
   const currentT = KALENDER[career.aktuelles_turnier_index ?? 0];
 
   const isDoubleIn = (currentT as any)?.modus === "double_in_out";
-  const legs = career.hat_tourcard ? 5 : 3;
+  const rundenInfo = getRundenInfo(
+    career.turnier_baum as any[] ?? [],
+    career.hat_tourcard,
+    career.aktuelles_turnier_index ?? 0
+  );
+  const legs = rundenInfo.first_to;
 
   const lobbyBody = {
     variant: "X01",
