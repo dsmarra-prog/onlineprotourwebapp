@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import {
   ArrowLeft, Play, UserPlus, UserMinus, Check, Loader2, Lock, Target,
-  Zap, Radio, CheckCircle2, Search,
+  Zap, Radio, CheckCircle2, Search, MonitorPlay, ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -372,6 +372,22 @@ function MatchCard({
   liveStatus?: SyncMatchStatus;
   onResult: () => void;
 }) {
+  const [lobbyUrl, setLobbyUrl] = useState<string | null>(null);
+  const [creatingLobby, setCreatingLobby] = useState(false);
+
+  const createLobby = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCreatingLobby(true);
+    try {
+      const data = await apiFetch(`/tour/matches/${match.id}/create-lobby`, { method: "POST" });
+      if (data.joinUrl) setLobbyUrl(data.joinUrl);
+    } catch {
+      // ignore
+    } finally {
+      setCreatingLobby(false);
+    }
+  };
+
   if (match.is_bye) {
     return (
       <div className="p-3 rounded-lg bg-accent/20 border border-border/50 opacity-60">
@@ -448,11 +464,37 @@ function MatchCard({
         <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground/60">
           <CheckCircle2 className="w-3 h-3 text-primary" />
           <span>Abgeschlossen</span>
-          {match.autodarts_match_id && <span className="ml-auto text-[10px]">via Autodarts</span>}
+          {(match as any).autodarts_match_id && <span className="ml-auto text-[10px]">via Autodarts</span>}
         </div>
       )}
-      {!isComplete && !isPending && !isLive && (
-        <div className="mt-2 text-xs text-primary/70 text-center">Ergebnis manuell eintragen →</div>
+      {/* Lobby button / join URL — only for scheduled matches with both players */}
+      {!isComplete && !isPending && (
+        <div className="mt-2 pt-2 border-t border-border/30" onClick={(e) => e.stopPropagation()}>
+          {lobbyUrl ? (
+            <a
+              href={lobbyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-1.5 w-full text-xs font-semibold rounded-md py-1.5 px-2 bg-primary text-black hover:bg-primary/90 transition-colors"
+            >
+              <ExternalLink className="w-3 h-3" />
+              Lobby beitreten
+            </a>
+          ) : (
+            <button
+              onClick={createLobby}
+              disabled={creatingLobby}
+              className="flex items-center justify-center gap-1.5 w-full text-xs text-primary/80 hover:text-primary rounded-md py-1.5 px-2 border border-primary/20 hover:border-primary/50 transition-colors disabled:opacity-50"
+            >
+              {creatingLobby ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <MonitorPlay className="w-3 h-3" />
+              )}
+              {creatingLobby ? "Erstelle Lobby…" : "Autodarts Lobby erstellen"}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

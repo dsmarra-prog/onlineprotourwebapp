@@ -1145,6 +1145,67 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
   }
 });
 
+// POST /tour/matches/:matchId/create-lobby — create a public Autodarts lobby for a tournament match
+router.post("/tour/matches/:matchId/create-lobby", async (req, res) => {
+  try {
+    const matchId = parseInt(req.params.matchId);
+    const match = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.id, matchId)).limit(1);
+    if (!match[0]) return res.status(404).json({ error: "Match nicht gefunden" });
+    if (match[0].status !== "ausstehend") return res.status(400).json({ error: "Match bereits abgeschlossen" });
+
+    const tournament = await db.select().from(tourTournamentsTable)
+      .where(eq(tourTournamentsTable.id, match[0].tournament_id)).limit(1);
+    if (!tournament[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
+
+    const winLegs = Math.ceil(tournament[0].legs_format / 2);
+
+    const accessToken = await getAutodartAccessToken();
+    if (!accessToken) return res.status(503).json({ error: "Kein Autodarts-Token konfiguriert" });
+
+    const lobbyBody = {
+      variant: "X01",
+      settings: {
+        inMode: "Straight",
+        outMode: "Double",
+        bullMode: "25/50",
+        maxRounds: 50,
+        baseScore: 501,
+      },
+      bullOffMode: "Normal",
+      legs: winLegs,
+      hasReferee: false,
+      isPrivate: false,   // Public so auto-sync can detect the result
+    };
+
+    const lobbyRes = await fetch("https://api.autodarts.io/gs/v0/lobbies", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(lobbyBody),
+    });
+
+    if (!lobbyRes.ok) {
+      const err = await lobbyRes.text();
+      return res.status(502).json({ error: `Autodarts-Fehler: ${err}` });
+    }
+
+    const lobby = await lobbyRes.json();
+    const joinUrl = `https://play.autodarts.io/lobbies/${lobby.id}`;
+
+    // Store lobby ID so we can correlate the finished match later
+    await db.update(tourMatchesTable)
+      .set({ autodarts_match_id: lobby.id })
+      .where(eq(tourMatchesTable.id, matchId));
+
+    res.json({ lobbyId: lobby.id, joinUrl });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // POST /tour/matches/:matchId/autodarts — manual single-match check
 router.post("/tour/matches/:matchId/autodarts", async (req, res) => {
   try {
