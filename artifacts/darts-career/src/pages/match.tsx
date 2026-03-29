@@ -517,7 +517,7 @@ function WalkOnScreen({
 function GegnerProfil({ career }: { career: any }) {
   const {
     gegner_name, gegner_avg, gegner_form, h2h_siege, h2h_niederlagen,
-    gegner_platz, gegner_oom_geld, gegner_bot_level, ist_angstgegner,
+    gegner_platz, gegner_oom_geld, gegner_bot_level, ist_angstgegner, ist_lieblingsgegner,
   } = career;
 
   const formEmoji = gegner_form?.form?.split(" ")[0] ?? "➡️";
@@ -546,6 +546,15 @@ function GegnerProfil({ career }: { career: any }) {
                 className="text-xs font-bold px-2 py-0.5 rounded-full border border-red-500/60 bg-red-500/15 text-red-300"
               >
                 ⚠️ Angstgegner
+              </motion.span>
+            )}
+            {ist_lieblingsgegner && (
+              <motion.span
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="text-xs font-bold px-2 py-0.5 rounded-full border border-yellow-400/60 bg-yellow-400/15 text-yellow-300"
+              >
+                ⭐ Lieblingsgegner
               </motion.span>
             )}
           </div>
@@ -936,6 +945,34 @@ export default function MatchView() {
                   <p className="text-sm text-white/85 leading-relaxed">
                     {(career as any).gegner_social_post.inhalt}
                   </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Gegner-Reaktion vom letzten Match */}
+          {(career as any).letzte_gegner_reaktion && career.aktuelle_runde > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.05 }}
+              className={`rounded-2xl border p-4 ${
+                (career as any).letzte_gegner_reaktion.ton === "respekt" ? "border-primary/30 bg-primary/5" :
+                (career as any).letzte_gegner_reaktion.ton === "stolz" ? "border-red-500/30 bg-red-500/5" :
+                (career as any).letzte_gegner_reaktion.ton === "warnung" ? "border-yellow-400/30 bg-yellow-400/5" :
+                (career as any).letzte_gegner_reaktion.ton === "enttaeuscht" ? "border-purple-400/30 bg-purple-400/5" :
+                (career as any).letzte_gegner_reaktion.ton === "trotz" ? "border-orange-400/30 bg-orange-400/5" :
+                "border-border/50 bg-card"
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-2 text-[10px] text-muted-foreground/60 font-mono uppercase tracking-widest">
+                💬 Reaktion nach letztem Match
+              </div>
+              <div className="flex items-start gap-3">
+                <PlayerAvatar name={(career as any).letzte_gegner_reaktion.name} size={36} />
+                <div>
+                  <p className="text-sm font-bold text-white leading-none mb-1">{(career as any).letzte_gegner_reaktion.name}</p>
+                  <p className="text-sm text-muted-foreground italic leading-relaxed">„{(career as any).letzte_gegner_reaktion.zitat}"</p>
                 </div>
               </div>
             </motion.div>

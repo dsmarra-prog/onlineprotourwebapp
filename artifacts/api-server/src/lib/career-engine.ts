@@ -1419,6 +1419,86 @@ export async function setPlayerName(name: string, spieler_avg: number = 60) {
   };
 }
 
+// ── Gegner-Reaktion Generator ────────────────────────────────────────────────
+function generateGegnerReaktion(
+  gegner_name: string,
+  spieler_name: string,
+  win: boolean,
+  avg: number,
+  h2h: { siege: number; niederlagen: number },
+): { name: string; zitat: string; ton: "respekt" | "trotz" | "enttaeuscht" | "warnung" | "neutral" | "stolz" } {
+  const erstbegegnung = h2h.siege + h2h.niederlagen <= 1;
+  const dominiertVomSpieler = h2h.siege >= 3 && h2h.siege > h2h.niederlagen * 2;
+  const angstgegnerFuerSpieler = h2h.niederlagen >= 3 && h2h.niederlagen > h2h.siege;
+
+  const pick = <T>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)];
+
+  if (win) {
+    // Player beat the opponent
+    if (erstbegegnung) {
+      return { name: gegner_name, ton: "respekt", zitat: pick([
+        `${spieler_name} hat mich überrascht. Gutes Spiel, aber das nächste Mal sieht es anders aus.`,
+        `Respekt an ${spieler_name}. Heute war der Tag von ihm — beim nächsten Mal bin ich bereit.`,
+        `Ich hab ${spieler_name} unterschätzt. Fehler gemacht, den ich nicht wieder machen werde.`,
+      ]) };
+    }
+    if (angstgegnerFuerSpieler) {
+      return { name: gegner_name, ton: "trotz", zitat: pick([
+        `Ich hab ihn schon öfter besiegt und ich werd ihn wieder besiegen. Das hier war ein Ausrutscher.`,
+        `${spieler_name} hat heute gewonnen. Aber ich kenne sein Spiel in- und auswendig.`,
+        `Kein Grund zur Panik. Jeder verliert mal. Ich komme stärker zurück.`,
+      ]) };
+    }
+    if (avg >= 90) {
+      return { name: gegner_name, ton: "respekt", zitat: pick([
+        `${spieler_name} hat heute absolut sensationell gespielt. Gegen so einen Average kann ich nichts machen.`,
+        `Mit einem Average von über 90 — was soll ich da sagen? Heute war ${spieler_name} der bessere Spieler.`,
+        `Glückwunsch. Das war Weltklasse-Darts von ${spieler_name}.`,
+      ]) };
+    }
+    if (dominiertVomSpieler) {
+      return { name: gegner_name, ton: "enttaeuscht", zitat: pick([
+        `Ich muss ehrlich sein — ${spieler_name} ist im Moment einfach besser als ich. Das tut weh.`,
+        `Das fängt an, mich zu nerven. Ich muss ernsthaft an meinem Spiel arbeiten.`,
+        `${spieler_name} hat heute wieder gewonnen. Ich suche nach Antworten.`,
+      ]) };
+    }
+    return { name: gegner_name, ton: "neutral", zitat: pick([
+      `Gut gespielt, ${spieler_name}. Heute war dein Tag.`,
+      `${spieler_name} hat verdient gewonnen. Ich war nicht auf meinem besten Niveau.`,
+      `Eine Niederlage, die schmerzt. Aber ich werde zurückschlagen.`,
+    ]) };
+  } else {
+    // Opponent beat the player
+    if (erstbegegnung) {
+      return { name: gegner_name, ton: "neutral", zitat: pick([
+        `${spieler_name} ist ein solider Spieler. Ich hab heute gewonnen, aber das war keine einfache Partie.`,
+        `Guter erster Auftritt von ${spieler_name}. Er wird in Zukunft noch gefährlicher werden.`,
+        `Ich hab heute gewonnen, aber ${spieler_name} hat mich mehr gefordert als erwartet.`,
+      ]) };
+    }
+    if (angstgegnerFuerSpieler) {
+      return { name: gegner_name, ton: "stolz", zitat: pick([
+        `${spieler_name} weiß genau, wie es sich anfühlt, gegen mich zu verlieren. Und das bleibt so.`,
+        `Ich kenne sein Spiel in- und auswendig. Das macht den Unterschied.`,
+        `Wieder gewonnen. Ich glaube, ${spieler_name} hat mir noch was gutzumachen.`,
+      ]) };
+    }
+    if (avg >= 85) {
+      return { name: gegner_name, ton: "warnung", zitat: pick([
+        `${spieler_name} spielt immer besser. Heute hab ich gewonnen — aber er wird bald ganz oben sein.`,
+        `Ich hab gewonnen, aber ${spieler_name} macht mir langsam Respekt. Der Typ ist gefährlich.`,
+        `Knapper als erwartet. ${spieler_name} wird irgendwann schwer zu schlagen sein.`,
+      ]) };
+    }
+    return { name: gegner_name, ton: "neutral", zitat: pick([
+      `Ein solider Sieg. ${spieler_name} muss noch mehr Konstanz entwickeln.`,
+      `Ich hab heute gewonnen. ${spieler_name} kämpft, aber es hat nicht gereicht.`,
+      `${spieler_name} wird aus dieser Niederlage lernen — ich auch aus dem Match.`,
+    ]) };
+  }
+}
+
 export async function startMatch() {
   const career = await getOrCreateCareer();
   const msgs: string[] = [];
@@ -1440,9 +1520,10 @@ export async function startMatch() {
   updates.letzte_schlagzeile = null;
   updates.turnier_laeuft = true;
 
-  // Reset round log when starting a fresh tournament
+  // Reset round log when starting a fresh tournament + snapshot current rank for delta display
   if (career.aktuelle_runde === 0) {
     updates.turnier_runden_log = [];
+    updates.letzter_rang = ermittlePlatz(career.bot_rangliste, career.spieler_name, career.order_of_merit_geld);
   }
 
   // ── Determine opponent based on tournament type ──────────────────────────
@@ -1657,6 +1738,16 @@ export async function processResult(
   if (win && h2hAfter.niederlagen >= 3 && h2hAfter.siege === 1) {
     msgs.push(`💪 Angstgegner besiegt! Erster Sieg gegen ${gegner_name}!`);
   }
+
+  // ── Gegner-Reaktion nach dem Match ───────────────────────────────────────
+  const reaktion = generateGegnerReaktion(
+    gegner_name,
+    career.spieler_name,
+    win,
+    my_avg,
+    h2hAfter,
+  );
+  updates.letzte_gegner_reaktion = reaktion;
 
   // ── Inline helper: shared post-match processing (sponsor, achievements, phase 2) ──
   function doPostMatch(
@@ -2298,6 +2389,38 @@ export function buildCareerState(career: any) {
       const h2hRec = (career.h2h as any)[career.gegner_name ?? ""] ?? { siege: 0, niederlagen: 0 };
       return h2hRec.niederlagen >= 3 && h2hRec.niederlagen > h2hRec.siege;
     })(),
+    ist_lieblingsgegner: (() => {
+      const h2hRec = (career.h2h as any)[career.gegner_name ?? ""] ?? { siege: 0, niederlagen: 0 };
+      return h2hRec.siege >= 3 && h2hRec.siege > h2hRec.niederlagen * 1.5;
+    })(),
+    // Rivalitätssystem: all rivals (angstgegner + lieblingsgegner) from full H2H
+    rivalitaeten: (() => {
+      const h2hAll = career.h2h as Record<string, { siege: number; niederlagen: number }>;
+      const angst: any[] = [];
+      const liebling: any[] = [];
+      for (const [name, rec] of Object.entries(h2hAll)) {
+        const diff = rec.niederlagen - rec.siege;
+        if (rec.niederlagen >= 3 && diff >= 2) {
+          angst.push({ name, siege: rec.siege, niederlagen: rec.niederlagen, bilanz: diff });
+        }
+        const winDiff = rec.siege - rec.niederlagen;
+        if (rec.siege >= 3 && winDiff >= 2) {
+          liebling.push({ name, siege: rec.siege, niederlagen: rec.niederlagen, bilanz: winDiff });
+        }
+      }
+      angst.sort((a, b) => b.bilanz - a.bilanz);
+      liebling.sort((a, b) => b.bilanz - a.bilanz);
+      return { angstgegner: angst.slice(0, 5), lieblingsgegner: liebling.slice(0, 5) };
+    })(),
+    // OoM Rang-Pfeile: delta between rank at tournament start and now
+    letzter_rang: career.letzter_rang ?? null,
+    rang_veraenderung: (() => {
+      if (!career.letzter_rang) return null;
+      const currentRang = ermittlePlatz(career.bot_rangliste, career.spieler_name, career.order_of_merit_geld);
+      return career.letzter_rang - currentRang; // positive = improved (moved up), negative = dropped
+    })(),
+    // Opponent quote after last match
+    letzte_gegner_reaktion: career.letzte_gegner_reaktion ?? null,
     // Extended stats
     stats_best_single_avg: career.stats_best_single_avg ?? 0,
     stats_most_180s_game: career.stats_most_180s_game ?? 0,

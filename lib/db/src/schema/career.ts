@@ -60,6 +60,10 @@ export const careerTable = pgTable("career", {
   beste_spiele: jsonb("beste_spiele").notNull().default([]),
   // Last 10 autodarts match IDs for history links
   letzte_match_ids: jsonb("letzte_match_ids").notNull().default([]),
+  // Rang-Tracking: rank at start of last tournament (for arrow display)
+  letzter_rang: integer("letzter_rang"),
+  // Opponent reaction quote after last match
+  letzte_gegner_reaktion: jsonb("letzte_gegner_reaktion"),
 });
 
 export const insertCareerSchema = createInsertSchema(careerTable);
