@@ -882,32 +882,42 @@ let cachedToken: { value: string; expiresAt: number } | null = null;
 // Store the latest refresh token in memory so each refresh extends the session.
 // Falls back to the env var on first start or after a server restart.
 let activeRefreshToken: string | null = null;
+// Mutex: only one refresh in flight at a time — prevents race-conditions where
+// two concurrent callers both try to refresh and Keycloak rejects the second one
+// (OAuth2 refresh tokens are single-use).
+let refreshPromise: Promise<string | null> | null = null;
 
 async function getAutodartAccessToken(): Promise<string | null> {
   if (cachedToken && Date.now() < cachedToken.expiresAt) return cachedToken.value;
+  // If another caller is already refreshing, wait for that same promise
+  if (refreshPromise) return refreshPromise;
   const refreshToken = activeRefreshToken ?? process.env.AUTODARTS_REFRESH_TOKEN;
   if (!refreshToken) return null;
-  try {
-    const tokenRes = await fetch(
-      "https://login.autodarts.io/realms/autodarts/protocol/openid-connect/token",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "refresh_token",
-          client_id: "autodarts-play",
-          refresh_token: refreshToken,
-        }),
-      }
-    );
-    if (!tokenRes.ok) return null;
-    const tokenData: any = await tokenRes.json();
-    // Always keep the newest refresh token — this keeps the Autodarts session alive
-    // as long as the server is running and regularly calls getAutodartAccessToken().
-    if (tokenData.refresh_token) activeRefreshToken = tokenData.refresh_token;
-    cachedToken = { value: tokenData.access_token, expiresAt: Date.now() + 50_000 };
-    return tokenData.access_token;
-  } catch { return null; }
+  refreshPromise = (async () => {
+    try {
+      const tokenRes = await fetch(
+        "https://login.autodarts.io/realms/autodarts/protocol/openid-connect/token",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            grant_type: "refresh_token",
+            client_id: "autodarts-play",
+            refresh_token: refreshToken,
+          }),
+        }
+      );
+      if (!tokenRes.ok) return null;
+      const tokenData: any = await tokenRes.json();
+      // Always keep the newest refresh token — this keeps the Autodarts session alive
+      // as long as the server is running and regularly calls getAutodartAccessToken().
+      if (tokenData.refresh_token) activeRefreshToken = tokenData.refresh_token;
+      cachedToken = { value: tokenData.access_token, expiresAt: Date.now() + 50_000 };
+      return tokenData.access_token;
+    } catch { return null; }
+    finally { refreshPromise = null; }
+  })();
+  return refreshPromise;
 }
 
 // Autodarts uses two relevant endpoints:
