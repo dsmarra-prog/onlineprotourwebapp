@@ -265,14 +265,16 @@ function getRoundSize(runde: string): number {
 }
 
 // ─── Bracket Generation ───────────────────────────────────────────────────────
-async function generateBracket(tournamentId: number, playerIds: number[], legsFormat: number) {
+async function generateBracket(tournamentId: number, playerIds: number[], legsFormat: number, randomDraw = false) {
   const entries = [...playerIds];
   const rounds = getRoundsForSize(entries.length);
 
   let bracketSize = 2;
   while (bracketSize < entries.length) bracketSize *= 2;
 
-  const seeded = [...entries, ...Array(bracketSize - entries.length).fill(null)];
+  // Shuffle entries for random draw
+  const shuffled = randomDraw ? [...entries].sort(() => Math.random() - 0.5) : entries;
+  const seeded = [...shuffled, ...Array(bracketSize - shuffled.length).fill(null)];
   const firstRound = rounds[0];
   const matchCount = bracketSize / 2;
   const matches = [];
@@ -295,24 +297,27 @@ async function generateBracket(tournamentId: number, playerIds: number[], legsFo
     });
   }
 
-  for (let ri = 1; ri < rounds.length; ri++) {
-    const prevRound = rounds[ri - 1];
-    const prevSize = getRoundSize(prevRound);
-    const thisRound = rounds[ri];
-    const thisCount = prevSize / 4;
-    for (let i = 0; i < Math.max(1, thisCount); i++) {
-      matches.push({
-        tournament_id: tournamentId,
-        runde: thisRound,
-        match_nr: i + 1,
-        player1_id: null,
-        player2_id: null,
-        status: "ausstehend",
-        is_bye: false,
-        winner_id: null,
-        score_p1: null,
-        score_p2: null,
-      });
+  // For random_draw tournaments, only create the first round
+  if (!randomDraw) {
+    for (let ri = 1; ri < rounds.length; ri++) {
+      const prevRound = rounds[ri - 1];
+      const prevSize = getRoundSize(prevRound);
+      const thisRound = rounds[ri];
+      const thisCount = prevSize / 4;
+      for (let i = 0; i < Math.max(1, thisCount); i++) {
+        matches.push({
+          tournament_id: tournamentId,
+          runde: thisRound,
+          match_nr: i + 1,
+          player1_id: null,
+          player2_id: null,
+          status: "ausstehend",
+          is_bye: false,
+          winner_id: null,
+          score_p1: null,
+          score_p2: null,
+        });
+      }
     }
   }
 
@@ -449,10 +454,12 @@ async function buildTournamentDetail(tournamentId: number) {
       typ: tournament[0].typ,
       tour_type: tournament[0].tour_type,
       datum: tournament[0].datum,
+      uhrzeit: tournament[0].uhrzeit,
       status: tournament[0].status,
       legs_format: tournament[0].legs_format,
       max_players: tournament[0].max_players,
       is_test: tournament[0].is_test,
+      random_draw: tournament[0].random_draw,
     },
     players: entries.map((e) => ({
       player_id: e.player_id,
@@ -2012,7 +2019,7 @@ router.get("/tour/tournaments", async (_req, res) => {
 // POST /tour/tournaments
 router.post("/tour/tournaments", async (req, res) => {
   try {
-    const { name, typ, tour_type, datum, uhrzeit, legs_format, max_players, admin_pin, admin_player_id, admin_player_pin, schedule_id, phase, is_test } = req.body;
+    const { name, typ, tour_type, datum, uhrzeit, legs_format, max_players, admin_pin, admin_player_id, admin_player_pin, schedule_id, phase, is_test, random_draw } = req.body;
 
     let resolvedAdminPinHash: string;
     if (admin_player_id && admin_player_pin) {
@@ -2044,6 +2051,7 @@ router.post("/tour/tournaments", async (req, res) => {
         admin_pin: resolvedAdminPinHash,
         schedule_id: schedule_id || null,
         is_test: is_test === true || is_test === "true" ? true : false,
+        random_draw: random_draw === true || random_draw === "true" ? true : false,
       })
       .returning();
 
@@ -2401,7 +2409,7 @@ router.post("/tour/tournaments/:id/start", async (req, res) => {
 
     await db.update(tourTournamentsTable).set({ status: "laufend" }).where(eq(tourTournamentsTable.id, tournamentId));
     const playerIds = entries.sort((a, b) => (a.seed ?? 0) - (b.seed ?? 0)).map((e) => e.player_id);
-    await generateBracket(tournamentId, playerIds, t[0].legs_format);
+    await generateBracket(tournamentId, playerIds, t[0].legs_format, t[0].random_draw);
 
     // Fire-and-forget Discord webhook announcement (lobby + threads handled inside generateBracket)
     (async () => {
@@ -2438,6 +2446,124 @@ router.post("/tour/tournaments/:id/start", async (req, res) => {
     })();
 
     res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/tournaments/:id/draw-next-round — Admin triggers random draw for next round
+router.post("/tour/tournaments/:id/draw-next-round", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const { admin_player_id, admin_player_pin } = req.body;
+
+    const [t] = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
+    if (!t) return res.status(404).json({ error: "Turnier nicht gefunden" });
+    if (!t.random_draw) return res.status(400).json({ error: "Turnier hat keine Zufalls-Auslosung" });
+    if (t.status !== "laufend") return res.status(400).json({ error: "Turnier ist nicht aktiv" });
+
+    const byAdmin = admin_player_id && admin_player_pin && await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!byAdmin) return res.status(403).json({ error: "Keine Admin-Berechtigung" });
+
+    // Find all existing rounds and determine the last one
+    const allMatches = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.tournament_id, tournamentId));
+    const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
+    const existingRounds = [...new Set(allMatches.map((m) => m.runde))].sort((a, b) => roundOrder.indexOf(a) - roundOrder.indexOf(b));
+    const lastRound = existingRounds[existingRounds.length - 1];
+
+    // Ensure all matches in the last round are complete (have a winner)
+    const lastRoundMatches = allMatches.filter((m) => m.runde === lastRound);
+    const allComplete = lastRoundMatches.every((m) => m.winner_id !== null);
+    if (!allComplete) return res.status(400).json({ error: "Noch nicht alle Matches der aktuellen Runde abgeschlossen" });
+
+    // Check if this was the final round
+    if (lastRound === "F") return res.status(400).json({ error: "Das Turnier ist bereits beendet" });
+
+    // Collect winners from the last round
+    const winners = lastRoundMatches.map((m) => m.winner_id!).filter(Boolean);
+
+    // Determine next round
+    const lastRoundIdx = roundOrder.indexOf(lastRound);
+    const nextRound = roundOrder[lastRoundIdx + 1];
+    if (!nextRound) return res.status(400).json({ error: "Keine weitere Runde verfuegbar" });
+
+    // Check if next round already exists
+    const nextRoundExists = allMatches.some((m) => m.runde === nextRound);
+    if (nextRoundExists) return res.status(400).json({ error: "Naechste Runde bereits ausgelost" });
+
+    // Shuffle winners randomly
+    const shuffled = [...winners].sort(() => Math.random() - 0.5);
+    let bracketSize = 2;
+    while (bracketSize < shuffled.length) bracketSize *= 2;
+    const seeded = [...shuffled, ...Array(bracketSize - shuffled.length).fill(null)];
+    const matchCount = seeded.length / 2;
+
+    const newMatches = [];
+    for (let i = 0; i < matchCount; i++) {
+      const p1 = seeded[i * 2] ?? null;
+      const p2 = seeded[i * 2 + 1] ?? null;
+      const isBye = p1 !== null && p2 === null;
+      newMatches.push({
+        tournament_id: tournamentId,
+        runde: nextRound,
+        match_nr: i + 1,
+        player1_id: p1,
+        player2_id: p2,
+        status: isBye ? "abgeschlossen" : "ausstehend",
+        is_bye: isBye,
+        winner_id: isBye ? p1 : null,
+        score_p1: isBye ? t.legs_format : null,
+        score_p2: isBye ? 0 : null,
+      });
+    }
+
+    await db.insert(tourMatchesTable).values(newMatches as any);
+
+    // Load player names for response and lobby/thread creation
+    const playerNameMap = new Map<number, string>();
+    for (const pid of winners) {
+      if (pid && !playerNameMap.has(pid)) {
+        const [p] = await db.select({ name: tourPlayersTable.name }).from(tourPlayersTable).where(eq(tourPlayersTable.id, pid)).limit(1);
+        if (p) playerNameMap.set(pid, p.name);
+      }
+    }
+
+    // Auto-create lobbies and Discord threads for new non-bye matches
+    const insertedMatches = await db.select().from(tourMatchesTable)
+      .where(and(
+        eq(tourMatchesTable.tournament_id, tournamentId),
+        eq(tourMatchesTable.runde, nextRound),
+        eq(tourMatchesTable.is_bye, false),
+        eq(tourMatchesTable.status, "ausstehend"),
+      ));
+
+    for (const m of insertedMatches) {
+      if (m.player1_id && m.player2_id) {
+        const lobbyUrl = await autoCreateLobby(m.id).catch(() => null);
+        const p1Name = playerNameMap.get(m.player1_id) ?? "Spieler 1";
+        const p2Name = playerNameMap.get(m.player2_id) ?? "Spieler 2";
+        createMatchThreadForMatch(t.name, tournamentId, m.runde, m.match_nr, p1Name, p2Name, lobbyUrl)
+          .then((threadId) => {
+            if (threadId) db.update(tourMatchesTable).set({ discord_thread_id: threadId }).where(eq(tourMatchesTable.id, m.id)).catch(() => {});
+          })
+          .catch(() => {});
+        notifyMatchReady(m.id, t.name, lobbyUrl).catch(() => {});
+        await new Promise((r) => setTimeout(r, 350));
+      }
+    }
+
+    // Return the pairings for the animation overlay
+    const pairings = newMatches.map((m, i) => ({
+      match_nr: m.match_nr,
+      runde: nextRound,
+      player1_id: m.player1_id,
+      player2_id: m.player2_id,
+      player1_name: m.player1_id ? (playerNameMap.get(m.player1_id) ?? null) : null,
+      player2_name: m.player2_id ? (playerNameMap.get(m.player2_id) ?? null) : null,
+      is_bye: m.is_bye,
+    }));
+
+    res.json({ ok: true, round: nextRound, pairings });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }

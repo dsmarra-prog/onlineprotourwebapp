@@ -31,6 +31,7 @@ export default function TourniereListe() {
     legs_format: "5",
     max_players: "32",
     is_test: false,
+    random_draw: false,
   });
 
   const TEMPLATES = [
@@ -50,6 +51,7 @@ export default function TourniereListe() {
           legs_format: parseInt(form.legs_format),
           max_players: parseInt(form.max_players),
           is_test: form.is_test,
+          random_draw: form.random_draw,
           admin_player_id: currentPlayer?.id,
           admin_player_pin: sessionPin,
         }),
@@ -57,7 +59,7 @@ export default function TourniereListe() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tournaments"] });
       setOpen(false);
-      setForm({ name: "", typ: "pc", tour_type: "pro", datum: new Date().toISOString().slice(0, 10), uhrzeit: "19:00", legs_format: "5", max_players: "32", is_test: false });
+      setForm({ name: "", typ: "pc", tour_type: "pro", datum: new Date().toISOString().slice(0, 10), uhrzeit: "19:00", legs_format: "5", max_players: "32", is_test: false, random_draw: false });
       toast({ title: "Turnier erstellt" });
     },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
@@ -167,6 +169,15 @@ export default function TourniereListe() {
                   className="w-4 h-4 rounded border-border accent-primary"
                 />
                 <span className="text-sm text-muted-foreground">Testturnier (keine OOM-Punkte)</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={form.random_draw}
+                  onChange={(e) => setForm((f) => ({ ...f, random_draw: e.target.checked }))}
+                  className="w-4 h-4 rounded border-border accent-primary"
+                />
+                <span className="text-sm text-muted-foreground">Zufaellige Auslosung nach jeder Runde</span>
               </label>
               <Button className="w-full" onClick={() => createMut.mutate()} disabled={createMut.isPending || !form.name}>
                 {createMut.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Erstellen...</> : "Turnier erstellen"}

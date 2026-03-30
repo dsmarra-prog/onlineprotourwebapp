@@ -53,6 +53,7 @@ export type TourTournament = {
   max_players: number;
   player_count: number;
   is_test: boolean;
+  random_draw: boolean;
   schedule_id: number | null;
 };
 
@@ -73,6 +74,16 @@ export type TourMatch = {
   status: string;
   is_bye: boolean;
   autodarts_match_id: string | null;
+};
+
+export type DrawPairing = {
+  match_nr: number;
+  runde: string;
+  player1_id: number | null;
+  player2_id: number | null;
+  player1_name: string | null;
+  player2_name: string | null;
+  is_bye: boolean;
 };
 
 export type TourTournamentDetail = {

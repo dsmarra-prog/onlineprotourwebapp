@@ -4,7 +4,7 @@ import { useParams, Link, useLocation } from "wouter";
 import {
   ArrowLeft, Play, UserPlus, UserMinus, Check, Loader2, Target,
   Zap, Radio, CheckCircle2, Search, MonitorPlay, ExternalLink, Activity,
-  TrendingUp, X, Trash2, Clock, ThumbsUp, ThumbsDown, Bell, MessageCircle, Send, AlertTriangle,
+  TrendingUp, X, Trash2, Clock, ThumbsUp, ThumbsDown, Bell, MessageCircle, Send, AlertTriangle, Shuffle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { apiFetch, TourTournamentDetail, TourPlayer, TourMatch, TYP_LABELS, RUNDE_LABELS } from "@/lib/api";
+import { apiFetch, TourTournamentDetail, TourPlayer, TourMatch, TYP_LABELS, RUNDE_LABELS, DrawPairing } from "@/lib/api";
 import { usePlayer } from "@/context/PlayerContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -174,6 +174,9 @@ export default function TurnierDetail() {
   const [selfRegPin, setSelfRegPin] = useState("");
   const [rsvpOpen, setRsvpOpen] = useState(false);
   const [rsvpPin, setRsvpPin] = useState("");
+  // Random draw
+  const [drawOverlayPairings, setDrawOverlayPairings] = useState<DrawPairing[] | null>(null);
+  const [drawOverlayRound, setDrawOverlayRound] = useState<string>("");
 
   const { data: detail, isLoading } = useQuery<TourTournamentDetail>({
     queryKey: ["tournament", id],
@@ -320,6 +323,19 @@ export default function TurnierDetail() {
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
+  const drawNextRoundMut = useMutation({
+    mutationFn: () => apiFetch<{ ok: boolean; round: string; pairings: DrawPairing[] }>(
+      `/tour/tournaments/${id}/draw-next-round`,
+      { method: "POST", body: JSON.stringify(adminAuth()) }
+    ),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["tournament", id] });
+      setDrawOverlayRound(data.round);
+      setDrawOverlayPairings(data.pairings);
+    },
+    onError: (e: Error) => toast({ title: "Fehler bei der Auslosung", description: e.message, variant: "destructive" }),
+  });
+
   const resultMut = useMutation({
     mutationFn: ({ matchId, ...data }: any) => apiFetch(`/tour/matches/${matchId}/result`, {
       method: "POST",
@@ -361,12 +377,33 @@ export default function TurnierDetail() {
   ).length;
   const liveCount = [...liveStatus.values()].filter((s) => s.status === "live").length;
 
+  // Random draw: determine if admin can trigger next-round draw
+  const canDrawNextRound = (() => {
+    if (!tournament.random_draw) return false;
+    if (!currentPlayer?.is_admin) return false;
+    if (tournament.status !== "laufend") return false;
+    if (sortedRounds.length === 0) return false;
+    const lastRound = sortedRounds[sortedRounds.length - 1];
+    if (lastRound === "F") return false;
+    const lastRoundMatches = matches.filter((m) => m.runde === lastRound);
+    return lastRoundMatches.length > 0 && lastRoundMatches.every((m) => m.winner_id !== null);
+  })();
+
   // Live modal data
   const liveModalMatchData = liveModalMatch !== null ? matches.find((m) => m.id === liveModalMatch) : null;
   const liveModalStatus = liveModalMatch !== null ? liveStatus.get(liveModalMatch) : undefined;
 
   return (
     <div className="space-y-6">
+      {/* Draw Overlay */}
+      {drawOverlayPairings && (
+        <DrawOverlay
+          pairings={drawOverlayPairings}
+          round={drawOverlayRound}
+          onClose={() => setDrawOverlayPairings(null)}
+        />
+      )}
+
       {/* Live Match Modal */}
       {liveModalMatchData && liveModalStatus?.status === "live" && (
         <LiveMatchModal
@@ -393,9 +430,14 @@ export default function TurnierDetail() {
             <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${statusBadge}`}>
               {tournament.status === "laufend" ? "Laufend" : tournament.status === "abgeschlossen" ? "Abgeschlossen" : "Offen"}
             </span>
-            {(tournament as any).is_test && (
+            {tournament.is_test && (
               <span className="text-xs px-2 py-0.5 rounded-full border font-medium text-orange-400 bg-orange-400/10 border-orange-400/30">
                 Testturnier · kein OOM
+              </span>
+            )}
+            {tournament.random_draw && (
+              <span className="text-xs px-2 py-0.5 rounded-full border font-medium text-purple-400 bg-purple-400/10 border-purple-400/30 flex items-center gap-1">
+                <Shuffle className="w-2.5 h-2.5" />Zufalls-Draw
               </span>
             )}
             {isRunning && (
@@ -756,7 +798,29 @@ export default function TurnierDetail() {
       {/* Bracket */}
       {(tournament.status === "laufend" || tournament.status === "abgeschlossen") && sortedRounds.length > 0 && (
         <div className="space-y-4">
-          <h2 className="font-semibold">Turnierbaum</h2>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <h2 className="font-semibold">Turnierbaum</h2>
+              {tournament.random_draw && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full border text-purple-400 bg-purple-400/10 border-purple-400/30 font-medium flex items-center gap-1">
+                  <Shuffle className="w-2.5 h-2.5" />Zufalls-Draw
+                </span>
+              )}
+            </div>
+            {canDrawNextRound && (
+              <Button
+                size="sm"
+                className="gap-1.5 bg-purple-600 hover:bg-purple-500 text-white"
+                onClick={() => drawNextRoundMut.mutate()}
+                disabled={drawNextRoundMut.isPending}
+              >
+                {drawNextRoundMut.isPending
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <Shuffle className="w-3.5 h-3.5" />}
+                Auslosung starten
+              </Button>
+            )}
+          </div>
           <div className="overflow-x-auto pb-6">
             <BracketView
               sortedRounds={sortedRounds}
@@ -1411,6 +1475,125 @@ function PlayerRow({
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Animated Draw Overlay ────────────────────────────────────────────────────
+
+function DrawOverlay({
+  pairings,
+  round,
+  onClose,
+}: {
+  pairings: DrawPairing[];
+  round: string;
+  onClose: () => void;
+}) {
+  const realPairings = pairings.filter((p) => !p.is_bye);
+  const byePairings = pairings.filter((p) => p.is_bye);
+  const allWinners = pairings.flatMap((p) =>
+    [p.player1_name, p.player2_name].filter(Boolean) as string[]
+  );
+
+  const [phase, setPhase] = useState<"pool" | "drawing" | "done">("pool");
+  const [revealCount, setRevealCount] = useState(0);
+
+  useEffect(() => {
+    const t = setTimeout(() => setPhase("drawing"), 1500);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (phase !== "drawing") return;
+    if (revealCount >= realPairings.length) {
+      const t = setTimeout(() => setPhase("done"), 500);
+      return () => clearTimeout(t);
+    }
+    const delay = revealCount === 0 ? 400 : 900;
+    const t = setTimeout(() => setRevealCount((c) => c + 1), delay);
+    return () => clearTimeout(t);
+  }, [phase, revealCount, realPairings.length]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/92 backdrop-blur-md p-6">
+      <style>{`
+        @keyframes chipIn {
+          from { opacity: 0; transform: translateY(12px) scale(0.85); }
+          to   { opacity: 1; transform: translateY(0)   scale(1); }
+        }
+        @keyframes pairFlash {
+          0%   { box-shadow: 0 0 0   rgba(0,210,255,0); }
+          40%  { box-shadow: 0 0 28px rgba(0,210,255,0.55); }
+          100% { box-shadow: 0 0 10px rgba(0,210,255,0.15); }
+        }
+      `}</style>
+
+      <div className="mb-8 text-center">
+        <p className="text-[11px] text-primary/60 font-semibold tracking-[0.18em] uppercase mb-1">Auslosung</p>
+        <h2 className="text-2xl font-bold tracking-tight">{RUNDE_LABELS[round] ?? round}</h2>
+      </div>
+
+      {phase === "pool" && (
+        <div className="flex flex-wrap justify-center gap-2 max-w-md">
+          {allWinners.map((name, i) => (
+            <div
+              key={i}
+              className="px-3 py-1.5 rounded-full bg-primary/15 border border-primary/40 text-sm text-primary font-medium"
+              style={{ animation: `chipIn 0.35s ${i * 90}ms both` }}
+            >
+              {name}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {phase !== "pool" && (
+        <div className="w-full max-w-xs space-y-3">
+          {realPairings.map((p, i) => {
+            const visible = i < revealCount;
+            const isLatest = i === revealCount - 1;
+            return (
+              <div
+                key={i}
+                style={{
+                  transition: "opacity 0.4s, transform 0.4s",
+                  opacity: visible ? 1 : 0,
+                  transform: visible ? "translateY(0)" : "translateY(16px)",
+                  animation: isLatest ? "pairFlash 0.7s ease-out" : undefined,
+                }}
+                className={`rounded-xl border p-3 bg-card/80 text-center ${isLatest ? "border-primary/60" : "border-border/40"}`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <span className="font-semibold text-sm truncate max-w-[110px]">{p.player1_name ?? "?"}</span>
+                  <span className="text-xs text-muted-foreground font-bold shrink-0">vs</span>
+                  <span className="font-semibold text-sm truncate max-w-[110px]">{p.player2_name ?? "?"}</span>
+                </div>
+                <p className="text-[10px] text-muted-foreground/60 mt-0.5">Match {p.match_nr}</p>
+              </div>
+            );
+          })}
+
+          {byePairings.length > 0 && phase === "done" && (
+            <p className="text-xs text-muted-foreground text-center pt-1">
+              Freilos: {byePairings.map((p) => p.player1_name).filter(Boolean).join(", ")}
+            </p>
+          )}
+        </div>
+      )}
+
+      {phase === "done" && (
+        <Button className="mt-8" onClick={onClose}>
+          Weiter zum Bracket
+        </Button>
+      )}
+
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 p-2 text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <X className="w-5 h-5" />
+      </button>
     </div>
   );
 }
