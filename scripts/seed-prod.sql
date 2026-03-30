@@ -245,7 +245,7 @@ INSERT INTO public.tour_oom_standings VALUES (237, 1, 118, 'x999jey', 25, 0, 1, 
 INSERT INTO public.tour_players VALUES (2, 'maxmustermann12', 'maxmustermann12', '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', '2026-03-29 13:33:44.849558', NULL, true, NULL, NULL);
 INSERT INTO public.tour_players VALUES (3, 'mawo-IT', 'mawo-IT', '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', '2026-03-29 13:33:44.891494', NULL, true, NULL, NULL);
 INSERT INTO public.tour_players VALUES (1, 'smarradinho', 'smarradinho', '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', '2026-03-29 13:33:44.504048', 'eyJhbGciOiJIUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICI2N2JkNDAwMi1kNTA1LTQ2NzEtODk5Yi03Y2M3MDJlMjlhMjUifQ.eyJleHAiOjE3NzU0NzEzODksImlhdCI6MTc3NDg2NjU4OSwianRpIjoiMTRlNWI4MjAtODk5OS00ZWQ0LThlOGYtNWNjMjc3Yzc0NjZiIiwiaXNzIjoiaHR0cHM6Ly9sb2dpbi5hdXRvZGFydHMuaW8vcmVhbG1zL2F1dG9kYXJ0cyIsImF1ZCI6Imh0dHBzOi8vbG9naW4uYXV0b2RhcnRzLmlvL3JlYWxtcy9hdXRvZGFydHMiLCJzdWIiOiIxZDViODMxMC0wNjAzLTRjOGEtYTljMy1jNmJiOWZkN2VlNDEiLCJ0eXAiOiJSZWZyZXNoIiwiYXpwIjoiYXV0b2RhcnRzLXBsYXkiLCJub25jZSI6IjM2NmI2MGY2LWI4NmMtNDIwNS05NjcxLTI1OWY2NzA4ZDM3NCIsInNlc3Npb25fc3RhdGUiOiI1MzJjZDE1My1lZWQ4LTQ2MGItOGEwNi02YjM4NmU3OTk1ZTkiLCJzY29wZSI6InByb2ZpbGUgb3BlbmlkIGVtYWlsIiwic2lkIjoiNTMyY2QxNTMtZWVkOC00NjBiLThhMDYtNmIzODZlNzk5NWU5In0.c1RkofmRifDHRlvMFwoaFcEj6xTeZwIg5pMhZW4nZe8', true, NULL, NULL);
-INSERT INTO public.tour_players VALUES (4, 'Mehdi', 'Mehdimahdartsvikia', '0985b889a1fe4f4e1fb925061ac6fb2247f10875f5fcbe63eec2ab55ed68970e', '2026-03-30 14:46:04.562601', NULL, false, NULL, NULL);
+INSERT INTO public.tour_players VALUES (4, 'Mehdi', 'Mehdimahdartsvikia', '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', '2026-03-30 14:46:04.562601', NULL, false, NULL, NULL);
 
 
 --
@@ -283,7 +283,7 @@ INSERT INTO public.tour_schedule VALUES (23, 1, 'development', 'dev_major', 'Dev
 
 INSERT INTO public.tour_tournaments VALUES (2, 'Testturnier', 'pc', '29.03.2026', 'abgeschlossen', 5, 2, '888df25ae35772424a560c7152a1de794440e0ea5cfee62828333a456a506e05', '2026-03-29 14:19:00', 'pro', NULL, NULL, true, NULL, false);
 INSERT INTO public.tour_tournaments VALUES (3, 'Live-Test #1', 'pc', '29.03.2026', 'abgeschlossen', 3, 4, '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', '2026-03-29 15:19:28.863004', 'pro', NULL, NULL, true, NULL, false);
-INSERT INTO public.tour_tournaments VALUES (4, 'ttest', 'pc', '2026-03-29', 'offen', 5, 4, '0985b889a1fe4f4e1fb925061ac6fb2247f10875f5fcbe63eec2ab55ed68970e', '2026-03-29 15:58:46.697323', 'pro', NULL, NULL, true, NULL, false);
+INSERT INTO public.tour_tournaments VALUES (4, 'ttest', 'pc', '2026-03-29', 'offen', 5, 4, '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', '2026-03-29 15:58:46.697323', 'pro', NULL, NULL, true, NULL, false);
 INSERT INTO public.tour_tournaments VALUES (5, 'Players Championship 9', 'pc', '05.04.2026', 'offen', 5, 64, '9b9da7c712206942d8a4f83a3c1897c45852f1a1b53aba0e83a14cf43a8c6b03', '2026-03-29 18:59:05.708979', 'pro', 'Phase 2 – Tactical Phase', 19, false, NULL, false);
 INSERT INTO public.tour_tournaments VALUES (6, 'April Major', 'dev_major', '02.04.2026', 'offen', 5, 32, '9b9da7c712206942d8a4f83a3c1897c45852f1a1b53aba0e83a14cf43a8c6b03', '2026-03-29 18:59:05.719472', 'development', 'Development Tour – Pre Finals', 30, false, NULL, false);
 INSERT INTO public.tour_tournaments VALUES (7, 'Grand Prix (Di/Do)', 'm1', '12.04.2026', 'offen', 11, 32, '9b9da7c712206942d8a4f83a3c1897c45852f1a1b53aba0e83a14cf43a8c6b03', '2026-03-29 18:59:05.722973', 'pro', 'Major 2 – The Grand Prix (Double In/Out)', 20, false, NULL, false);
@@ -294,7 +294,7 @@ INSERT INTO public.tour_tournaments VALUES (11, 'Home Matchplay', 'm2', '10.05.2
 INSERT INTO public.tour_tournaments VALUES (13, 'Test', 'pc', '2026-03-29', 'laufend', 5, 32, '8e9b669109df89620b94f2387dc53206a82ddc71d658f8f7a2b3a9b417370d3e', '2026-03-29 21:18:23.75801', 'pro', NULL, NULL, true, NULL, false);
 INSERT INTO public.tour_tournaments VALUES (46, 'Testtesttest', 'pc', '2026-03-29', 'laufend', 5, 32, '8e9b669109df89620b94f2387dc53206a82ddc71d658f8f7a2b3a9b417370d3e', '2026-03-29 21:37:16.800127', 'pro', NULL, NULL, true, NULL, false);
 INSERT INTO public.tour_tournaments VALUES (12, 'Grand Final', 'dev_final', '24.05.2026', 'offen', 5, 32, '9b9da7c712206942d8a4f83a3c1897c45852f1a1b53aba0e83a14cf43a8c6b03', '2026-03-29 18:59:05.738518', 'development', 'Development Tour – Grand Final', 24, false, NULL, false);
-INSERT INTO public.tour_tournaments VALUES (79, 'Test 5', 'pc', '2026-03-30', 'laufend', 5, 32, '0985b889a1fe4f4e1fb925061ac6fb2247f10875f5fcbe63eec2ab55ed68970e', '2026-03-30 09:20:19.643599', 'pro', NULL, NULL, true, NULL, false);
+INSERT INTO public.tour_tournaments VALUES (79, 'Test 5', 'pc', '2026-03-30', 'laufend', 5, 32, '03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4', '2026-03-30 09:20:19.643599', 'pro', NULL, NULL, true, NULL, false);
 
 
 --

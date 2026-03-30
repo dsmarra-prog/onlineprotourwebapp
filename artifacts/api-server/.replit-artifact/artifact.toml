@@ -13,7 +13,7 @@ paths = ["/api"]
 run = "pnpm --filter @workspace/api-server run dev"
 
 [services.production]
-build = ["sh", "-c", "pnpm --filter @workspace/db run push-force && sh scripts/seed-if-empty.sh && pnpm --filter @workspace/api-server run build"]
+build = ["sh", "-c", "pnpm --filter @workspace/db run push-force && sh scripts/seed-if-empty.sh && sh scripts/run-prod-updates.sh && pnpm --filter @workspace/api-server run build"]
 run = ["node", "--enable-source-maps", "artifacts/api-server/dist/index.mjs"]
 
 [services.production.buildEnv]
