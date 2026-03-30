@@ -1298,6 +1298,11 @@ router.post("/tour/tournaments/seed-from-schedule", async (req, res) => {
 
 // ─── Player Routes ────────────────────────────────────────────────────────────
 
+/** Normalize username for fuzzy matching: lowercase, strip hyphens/underscores/spaces/dots */
+function normalizeUsername(u: string): string {
+  return u.toLowerCase().replace(/[-_.\s]/g, "");
+}
+
 // GET /tour/players
 router.get("/tour/players", async (_req, res) => {
   try {
@@ -1311,9 +1316,10 @@ router.get("/tour/players", async (_req, res) => {
     const proHistNames = new Set<string>();
     const devHistNames = new Set<string>();
 
-    const proOomMap = new Map<string, number>(); // username → total_points (historical)
+    // Maps use normalized username as key
+    const proOomMap = new Map<string, number>(); // normalizedUsername → total_points (historical)
     for (const s of proStandings) {
-      proOomMap.set(s.autodarts_username, s.total_points ?? 0);
+      proOomMap.set(normalizeUsername(s.autodarts_username), s.total_points ?? 0);
       try {
         const raw = JSON.parse(s.tournament_breakdown || "{}");
         const entries: [string, number][] = Array.isArray(raw)
@@ -1323,9 +1329,9 @@ router.get("/tour/players", async (_req, res) => {
       } catch { /* ignore */ }
     }
 
-    const devOomMap = new Map<string, number>(); // username → total_points (historical)
+    const devOomMap = new Map<string, number>(); // normalizedUsername → total_points (historical)
     for (const s of devStandings) {
-      devOomMap.set(s.autodarts_username, s.total_points ?? 0);
+      devOomMap.set(normalizeUsername(s.autodarts_username), s.total_points ?? 0);
       try {
         const raw = JSON.parse(s.tournament_breakdown || "[]");
         const entries: [string, number][] = Array.isArray(raw)
@@ -1379,9 +1385,9 @@ router.get("/tour/players", async (_req, res) => {
 
     // ── Build result per registered player ───────────────────────────────────
     const result = players.map((p) => {
-      const username = p.autodarts_username;
-      const proTotal = (proOomMap.get(username) ?? 0) + (inAppProPts.get(p.id) ?? 0);
-      const devTotal = (devOomMap.get(username) ?? 0) + (inAppDevPts.get(p.id) ?? 0);
+      const normUsername = normalizeUsername(p.autodarts_username);
+      const proTotal = (proOomMap.get(normUsername) ?? 0) + (inAppProPts.get(p.id) ?? 0);
+      const devTotal = (devOomMap.get(normUsername) ?? 0) + (inAppDevPts.get(p.id) ?? 0);
 
       // Priority: Pro Tour > Dev Tour
       const oomTourType: "pro" | "development" | null =
