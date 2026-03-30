@@ -1845,6 +1845,36 @@ router.patch("/tour/players/:id/oom-name", async (req, res) => {
   }
 });
 
+// PATCH /tour/players/:id/autodarts-username — update Autodarts username (admin only)
+router.patch("/tour/players/:id/autodarts-username", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { autodarts_username, admin_pin, admin_player_id, admin_player_pin } = req.body;
+
+    const byAdminPin = admin_pin && admin_pin === process.env.ADMIN_SECRET;
+    const byAdminPlayer = admin_player_id && admin_player_pin
+      && await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+
+    if (!byAdminPin && !byAdminPlayer) {
+      return res.status(403).json({ error: "Admin-Berechtigung erforderlich" });
+    }
+
+    if (!autodarts_username || typeof autodarts_username !== "string" || !autodarts_username.trim()) {
+      return res.status(400).json({ error: "Autodarts-Username darf nicht leer sein" });
+    }
+
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, id)).limit(1);
+    if (!player) return res.status(404).json({ error: "Spieler nicht gefunden" });
+
+    const newUsername = autodarts_username.trim();
+    await db.update(tourPlayersTable).set({ autodarts_username: newUsername }).where(eq(tourPlayersTable.id, id));
+
+    res.json({ ok: true, message: `Autodarts-Username für ${player.name} aktualisiert: ${newUsername}` });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // PATCH /tour/players/:id/discord-id — player sets their own Discord user ID (for @mentions)
 router.patch("/tour/players/:id/discord-id", async (req, res) => {
   try {

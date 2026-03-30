@@ -104,6 +104,93 @@ function AdminOomNamesPanel() {
   );
 }
 
+function AdminAutodartsNamesPanel() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { currentPlayer, sessionPin } = usePlayer();
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Record<number, string>>({});
+
+  const { data: players, refetch } = useQuery<TourPlayer[]>({
+    queryKey: ["all-players-ad-names"],
+    queryFn: () => apiFetch("/tour/players"),
+    enabled: open,
+    staleTime: 30_000,
+  });
+
+  const saveMut = useMutation({
+    mutationFn: ({ id, autodarts_username }: { id: number; autodarts_username: string }) =>
+      apiFetch<{ ok: boolean; message: string }>(`/tour/players/${id}/autodarts-username`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          autodarts_username,
+          admin_player_id: currentPlayer?.id,
+          admin_player_pin: sessionPin,
+        }),
+      }),
+    onSuccess: (d, vars) => {
+      toast({ title: d.message });
+      setEditing((e) => { const n = { ...e }; delete n[vars.id]; return n; });
+      refetch();
+      qc.invalidateQueries({ queryKey: ["players"] });
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="bg-card border border-primary/20 rounded-xl overflow-hidden">
+      <button
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-accent/30 transition-colors"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <div className="flex items-center gap-2">
+          <Target className="w-4 h-4 text-primary" />
+          <span className="font-semibold text-sm">Admin: Autodarts-Usernamen korrigieren</span>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30 font-semibold">Admin</span>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="border-t border-border px-4 pb-4 pt-4 space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Hier kann der Autodarts-Username eines Spielers korrigiert werden. Der Username muss <strong>exakt</strong> mit dem Namen im Autodarts-Account übereinstimmen (Groß-/Kleinschreibung beachten), damit das Sync-System Matches erkennt.
+          </p>
+          <div className="space-y-2">
+            {players?.map((p) => {
+              const val = editing[p.id] ?? p.autodarts_username;
+              const changed = val !== p.autodarts_username;
+              return (
+                <div key={p.id} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-accent/20">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{p.name}</p>
+                    <p className="text-xs text-muted-foreground">Aktuell: @{p.autodarts_username}</p>
+                  </div>
+                  <Input
+                    value={val}
+                    onChange={(e) => setEditing((ed) => ({ ...ed, [p.id]: e.target.value }))}
+                    placeholder="Autodarts-Username"
+                    className="h-7 text-xs w-48"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={`h-7 text-xs px-2 ${changed ? "border-primary/50 text-primary" : "opacity-40"}`}
+                    disabled={!changed || saveMut.isPending}
+                    onClick={() => saveMut.mutate({ id: p.id, autodarts_username: val })}
+                  >
+                    {saveMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AdminPanel() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -893,6 +980,7 @@ export default function EinstellungenPage() {
       {/* Admin: Rollenverwaltung */}
       {currentPlayer?.is_admin && <AdminPanel />}
       {currentPlayer?.is_admin && <AdminOomNamesPanel />}
+      {currentPlayer?.is_admin && <AdminAutodartsNamesPanel />}
       {currentPlayer?.is_admin && <AdminDisputesPanel />}
       {currentPlayer?.is_admin && <AdminFairnessPanel />}
 
