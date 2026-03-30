@@ -708,36 +708,18 @@ export default function TurnierDetail() {
       {(tournament.status === "laufend" || tournament.status === "abgeschlossen") && sortedRounds.length > 0 && (
         <div className="space-y-4">
           <h2 className="font-semibold">Turnierbaum</h2>
-          <div className="overflow-x-auto">
-            <div className="flex gap-4 min-w-max pb-4">
-              {sortedRounds.map((runde) => {
-                const roundMatches = matches
-                  .filter((m) => m.runde === runde)
-                  .sort((a, b) => a.match_nr - b.match_nr);
-                return (
-                  <div key={runde} className="flex flex-col gap-3 min-w-[220px]">
-                    <div className="text-xs font-semibold text-muted-foreground text-center py-1 border-b border-border">
-                      {RUNDE_LABELS[runde] || runde}
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      {roundMatches.map((match) => (
-                        <MatchCard
-                          key={match.id}
-                          match={match}
-                          legsFormat={tournament.legs_format}
-                          liveStatus={liveStatus.get(match.id)}
-                          onResult={() => {
-                            setResultOpen(match.id);
-                            setResultForm({ winner_id: "", score_p1: "", score_p2: "" });
-                          }}
-                          onLiveClick={() => setLiveModalMatch(match.id)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          <div className="overflow-x-auto pb-6">
+            <BracketView
+              sortedRounds={sortedRounds}
+              matches={matches}
+              tournament={tournament}
+              liveStatus={liveStatus}
+              onResult={(matchId) => {
+                setResultOpen(matchId);
+                setResultForm({ winner_id: "", score_p1: "", score_p2: "" });
+              }}
+              onLiveClick={(matchId) => setLiveModalMatch(matchId)}
+            />
           </div>
         </div>
       )}
@@ -1379,6 +1361,135 @@ function PlayerRow({
             {score}
           </span>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Visual Bracket with SVG connectors ───────────────────────────────────────
+
+function BracketView({
+  sortedRounds,
+  matches,
+  tournament,
+  liveStatus,
+  onResult,
+  onLiveClick,
+}: {
+  sortedRounds: string[];
+  matches: TourMatch[];
+  tournament: TourTournamentDetail["tournament"];
+  liveStatus: Map<number, SyncMatchStatus>;
+  onResult: (matchId: number) => void;
+  onLiveClick: (matchId: number) => void;
+}) {
+  const CARD_W = 224;
+  const CARD_H = 90;
+  const SLOT = 128;
+  const COL_GAP = 52;
+
+  const firstRoundCount = matches.filter((m) => m.runde === sortedRounds[0]).length;
+  const totalHeight = Math.max(firstRoundCount * SLOT, SLOT);
+  const totalWidth = sortedRounds.length * (CARD_W + COL_GAP) - COL_GAP;
+
+  function getTop(roundIdx: number, matchIdx: number): number {
+    const mult = Math.pow(2, roundIdx);
+    return matchIdx * SLOT * mult + (SLOT * mult - SLOT) / 2;
+  }
+
+  function getCenterY(roundIdx: number, matchIdx: number): number {
+    return getTop(roundIdx, matchIdx) + CARD_H / 2;
+  }
+
+  return (
+    <div>
+      {/* Round labels row */}
+      <div className="flex mb-4" style={{ gap: COL_GAP, width: totalWidth }}>
+        {sortedRounds.map((runde) => (
+          <div
+            key={runde}
+            style={{ width: CARD_W, flexShrink: 0 }}
+            className="text-xs font-semibold text-muted-foreground text-center pb-1.5 border-b border-border/60"
+          >
+            {RUNDE_LABELS[runde] || runde}
+          </div>
+        ))}
+      </div>
+
+      {/* Bracket canvas */}
+      <div style={{ position: "relative", height: totalHeight, width: totalWidth, minWidth: totalWidth }}>
+        {/* SVG connector lines */}
+        <svg
+          style={{ position: "absolute", inset: 0, overflow: "visible", pointerEvents: "none" }}
+          width={totalWidth}
+          height={totalHeight}
+        >
+          {sortedRounds.slice(0, -1).map((runde, rIdx) => {
+            const nextRunde = sortedRounds[rIdx + 1];
+            const nextRoundMatches = matches
+              .filter((m) => m.runde === nextRunde)
+              .sort((a, b) => a.match_nr - b.match_nr);
+
+            const srcRight = rIdx * (CARD_W + COL_GAP) + CARD_W;
+            const dstLeft = (rIdx + 1) * (CARD_W + COL_GAP);
+            const midX = srcRight + COL_GAP / 2;
+
+            return nextRoundMatches.map((_, tIdx) => {
+              const src0Y = getCenterY(rIdx, tIdx * 2);
+              const src1Y = getCenterY(rIdx, tIdx * 2 + 1);
+              const tgtY = getCenterY(rIdx + 1, tIdx);
+
+              const hasWinner0 = matches
+                .filter((m) => m.runde === runde)
+                .sort((a, b) => a.match_nr - b.match_nr)[tIdx * 2]?.winner_id != null;
+              const hasWinner1 = matches
+                .filter((m) => m.runde === runde)
+                .sort((a, b) => a.match_nr - b.match_nr)[tIdx * 2 + 1]?.winner_id != null;
+
+              const color0 = hasWinner0 ? "rgba(0,210,255,0.55)" : "rgba(255,255,255,0.12)";
+              const color1 = hasWinner1 ? "rgba(0,210,255,0.55)" : "rgba(255,255,255,0.12)";
+              const colorV = hasWinner0 && hasWinner1 ? "rgba(0,210,255,0.4)" : "rgba(255,255,255,0.1)";
+              const colorT = hasWinner0 && hasWinner1 ? "rgba(0,210,255,0.5)" : "rgba(255,255,255,0.1)";
+
+              return (
+                <g key={`c-${rIdx}-${tIdx}`}>
+                  <line x1={srcRight} y1={src0Y} x2={midX} y2={src0Y} stroke={color0} strokeWidth="1.5" strokeLinecap="round" />
+                  <line x1={srcRight} y1={src1Y} x2={midX} y2={src1Y} stroke={color1} strokeWidth="1.5" strokeLinecap="round" />
+                  <line x1={midX} y1={src0Y} x2={midX} y2={src1Y} stroke={colorV} strokeWidth="1.5" />
+                  <line x1={midX} y1={tgtY} x2={dstLeft} y2={tgtY} stroke={colorT} strokeWidth="1.5" strokeLinecap="round" />
+                </g>
+              );
+            });
+          })}
+        </svg>
+
+        {/* Match cards */}
+        {sortedRounds.map((runde, rIdx) => {
+          const roundMatches = matches
+            .filter((m) => m.runde === runde)
+            .sort((a, b) => a.match_nr - b.match_nr);
+          const colX = rIdx * (CARD_W + COL_GAP);
+
+          return roundMatches.map((match, mIdx) => (
+            <div
+              key={match.id}
+              style={{
+                position: "absolute",
+                top: getTop(rIdx, mIdx),
+                left: colX,
+                width: CARD_W,
+              }}
+            >
+              <MatchCard
+                match={match}
+                legsFormat={tournament.legs_format}
+                liveStatus={liveStatus.get(match.id)}
+                onResult={() => onResult(match.id)}
+                onLiveClick={() => onLiveClick(match.id)}
+              />
+            </div>
+          ));
+        })}
       </div>
     </div>
   );
