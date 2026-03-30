@@ -57,7 +57,7 @@ const TUTORIAL_STEPS = [
   {
     icon: Target,
     title: "Willkommen bei der Online Pro Tour!",
-    body: "Schoen, dass du dabei bist! Die OPT ist eine professionelle Online-Dartstour auf Basis von Autodarts. Hier trittst du in Turnieren gegen andere Spieler an, sammelst Punkte in der Order of Merit und kaempfst um Titel.",
+    body: "Schön, dass du dabei bist! Die OPT ist eine professionelle Online-Dartstour auf Basis von Autodarts. Hier trittst du in Turnieren gegen andere Spieler an, sammelst Punkte in der Order of Merit und kämpfst um Titel.",
   },
   {
     icon: Trophy,
@@ -66,23 +66,23 @@ const TUTORIAL_STEPS = [
   },
   {
     icon: Target,
-    title: "Autodarts & Discord",
-    body: "Du brauchst ein laufendes Autodarts-System sowie einen Discord-Account. Wichtig: Dein Discord-Name muss deinen Autodarts-Namen enthalten. Alle Matches laufen ueber Autodarts-Lobbies, die automatisch erstellt werden.",
+    title: "Autodarts",
+    body: "Du brauchst ein laufendes Autodarts-System und einen aktiven Autodarts-Account. Alle Lobbies werden automatisch über die App erstellt — du musst nur noch einsteigen und werfen.",
   },
   {
     icon: CheckCircle,
     title: "Matches spielen",
-    body: "Sobald das Bracket steht, oeffnet der oben stehende Spieler die Autodarts-Lobby und teilt den Link. Gespielt wird 501 Double Out. Ergebnisse werden direkt in der App eingetragen — einfach auf dein Match klicken.",
+    body: "Sobald das Bracket steht, öffnet der oben stehende Spieler die Autodarts-Lobby. Gespielt wird 501 Double Out. Ergebnisse trägst du direkt in der App ein — einfach auf dein Match klicken.",
   },
   {
     icon: BarChart3,
     title: "Order of Merit",
-    body: "Fuer jedes Turnierergebnis gibt es Punkte. Die Rangliste findest du unter \"Pro OOM\". Je besser dein Ergebnis, desto mehr Punkte! Am Saisonende qualifizieren sich die besten Spieler fuer grosse Events.",
+    body: "Für jedes Turnierergebnis gibt es Punkte. Die Rangliste findest du unter \"Pro OOM\". Je besser dein Ergebnis, desto mehr Punkte! Am Saisonende qualifizieren sich die besten Spieler für große Events.",
   },
   {
     icon: HelpCircle,
     title: "Hilfe & Support",
-    body: "Fragen oder Probleme? Unter \"Hilfe\" kannst du jederzeit ein Support-Ticket einreichen. Ein Admin antwortet dir so schnell wie moeglich. Jetzt viel Spass und gute Darts!",
+    body: "Fragen oder Probleme? Unter \"Hilfe\" kannst du jederzeit ein Support-Ticket einreichen. Ein Admin antwortet dir so schnell wie möglich. Jetzt viel Spaß und gute Darts!",
   },
 ];
 
@@ -126,12 +126,12 @@ function TutorialOverlay() {
               onClick={dismissTutorial}
               className="text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
-              Ueberspringen
+              Überspringen
             </button>
             <div className="flex-1" />
             {step > 0 && (
               <Button variant="outline" size="sm" onClick={() => setStep((s) => s - 1)}>
-                Zurueck
+                Zurück
               </Button>
             )}
             <Button
