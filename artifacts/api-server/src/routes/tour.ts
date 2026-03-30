@@ -250,6 +250,15 @@ function roundToOomKey(runde: string): string {
   return map[runde] ?? "Teilnahme";
 }
 
+function fisherYatesShuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 function getRoundsForSize(size: number): string[] {
   if (size <= 2) return ["F"];
   if (size <= 4) return ["SF", "F"];
@@ -273,7 +282,7 @@ async function generateBracket(tournamentId: number, playerIds: number[], legsFo
   while (bracketSize < entries.length) bracketSize *= 2;
 
   // Shuffle entries for random draw
-  const shuffled = randomDraw ? [...entries].sort(() => Math.random() - 0.5) : entries;
+  const shuffled = randomDraw ? fisherYatesShuffle(entries) : entries;
   const seeded = [...shuffled, ...Array(bracketSize - shuffled.length).fill(null)];
   const firstRound = rounds[0];
   const matchCount = bracketSize / 2;
@@ -2491,8 +2500,8 @@ router.post("/tour/tournaments/:id/draw-next-round", async (req, res) => {
     const nextRoundExists = allMatches.some((m) => m.runde === nextRound);
     if (nextRoundExists) return res.status(400).json({ error: "Naechste Runde bereits ausgelost" });
 
-    // Shuffle winners randomly
-    const shuffled = [...winners].sort(() => Math.random() - 0.5);
+    // Shuffle winners randomly (Fisher-Yates)
+    const shuffled = fisherYatesShuffle(winners);
     let bracketSize = 2;
     while (bracketSize < shuffled.length) bracketSize *= 2;
     const seeded = [...shuffled, ...Array(bracketSize - shuffled.length).fill(null)];
@@ -2517,7 +2526,15 @@ router.post("/tour/tournaments/:id/draw-next-round", async (req, res) => {
       });
     }
 
-    await db.insert(tourMatchesTable).values(newMatches);
+    // Transactional insert: re-check round doesn't exist, then insert atomically
+    await db.transaction(async (tx) => {
+      const existing = await tx.select({ id: tourMatchesTable.id })
+        .from(tourMatchesTable)
+        .where(and(eq(tourMatchesTable.tournament_id, tournamentId), eq(tourMatchesTable.runde, nextRound)))
+        .limit(1);
+      if (existing.length > 0) throw new Error("Naechste Runde bereits ausgelost");
+      await tx.insert(tourMatchesTable).values(newMatches);
+    });
 
     // Load player names for response and lobby/thread creation
     const playerNameMap = new Map<number, string>();

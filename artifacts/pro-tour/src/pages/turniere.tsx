@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Plus, Trophy, Calendar, Users, Loader2, Zap } from "lucide-react";
+import { Plus, Trophy, Calendar, Users, Loader2, Zap, Shuffle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -211,6 +211,11 @@ export default function TourniereListe() {
                       {(t as any).is_test && (
                         <span className="text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 text-orange-400 bg-orange-400/10 border-orange-400/30">
                           Test
+                        </span>
+                      )}
+                      {(t as any).random_draw && (
+                        <span className="text-xs px-2 py-0.5 rounded-full border font-medium shrink-0 text-purple-400 bg-purple-400/10 border-purple-400/30 flex items-center gap-1">
+                          <Shuffle className="w-2.5 h-2.5" />Draw
                         </span>
                       )}
                     </div>
