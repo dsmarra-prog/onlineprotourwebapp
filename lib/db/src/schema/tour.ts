@@ -147,6 +147,24 @@ export const tourMatchMessagesTable = pgTable("tour_match_messages", {
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const tourMatchDisputesTable = pgTable("tour_match_disputes", {
+  id: serial("id").primaryKey(),
+  match_id: integer("match_id").notNull(),
+  player_id: integer("player_id").notNull(),
+  reason: text("reason").notNull(),
+  status: text("status").notNull().default("offen"), // offen | bearbeitet | geschlossen
+  admin_note: text("admin_note"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const tourMatchFairnessTable = pgTable("tour_match_fairness", {
+  id: serial("id").primaryKey(),
+  match_id: integer("match_id").notNull(),
+  player_id: integer("player_id").notNull(),
+  vote: text("vote").notNull(), // up | down
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
 export type TourPlayer = typeof tourPlayersTable.$inferSelect;
 export type TourPushSubscription = typeof tourPushSubscriptionsTable.$inferSelect;
 export const systemSettingsTable = pgTable("system_settings", {
@@ -164,3 +182,5 @@ export type TourBonusPoints = typeof tourBonusPointsTable.$inferSelect;
 export type TourDevOomStanding = typeof tourDevOomStandingsTable.$inferSelect;
 export type TourPlayerAchievement = typeof tourPlayerAchievementsTable.$inferSelect;
 export type TourMatchMessage = typeof tourMatchMessagesTable.$inferSelect;
+export type TourMatchDispute = typeof tourMatchDisputesTable.$inferSelect;
+export type TourMatchFairness = typeof tourMatchFairnessTable.$inferSelect;

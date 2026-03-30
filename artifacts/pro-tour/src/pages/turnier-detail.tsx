@@ -4,7 +4,7 @@ import { useParams, Link, useLocation } from "wouter";
 import {
   ArrowLeft, Play, UserPlus, UserMinus, Check, Loader2, Target,
   Zap, Radio, CheckCircle2, Search, MonitorPlay, ExternalLink, Activity,
-  TrendingUp, X, Trash2, Clock, ThumbsUp, ThumbsDown, Bell, MessageCircle, Send,
+  TrendingUp, X, Trash2, Clock, ThumbsUp, ThumbsDown, Bell, MessageCircle, Send, AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -983,6 +983,172 @@ function MatchChatDialog({
   );
 }
 
+// ─── Match Dispute ────────────────────────────────────────────────────────────
+
+function MatchDisputeDialog({
+  matchId,
+  currentPlayerId,
+  sessionPin,
+}: {
+  matchId: number;
+  currentPlayerId: number;
+  sessionPin: string;
+}) {
+  const { toast } = useToast();
+  const DONE_KEY = `dispute_sent_${matchId}_${currentPlayerId}`;
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [submitted, setSubmitted] = useState(() => !!localStorage.getItem(DONE_KEY));
+
+  const disputeMut = useMutation({
+    mutationFn: () =>
+      apiFetch(`/tour/matches/${matchId}/dispute`, {
+        method: "POST",
+        body: JSON.stringify({ player_id: currentPlayerId, pin: sessionPin, reason }),
+      }),
+    onSuccess: () => {
+      localStorage.setItem(DONE_KEY, "1");
+      setSubmitted(true);
+      setOpen(false);
+      toast({ title: "Anfechtung eingereicht", description: "Die Admins wurden benachrichtigt." });
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  if (submitted) {
+    return (
+      <span className="flex items-center gap-1 text-xs text-yellow-500/80">
+        <AlertTriangle className="w-3 h-3" /> Anfechtung eingereicht
+      </span>
+    );
+  }
+
+  return (
+    <>
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+        className="flex items-center gap-1 text-xs text-muted-foreground/60 hover:text-yellow-400 transition-colors px-1.5 py-1 rounded-md hover:bg-yellow-400/10"
+        title="Ergebnis anfechten"
+      >
+        <AlertTriangle className="w-3.5 h-3.5" />
+        <span>Anfechten</span>
+      </button>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="w-full sm:max-w-md bg-card border border-border rounded-t-2xl sm:rounded-xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-yellow-400" />
+                <span className="font-semibold text-sm">Ergebnis anfechten</span>
+              </div>
+              <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-accent">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-4 py-4 space-y-4">
+              <p className="text-xs text-muted-foreground">
+                Schildere das Problem so genau wie möglich. Die Admins werden per Benachrichtigung informiert und werden sich melden.
+              </p>
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Was ist passiert? (z. B. falsche Ergebnis-Eingabe, Verbindungsprobleme, ...)"
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-yellow-400 resize-none h-32"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setOpen(false)}
+                  className="flex-1 py-2 text-sm rounded-lg border border-border text-muted-foreground hover:bg-accent transition-colors"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  onClick={() => { if (reason.trim()) disputeMut.mutate(); }}
+                  disabled={!reason.trim() || disputeMut.isPending}
+                  className="flex-1 py-2 text-sm rounded-lg bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 hover:bg-yellow-500/30 transition-colors disabled:opacity-50 font-medium"
+                >
+                  {disputeMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Anfechtung einreichen"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── Match Fairness ───────────────────────────────────────────────────────────
+
+function MatchFairnessButtons({
+  matchId,
+  currentPlayerId,
+  sessionPin,
+}: {
+  matchId: number;
+  currentPlayerId: number;
+  sessionPin: string;
+}) {
+  const { toast } = useToast();
+  const VOTE_KEY = `fairness_${matchId}_${currentPlayerId}`;
+  const [voted, setVoted] = useState<"up" | "down" | null>(() => {
+    const v = localStorage.getItem(VOTE_KEY);
+    return v === "up" || v === "down" ? v : null;
+  });
+
+  const voteMut = useMutation({
+    mutationFn: (vote: "up" | "down") =>
+      apiFetch(`/tour/matches/${matchId}/fairness`, {
+        method: "POST",
+        body: JSON.stringify({ player_id: currentPlayerId, pin: sessionPin, vote }),
+      }),
+    onSuccess: (_, vote) => {
+      localStorage.setItem(VOTE_KEY, vote);
+      setVoted(vote);
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-[10px] text-muted-foreground/60 mr-0.5">Fairplay:</span>
+      <button
+        onClick={(e) => { e.stopPropagation(); if (!voted) voteMut.mutate("up"); }}
+        disabled={!!voted || voteMut.isPending}
+        className={`flex items-center gap-0.5 text-xs px-1.5 py-1 rounded-md transition-colors ${
+          voted === "up"
+            ? "bg-green-500/20 text-green-400 border border-green-500/40"
+            : "text-muted-foreground/60 hover:text-green-400 hover:bg-green-400/10 border border-transparent"
+        } disabled:cursor-default`}
+        title="Faire Partie"
+      >
+        <ThumbsUp className="w-3 h-3" />
+        {voted === "up" && <span>Danke!</span>}
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); if (!voted) voteMut.mutate("down"); }}
+        disabled={!!voted || voteMut.isPending}
+        className={`flex items-center gap-0.5 text-xs px-1.5 py-1 rounded-md transition-colors ${
+          voted === "down"
+            ? "bg-red-500/20 text-red-400 border border-red-500/40"
+            : "text-muted-foreground/60 hover:text-red-400 hover:bg-red-400/10 border border-transparent"
+        } disabled:cursor-default`}
+        title="Unfaire Partie"
+      >
+        <ThumbsDown className="w-3 h-3" />
+        {voted === "down" && <span>Notiert.</span>}
+      </button>
+    </div>
+  );
+}
+
 // ─── Match Card ────────────────────────────────────────────────────────────────
 
 function MatchCard({
@@ -1109,17 +1275,36 @@ function MatchCard({
           {match.autodarts_match_id && <span className="ml-auto text-[10px]">via Autodarts</span>}
         </div>
       )}
-      {/* Chat button — visible to participants and admins when both players are assigned */}
+      {/* Chat + Dispute + Fairness — visible to participants/admins when both players are assigned */}
       {match.player1_id && match.player2_id && currentPlayer && sessionPin &&
         (currentPlayer.id === match.player1_id || currentPlayer.id === match.player2_id || currentPlayer.is_admin) && (
-        <div className="mt-2 pt-2 border-t border-border/30 flex justify-end" onClick={(e) => e.stopPropagation()}>
-          <MatchChatDialog
-            matchId={match.id}
-            player1Name={match.player1_name ?? "Spieler 1"}
-            player2Name={match.player2_name ?? "Spieler 2"}
-            currentPlayerId={currentPlayer.id}
-            sessionPin={sessionPin}
-          />
+        <div className="mt-2 pt-2 border-t border-border/30 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+          {/* Chat always visible */}
+          <div className="flex justify-end">
+            <MatchChatDialog
+              matchId={match.id}
+              player1Name={match.player1_name ?? "Spieler 1"}
+              player2Name={match.player2_name ?? "Spieler 2"}
+              currentPlayerId={currentPlayer.id}
+              sessionPin={sessionPin}
+            />
+          </div>
+          {/* Fairness + Dispute — only after match is complete, only for direct participants (not admins) */}
+          {isComplete && !currentPlayer.is_admin &&
+            (currentPlayer.id === match.player1_id || currentPlayer.id === match.player2_id) && (
+            <div className="flex items-center justify-between gap-2">
+              <MatchFairnessButtons
+                matchId={match.id}
+                currentPlayerId={currentPlayer.id}
+                sessionPin={sessionPin}
+              />
+              <MatchDisputeDialog
+                matchId={match.id}
+                currentPlayerId={currentPlayer.id}
+                sessionPin={sessionPin}
+              />
+            </div>
+          )}
         </div>
       )}
 

@@ -13,6 +13,8 @@ import {
   tourPlayerAchievementsTable,
   systemSettingsTable,
   tourMatchMessagesTable,
+  tourMatchDisputesTable,
+  tourMatchFairnessTable,
 } from "@workspace/db";
 import { eq, and, desc, or } from "drizzle-orm";
 import crypto from "crypto";
@@ -3779,6 +3781,169 @@ router.post("/tour/matches/:matchId/messages", async (req, res) => {
     }
 
     res.json(newMsg);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// ─── Match Disputes ───────────────────────────────────────────────────────────
+
+// POST /tour/matches/:matchId/dispute — player files a dispute
+router.post("/tour/matches/:matchId/dispute", async (req, res) => {
+  try {
+    const matchId = parseInt(req.params.matchId);
+    const { player_id, pin, reason } = req.body as { player_id: number; pin: string; reason: string };
+    if (!matchId || !player_id || !pin || !reason?.trim()) return res.status(400).json({ error: "Alle Felder sind erforderlich" });
+
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, player_id)).limit(1);
+    if (!player || !verifyPin(pin, player.pin_hash)) return res.status(403).json({ error: "Ungültiger PIN" });
+
+    const [match] = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.id, matchId)).limit(1);
+    if (!match) return res.status(404).json({ error: "Match nicht gefunden" });
+
+    const isParticipant = match.player1_id === player_id || match.player2_id === player_id;
+    if (!isParticipant) return res.status(403).json({ error: "Kein Zugriff" });
+
+    const [dispute] = await db.insert(tourMatchDisputesTable).values({
+      match_id: matchId,
+      player_id,
+      reason: reason.trim(),
+      status: "offen",
+    }).returning();
+
+    // Notify all admins
+    const admins = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.is_admin, true));
+    const [tournament] = await db.select({ name: tourTournamentsTable.name })
+      .from(tourTournamentsTable).where(eq(tourTournamentsTable.id, match.tournament_id)).limit(1);
+    const notifUrl = `/pro-tour/turniere/${match.tournament_id}`;
+    for (const admin of admins) {
+      sendPushToPlayer(
+        admin.id,
+        `⚠️ Ergebnis angefochten`,
+        `${player.name} hat ein Match in "${tournament?.name ?? "Turnier"}" angefochten.`,
+        notifUrl,
+      ).catch(() => {});
+    }
+
+    res.json(dispute);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /tour/admin/disputes — list all disputes (admin only)
+router.get("/tour/admin/disputes", async (req, res) => {
+  try {
+    const playerId = parseInt(req.query.player_id as string);
+    const pin = req.query.pin as string;
+    if (!playerId || !pin) return res.status(400).json({ error: "player_id und pin erforderlich" });
+
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, playerId)).limit(1);
+    if (!player || !verifyPin(pin, player.pin_hash) || !player.is_admin) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
+    const disputes = await db.select({
+      id: tourMatchDisputesTable.id,
+      match_id: tourMatchDisputesTable.match_id,
+      player_id: tourMatchDisputesTable.player_id,
+      player_name: tourPlayersTable.name,
+      reason: tourMatchDisputesTable.reason,
+      status: tourMatchDisputesTable.status,
+      admin_note: tourMatchDisputesTable.admin_note,
+      created_at: tourMatchDisputesTable.created_at,
+      tournament_id: tourMatchesTable.tournament_id,
+      runde: tourMatchesTable.runde,
+      match_nr: tourMatchesTable.match_nr,
+    })
+      .from(tourMatchDisputesTable)
+      .leftJoin(tourPlayersTable, eq(tourMatchDisputesTable.player_id, tourPlayersTable.id))
+      .leftJoin(tourMatchesTable, eq(tourMatchDisputesTable.match_id, tourMatchesTable.id))
+      .orderBy(desc(tourMatchDisputesTable.created_at));
+
+    res.json(disputes);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// PATCH /tour/admin/disputes/:id — update dispute status + admin note
+router.patch("/tour/admin/disputes/:id", async (req, res) => {
+  try {
+    const disputeId = parseInt(req.params.id);
+    const { player_id, pin, status, admin_note } = req.body as { player_id: number; pin: string; status: string; admin_note?: string };
+    if (!disputeId || !player_id || !pin) return res.status(400).json({ error: "player_id und pin erforderlich" });
+
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, player_id)).limit(1);
+    if (!player || !verifyPin(pin, player.pin_hash) || !player.is_admin) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
+    const [updated] = await db.update(tourMatchDisputesTable)
+      .set({ status, admin_note: admin_note ?? null })
+      .where(eq(tourMatchDisputesTable.id, disputeId))
+      .returning();
+
+    res.json(updated);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// ─── Match Fairness ───────────────────────────────────────────────────────────
+
+// POST /tour/matches/:matchId/fairness — submit fairness vote (once per player per match)
+router.post("/tour/matches/:matchId/fairness", async (req, res) => {
+  try {
+    const matchId = parseInt(req.params.matchId);
+    const { player_id, pin, vote } = req.body as { player_id: number; pin: string; vote: "up" | "down" };
+    if (!matchId || !player_id || !pin || !["up", "down"].includes(vote)) return res.status(400).json({ error: "match_id, player_id, pin und vote (up/down) erforderlich" });
+
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, player_id)).limit(1);
+    if (!player || !verifyPin(pin, player.pin_hash)) return res.status(403).json({ error: "Ungültiger PIN" });
+
+    const [match] = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.id, matchId)).limit(1);
+    if (!match) return res.status(404).json({ error: "Match nicht gefunden" });
+    if (match.status !== "abgeschlossen") return res.status(400).json({ error: "Match noch nicht abgeschlossen" });
+
+    const isParticipant = match.player1_id === player_id || match.player2_id === player_id;
+    if (!isParticipant) return res.status(403).json({ error: "Nur Teilnehmer dürfen bewerten" });
+
+    // Check if already voted
+    const existing = await db.select().from(tourMatchFairnessTable)
+      .where(and(eq(tourMatchFairnessTable.match_id, matchId), eq(tourMatchFairnessTable.player_id, player_id))).limit(1);
+    if (existing[0]) return res.status(409).json({ error: "Du hast bereits bewertet" });
+
+    const [entry] = await db.insert(tourMatchFairnessTable).values({ match_id: matchId, player_id, vote }).returning();
+    res.json(entry);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /tour/admin/fairness — admin overview: all fairness votes with player + match info
+router.get("/tour/admin/fairness", async (req, res) => {
+  try {
+    const playerId = parseInt(req.query.player_id as string);
+    const pin = req.query.pin as string;
+    if (!playerId || !pin) return res.status(400).json({ error: "player_id und pin erforderlich" });
+
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, playerId)).limit(1);
+    if (!player || !verifyPin(pin, player.pin_hash) || !player.is_admin) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
+    const votes = await db.select({
+      id: tourMatchFairnessTable.id,
+      match_id: tourMatchFairnessTable.match_id,
+      player_id: tourMatchFairnessTable.player_id,
+      player_name: tourPlayersTable.name,
+      vote: tourMatchFairnessTable.vote,
+      created_at: tourMatchFairnessTable.created_at,
+      tournament_id: tourMatchesTable.tournament_id,
+      runde: tourMatchesTable.runde,
+      match_nr: tourMatchesTable.match_nr,
+    })
+      .from(tourMatchFairnessTable)
+      .leftJoin(tourPlayersTable, eq(tourMatchFairnessTable.player_id, tourPlayersTable.id))
+      .leftJoin(tourMatchesTable, eq(tourMatchFairnessTable.match_id, tourMatchesTable.id))
+      .orderBy(desc(tourMatchFairnessTable.created_at));
+
+    res.json(votes);
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }

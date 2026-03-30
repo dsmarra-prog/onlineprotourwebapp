@@ -4,6 +4,7 @@ import {
   Settings, CheckCircle, Loader2, Target, KeyRound, RefreshCw, ShieldCheck, LogOut,
   User, Link2, Link2Off, ChevronDown, Wifi, WifiOff, Copy, Check, ExternalLink,
   Terminal, ClipboardPaste, MessageSquare, Bell, GitBranch, Send,
+  AlertTriangle, ThumbsUp, ThumbsDown, Flag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -183,6 +184,234 @@ function AdminPanel() {
             ))}
             {players?.length === 0 && <p className="text-xs text-muted-foreground">Keine Spieler gefunden.</p>}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Admin: Disputes Panel ────────────────────────────────────────────────────
+
+type Dispute = {
+  id: number;
+  match_id: number;
+  player_id: number;
+  player_name: string | null;
+  reason: string;
+  status: string;
+  admin_note: string | null;
+  created_at: string;
+  tournament_id: number | null;
+  runde: string | null;
+  match_nr: number | null;
+};
+
+function AdminDisputesPanel() {
+  const { currentPlayer, sessionPin } = usePlayer();
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [noteEditing, setNoteEditing] = useState<Record<number, string>>({});
+
+  const { data: disputes = [], isLoading } = useQuery<Dispute[]>({
+    queryKey: ["admin-disputes"],
+    queryFn: () => apiFetch(`/tour/admin/disputes?player_id=${currentPlayer?.id}&pin=${encodeURIComponent(sessionPin ?? "")}`),
+    enabled: open && !!currentPlayer && !!sessionPin,
+    staleTime: 30_000,
+  });
+
+  const updateMut = useMutation({
+    mutationFn: ({ id, status, admin_note }: { id: number; status: string; admin_note?: string }) =>
+      apiFetch(`/tour/admin/disputes/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ player_id: currentPlayer?.id, pin: sessionPin, status, admin_note }),
+      }),
+    onSuccess: () => {
+      toast({ title: "Status aktualisiert" });
+      qc.invalidateQueries({ queryKey: ["admin-disputes"] });
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const statusBadge = (s: string) => {
+    if (s === "offen") return <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">Offen</span>;
+    if (s === "bearbeitet") return <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">In Bearbeitung</span>;
+    return <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-500/10 text-green-400 border border-green-500/20">Geschlossen</span>;
+  };
+
+  return (
+    <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <button
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-accent/30 transition-colors"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-yellow-400" />
+          <span className="font-semibold text-sm">Admin: Angefochtene Ergebnisse</span>
+          {disputes.filter(d => d.status === "offen").length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-yellow-500/20 text-yellow-400">
+              {disputes.filter(d => d.status === "offen").length}
+            </span>
+          )}
+        </div>
+        <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="border-t border-border divide-y divide-border/50">
+          {isLoading && <div className="p-4 text-sm text-muted-foreground">Lädt…</div>}
+          {!isLoading && disputes.length === 0 && (
+            <div className="p-4 text-sm text-muted-foreground">Keine Anfechtungen vorhanden.</div>
+          )}
+          {disputes.map((d) => (
+            <div key={d.id} className="p-4 space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {statusBadge(d.status)}
+                    <span className="text-xs font-medium">{d.player_name}</span>
+                    {d.tournament_id && (
+                      <a
+                        href={`/pro-tour/turniere/${d.tournament_id}`}
+                        className="text-xs text-primary hover:underline flex items-center gap-0.5"
+                        target="_blank" rel="noopener noreferrer"
+                      >
+                        <ExternalLink className="w-2.5 h-2.5" />
+                        {d.runde} #{d.match_nr}
+                      </a>
+                    )}
+                    <span className="text-[10px] text-muted-foreground">
+                      {new Date(d.created_at).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+                  <p className="text-sm bg-accent/40 rounded-lg px-3 py-2 mt-1">{d.reason}</p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <textarea
+                  placeholder="Admin-Notiz (intern)…"
+                  value={noteEditing[d.id] ?? d.admin_note ?? ""}
+                  onChange={(e) => setNoteEditing((prev) => ({ ...prev, [d.id]: e.target.value }))}
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary resize-none h-16"
+                />
+                <div className="flex gap-2 flex-wrap">
+                  {["offen", "bearbeitet", "geschlossen"].map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => updateMut.mutate({ id: d.id, status: s, admin_note: noteEditing[d.id] ?? d.admin_note ?? undefined })}
+                      disabled={updateMut.isPending}
+                      className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                        d.status === s
+                          ? "bg-primary/20 text-primary border-primary/40"
+                          : "border-border text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                      } disabled:opacity-50`}
+                    >
+                      {s === "offen" ? "Offen" : s === "bearbeitet" ? "In Bearbeitung" : "Geschlossen"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Admin: Fairness Panel ────────────────────────────────────────────────────
+
+type FairnessVote = {
+  id: number;
+  match_id: number;
+  player_id: number;
+  player_name: string | null;
+  vote: string;
+  created_at: string;
+  tournament_id: number | null;
+  runde: string | null;
+  match_nr: number | null;
+};
+
+function AdminFairnessPanel() {
+  const { currentPlayer, sessionPin } = usePlayer();
+  const [open, setOpen] = useState(false);
+
+  const { data: votes = [], isLoading } = useQuery<FairnessVote[]>({
+    queryKey: ["admin-fairness"],
+    queryFn: () => apiFetch(`/tour/admin/fairness?player_id=${currentPlayer?.id}&pin=${encodeURIComponent(sessionPin ?? "")}`),
+    enabled: open && !!currentPlayer && !!sessionPin,
+    staleTime: 30_000,
+  });
+
+  // Group by match
+  const byMatch = votes.reduce<Record<number, FairnessVote[]>>((acc, v) => {
+    const key = v.match_id;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(v);
+    return acc;
+  }, {});
+
+  const negativeMatches = Object.entries(byMatch).filter(([, vs]) => vs.some(v => v.vote === "down")).length;
+
+  return (
+    <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <button
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-accent/30 transition-colors"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <div className="flex items-center gap-2">
+          <Flag className="w-4 h-4 text-primary" />
+          <span className="font-semibold text-sm">Admin: Fairplay-Bewertungen</span>
+          {negativeMatches > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-500/20 text-red-400">
+              {negativeMatches} negativ
+            </span>
+          )}
+        </div>
+        <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="border-t border-border divide-y divide-border/50">
+          {isLoading && <div className="p-4 text-sm text-muted-foreground">Lädt…</div>}
+          {!isLoading && votes.length === 0 && (
+            <div className="p-4 text-sm text-muted-foreground">Noch keine Fairplay-Bewertungen.</div>
+          )}
+          {Object.entries(byMatch).map(([matchId, vs]) => {
+            const upCount = vs.filter(v => v.vote === "up").length;
+            const downCount = vs.filter(v => v.vote === "down").length;
+            const first = vs[0];
+            return (
+              <div key={matchId} className="px-4 py-3 flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {first.tournament_id && (
+                      <a
+                        href={`/pro-tour/turniere/${first.tournament_id}`}
+                        className="text-xs text-primary hover:underline flex items-center gap-0.5"
+                        target="_blank" rel="noopener noreferrer"
+                      >
+                        <ExternalLink className="w-2.5 h-2.5" />
+                        {first.runde} #{first.match_nr}
+                      </a>
+                    )}
+                    <span className="text-[10px] text-muted-foreground">
+                      {vs.map(v => v.player_name).join(", ")}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="flex items-center gap-1 text-xs text-green-400">
+                    <ThumbsUp className="w-3 h-3" /> {upCount}
+                  </span>
+                  <span className="flex items-center gap-1 text-xs text-red-400">
+                    <ThumbsDown className="w-3 h-3" /> {downCount}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -611,6 +840,8 @@ export default function EinstellungenPage() {
       {/* Admin: Rollenverwaltung */}
       {currentPlayer?.is_admin && <AdminPanel />}
       {currentPlayer?.is_admin && <AdminOomNamesPanel />}
+      {currentPlayer?.is_admin && <AdminDisputesPanel />}
+      {currentPlayer?.is_admin && <AdminFairnessPanel />}
 
       {/* Admin: Discord Settings */}
       {currentPlayer?.is_admin && <div className="bg-card border border-border rounded-xl overflow-hidden">
