@@ -17,9 +17,11 @@ export default function SpielerProfil() {
   const [generatingCard, setGeneratingCard] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
-  const { data: profile, isLoading } = useQuery<TourPlayerProfile>({
+  const { data: profile, isLoading, isError, error } = useQuery<TourPlayerProfile>({
     queryKey: ["player", id],
     queryFn: () => apiFetch(`/tour/players/${id}`),
+    enabled: !!id,
+    retry: 1,
   });
 
   const { data: allPlayers } = useQuery<TourPlayer[]>({
@@ -41,7 +43,14 @@ export default function SpielerProfil() {
   });
 
   if (isLoading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>;
-  if (!profile) return <div className="text-center py-20 text-muted-foreground">Spieler nicht gefunden</div>;
+  if (isError) return (
+    <div className="text-center py-20 space-y-2">
+      <p className="text-muted-foreground font-medium">Spieler nicht gefunden</p>
+      {error instanceof Error && <p className="text-xs text-muted-foreground/60">{error.message}</p>}
+      <Link href="/spieler" className="text-sm text-primary hover:underline block mt-3">← Zurück zur Spielerliste</Link>
+    </div>
+  );
+  if (!profile) return null;
 
   const bonusTotal = (profile.bonus_points ?? []).reduce((s, b) => s + b.points, 0);
   const proResults = profile.tournament_results?.filter((r) => r.tour_type !== "development") ?? [];

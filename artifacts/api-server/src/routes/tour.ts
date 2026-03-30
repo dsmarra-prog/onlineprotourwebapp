@@ -1946,6 +1946,7 @@ router.get("/tour/players/:id", async (req, res) => {
       id: player[0].id,
       name: player[0].name,
       autodarts_username: player[0].autodarts_username,
+      avatar_url: player[0].avatar_url ?? null,
       created_at: player[0].created_at,
       oom_points: totalPoints,
       dev_oom_points: devTotalPoints,

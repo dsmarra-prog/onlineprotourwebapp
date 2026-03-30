@@ -30,16 +30,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [sessionPin, setSessionPin] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [pinReentry, setPinReentry] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [pinError, setPinError] = useState("");
+  const [pinLoading, setPinLoading] = useState(false);
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        setCurrentPlayer(JSON.parse(stored));
-      }
       const storedPin = localStorage.getItem(PIN_KEY);
-      if (storedPin) {
-        setSessionPin(storedPin);
+      if (stored) {
+        const player = JSON.parse(stored) as CurrentPlayer;
+        setCurrentPlayer(player);
+        if (storedPin) {
+          setSessionPin(storedPin);
+        } else {
+          setPinReentry(true);
+        }
       }
     } catch {
       localStorage.removeItem(STORAGE_KEY);
@@ -57,8 +64,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(PIN_KEY, pin);
     setCurrentPlayer(player);
     setSessionPin(pin);
+    setPinReentry(false);
     if (!localStorage.getItem(tutorialKey(player.id))) {
       setShowTutorial(true);
+    }
+  };
+
+  const handlePinReentry = async () => {
+    if (!currentPlayer || !pinInput.trim()) return;
+    setPinLoading(true);
+    setPinError("");
+    try {
+      await login(currentPlayer.autodarts_username, pinInput.trim());
+      setPinInput("");
+    } catch {
+      setPinError("Falscher PIN. Bitte erneut versuchen.");
+    } finally {
+      setPinLoading(false);
     }
   };
 
@@ -75,11 +97,54 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setCurrentPlayer(null);
     setSessionPin("");
     setShowTutorial(false);
+    setPinReentry(false);
+    setPinInput("");
+    setPinError("");
   };
 
   return (
     <PlayerContext.Provider value={{ currentPlayer, sessionPin, showTutorial, dismissTutorial, login, logout, isLoading }}>
       {children}
+      {pinReentry && currentPlayer && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4">
+            <div className="text-center space-y-1">
+              <p className="text-lg font-bold">PIN erforderlich</p>
+              <p className="text-sm text-muted-foreground">
+                Willkommen zurück, <span className="font-semibold text-foreground">{currentPlayer.name}</span>!<br />
+                Bitte gib deinen PIN zur Bestätigung ein.
+              </p>
+            </div>
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={8}
+              placeholder="PIN eingeben"
+              value={pinInput}
+              onChange={(e) => { setPinInput(e.target.value); setPinError(""); }}
+              onKeyDown={(e) => e.key === "Enter" && handlePinReentry()}
+              className="w-full px-4 py-3 rounded-xl border border-border bg-background text-center text-xl tracking-widest font-bold placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+              autoFocus
+            />
+            {pinError && <p className="text-sm text-destructive text-center">{pinError}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={logout}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:bg-accent transition-colors"
+              >
+                Abmelden
+              </button>
+              <button
+                onClick={handlePinReentry}
+                disabled={pinLoading || !pinInput.trim()}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              >
+                {pinLoading ? "Prüfen…" : "Bestätigen"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </PlayerContext.Provider>
   );
 }
