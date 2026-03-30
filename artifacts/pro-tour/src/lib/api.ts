@@ -16,6 +16,7 @@ export type TourPlayer = {
   id: number;
   name: string;
   autodarts_username: string;
+  oom_name: string | null;
   created_at: string;
   oom_points: number;
   oom_rank: number;

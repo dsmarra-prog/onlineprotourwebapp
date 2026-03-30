@@ -13,7 +13,105 @@ import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api";
 import { usePlayer } from "@/context/PlayerContext";
 
-type TourPlayer = { id: number; name: string; autodarts_username: string; is_admin: boolean };
+type TourPlayer = { id: number; name: string; autodarts_username: string; oom_name: string | null; is_admin: boolean };
+
+function AdminOomNamesPanel() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { currentPlayer } = usePlayer();
+  const [open, setOpen] = useState(false);
+  const [adminPin, setAdminPin] = useState("");
+  const [editing, setEditing] = useState<Record<number, string>>({});
+
+  const { data: players, refetch } = useQuery<TourPlayer[]>({
+    queryKey: ["all-players-oom-names"],
+    queryFn: () => apiFetch("/tour/players"),
+    enabled: open,
+    staleTime: 30_000,
+  });
+
+  const saveMut = useMutation({
+    mutationFn: ({ id, oom_name }: { id: number; oom_name: string }) =>
+      apiFetch<{ ok: boolean; message: string }>(`/tour/players/${id}/oom-name`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          oom_name,
+          admin_player_id: currentPlayer?.id,
+          admin_player_pin: adminPin,
+        }),
+      }),
+    onSuccess: (d, vars) => {
+      toast({ title: d.message });
+      setEditing((e) => { const n = { ...e }; delete n[vars.id]; return n; });
+      refetch();
+      qc.invalidateQueries({ queryKey: ["players"] });
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="bg-card border border-primary/20 rounded-xl overflow-hidden">
+      <button
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-accent/30 transition-colors"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4 text-primary" />
+          <span className="font-semibold text-sm">Admin: OOM-Namen zuweisen</span>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30 font-semibold">Admin</span>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="border-t border-border px-4 pb-4 pt-4 space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Wenn ein Spieler bei der OOM unter einem anderen Namen (z.B. Discord-Name) geführt wird, trage ihn hier ein. Felder leer lassen = Autodarts-Username wird verwendet.
+          </p>
+          <div className="space-y-1">
+            <Label className="text-xs">Dein Admin-PIN</Label>
+            <Input
+              type="password"
+              value={adminPin}
+              onChange={(e) => setAdminPin(e.target.value)}
+              placeholder="••••"
+              className="h-8 text-sm max-w-[140px]"
+            />
+          </div>
+          <div className="space-y-2">
+            {players?.map((p) => {
+              const val = editing[p.id] ?? (p.oom_name ?? "");
+              const changed = val !== (p.oom_name ?? "");
+              return (
+                <div key={p.id} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-accent/20">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{p.name}</p>
+                    <p className="text-xs text-muted-foreground">@{p.autodarts_username}</p>
+                  </div>
+                  <Input
+                    value={val}
+                    onChange={(e) => setEditing((ed) => ({ ...ed, [p.id]: e.target.value }))}
+                    placeholder="OOM-Name (Discord)"
+                    className="h-7 text-xs w-40"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className={`h-7 text-xs px-2 ${changed ? "border-primary/50 text-primary" : "opacity-40"}`}
+                    disabled={!changed || !adminPin || adminPin.length < 4 || saveMut.isPending}
+                    onClick={() => saveMut.mutate({ id: p.id, oom_name: val })}
+                  >
+                    {saveMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function AdminPanel() {
   const { toast } = useToast();
@@ -524,6 +622,7 @@ export default function EinstellungenPage() {
 
       {/* Admin: Rollenverwaltung */}
       {currentPlayer?.is_admin && <AdminPanel />}
+      {currentPlayer?.is_admin && <AdminOomNamesPanel />}
 
       {/* Admin: Discord Settings */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">

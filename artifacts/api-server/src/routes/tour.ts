@@ -1385,9 +1385,14 @@ router.get("/tour/players", async (_req, res) => {
 
     // ── Build result per registered player ───────────────────────────────────
     const result = players.map((p) => {
-      const normUsername = normalizeUsername(p.autodarts_username);
-      const proTotal = (proOomMap.get(normUsername) ?? 0) + (inAppProPts.get(p.id) ?? 0);
-      const devTotal = (devOomMap.get(normUsername) ?? 0) + (inAppDevPts.get(p.id) ?? 0);
+      // Use oom_name (Discord/OOM alias) as primary key, fall back to autodarts_username
+      const lookupKey = normalizeUsername(p.oom_name ?? p.autodarts_username);
+      const fallbackKey = p.oom_name ? normalizeUsername(p.autodarts_username) : null;
+
+      const proHist = proOomMap.get(lookupKey) ?? (fallbackKey ? proOomMap.get(fallbackKey) ?? 0 : 0);
+      const devHist = devOomMap.get(lookupKey) ?? (fallbackKey ? devOomMap.get(fallbackKey) ?? 0 : 0);
+      const proTotal = proHist + (inAppProPts.get(p.id) ?? 0);
+      const devTotal = devHist + (inAppDevPts.get(p.id) ?? 0);
 
       // Priority: Pro Tour > Dev Tour
       const oomTourType: "pro" | "development" | null =
@@ -1398,6 +1403,7 @@ router.get("/tour/players", async (_req, res) => {
         id: p.id,
         name: p.name,
         autodarts_username: p.autodarts_username,
+        oom_name: p.oom_name ?? null,
         created_at: p.created_at,
         oom_points: oomPoints,
         oom_rank: 0,
@@ -1486,6 +1492,32 @@ router.post("/tour/admin/revoke-admin", async (req, res) => {
     if (!player) return res.status(404).json({ error: "Spieler nicht gefunden" });
     await db.update(tourPlayersTable).set({ is_admin: false }).where(eq(tourPlayersTable.id, parseInt(player_id)));
     res.json({ ok: true, message: `${player.name} ist kein Admin mehr` });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// PATCH /tour/players/:id/oom-name — set OOM/Discord name alias (admin only via pin)
+router.patch("/tour/players/:id/oom-name", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { oom_name, admin_pin, admin_player_id, admin_player_pin } = req.body;
+
+    const byAdminPin = admin_pin && admin_pin === process.env.ADMIN_SECRET;
+    const byAdminPlayer = admin_player_id && admin_player_pin
+      && await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+
+    if (!byAdminPin && !byAdminPlayer) {
+      return res.status(403).json({ error: "Admin-Berechtigung erforderlich" });
+    }
+
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, id)).limit(1);
+    if (!player) return res.status(404).json({ error: "Spieler nicht gefunden" });
+
+    const newName = typeof oom_name === "string" && oom_name.trim() ? oom_name.trim() : null;
+    await db.update(tourPlayersTable).set({ oom_name: newName }).where(eq(tourPlayersTable.id, id));
+
+    res.json({ ok: true, message: newName ? `OOM-Name für ${player.name} gesetzt: ${newName}` : `OOM-Name für ${player.name} entfernt` });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }

@@ -4,6 +4,7 @@ export const tourPlayersTable = pgTable("tour_players", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   autodarts_username: text("autodarts_username").notNull().unique(),
+  oom_name: text("oom_name"),
   pin_hash: text("pin_hash").notNull(),
   autodarts_refresh_token: text("autodarts_refresh_token"),
   is_admin: boolean("is_admin").notNull().default(false),
