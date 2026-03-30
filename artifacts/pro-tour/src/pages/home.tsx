@@ -103,7 +103,7 @@ export default function HomeDashboard() {
                     "bg-accent text-muted-foreground"
                   }`}>{entry.rank}</span>
                   <span className="flex-1 text-sm font-medium">{entry.player_name}</span>
-                  <span className="text-sm font-bold text-primary">£{entry.total_points.toLocaleString("en-GB")}</span>
+                  <span className="text-sm font-bold text-primary">{entry.total_points.toLocaleString("de-DE")} Pkt</span>
                 </Link>
               ))}
             </div>
