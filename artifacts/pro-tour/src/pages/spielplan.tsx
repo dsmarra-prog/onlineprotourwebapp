@@ -135,21 +135,22 @@ export default function SpielplanPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Calendar className="w-6 h-6 text-primary" /> Spielplan – Season 1
+          <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+            <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-primary flex-shrink-0" /> Spielplan – Season 1
           </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Tourkalender 2026 · Pro Tour & Development Tour
+          <p className="text-muted-foreground text-xs sm:text-sm mt-1">
+            Tourkalender 2026 · Pro Tour & Dev Tour
           </p>
         </div>
         <button
           onClick={() => setShowSeedPanel((v) => !v)}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary border border-border hover:border-primary/30 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary border border-border hover:border-primary/30 px-2.5 py-1.5 rounded-lg transition-colors flex-shrink-0"
         >
           <PlusCircle className="w-3.5 h-3.5" />
-          Turniere anlegen
+          <span className="hidden sm:inline">Turniere anlegen</span>
+          <span className="sm:hidden">Anlegen</span>
         </button>
       </div>
 
@@ -245,7 +246,7 @@ export default function SpielplanPage() {
                     return (
                       <div
                         key={event.id}
-                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                        className={`flex items-center gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-xl border transition-all ${
                           isNext
                             ? "bg-primary/8 border-primary/30"
                             : isPast
@@ -253,33 +254,33 @@ export default function SpielplanPage() {
                             : "bg-card border-border hover:border-primary/30"
                         }`}
                       >
-                        <div className="w-14 text-center flex-shrink-0">
+                        <div className="w-7 sm:w-10 text-center flex-shrink-0">
                           {isPast ? (
-                            <CheckCircle2 className="w-5 h-5 text-green-500 mx-auto" />
+                            <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-500 mx-auto" />
                           ) : (
-                            <Clock className="w-5 h-5 text-primary mx-auto" />
+                            <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-primary mx-auto" />
                           )}
                         </div>
 
-                        <div className="w-24 flex-shrink-0 text-center">
+                        <div className="w-16 sm:w-24 flex-shrink-0">
                           <p className="text-xs font-bold">{event.datum.slice(0, 5)}</p>
-                          <p className="text-xs text-muted-foreground">{event.tag} · {event.uhrzeit}</p>
+                          <p className="text-[10px] sm:text-xs text-muted-foreground">{event.tag} · {event.uhrzeit}</p>
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${TOUR_BADGE_COLOR[event.tour_type]}`}>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`text-[10px] sm:text-xs font-bold px-1 sm:px-1.5 py-0.5 rounded ${TOUR_BADGE_COLOR[event.tour_type]}`}>
                               {TOUR_BADGE[event.tour_type]}
                             </span>
-                            <p className="font-medium text-sm">{event.event_name}</p>
+                            <p className="font-medium text-xs sm:text-sm leading-tight">{event.event_name}</p>
                           </div>
-                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                            <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${KATEGORIE_COLOR[event.kategorie] ?? ""}`}>
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            <span className={`text-[10px] sm:text-xs px-1 sm:px-1.5 py-0.5 rounded-full font-medium ${KATEGORIE_COLOR[event.kategorie] ?? ""}`}>
                               {KATEGORIE_LABEL[event.kategorie] ?? event.kategorie}
                             </span>
-                            <span className="text-xs text-muted-foreground">{event.mode}</span>
+                            <span className="text-[10px] sm:text-xs text-muted-foreground">{event.mode}</span>
                             {event.qualification && (
-                              <span className="text-xs text-yellow-400">★ {event.qualification}</span>
+                              <span className="text-[10px] sm:text-xs text-yellow-400 hidden sm:inline">★ {event.qualification}</span>
                             )}
                           </div>
                         </div>

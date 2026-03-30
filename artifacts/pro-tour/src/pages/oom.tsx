@@ -231,12 +231,12 @@ export default function OomPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-border bg-accent/30 text-xs text-muted-foreground">
-                <th className="text-left p-3 w-10">Pl.</th>
-                <th className="text-left p-3">Spieler</th>
-                <th className="text-center p-3">T</th>
-                <th className="text-center p-3">Bestes Ergebnis</th>
-                <th className="text-right p-3">Bonus</th>
-                <th className="text-right p-3">Punkte</th>
+                <th className="text-left p-2 sm:p-3 w-8 sm:w-10">Pl.</th>
+                <th className="text-left p-2 sm:p-3">Spieler</th>
+                <th className="text-center p-2 sm:p-3 hidden sm:table-cell">T</th>
+                <th className="text-center p-2 sm:p-3 hidden sm:table-cell">Bestes Ergebnis</th>
+                <th className="text-right p-2 sm:p-3 hidden sm:table-cell">Bonus</th>
+                <th className="text-right p-2 sm:p-3">Punkte</th>
               </tr>
             </thead>
             <tbody>
@@ -247,17 +247,17 @@ export default function OomPage() {
                     key={entry.player_id}
                     className={`border-b border-border/50 hover:bg-accent/20 transition-colors ${i < 3 ? "bg-accent/10" : ""}`}
                   >
-                    <td className="p-3">
+                    <td className="p-2 sm:p-3">
                       <RankBadge rank={entry.rank} />
                     </td>
-                    <td className="p-3">
+                    <td className="p-2 sm:p-3">
                       <div className="font-semibold text-sm">{entry.autodarts_username}</div>
                     </td>
-                    <td className="p-3 text-center text-sm text-muted-foreground">{entry.tournaments_played}</td>
-                    <td className="p-3 text-center">
+                    <td className="p-2 sm:p-3 text-center text-sm text-muted-foreground hidden sm:table-cell">{entry.tournaments_played}</td>
+                    <td className="p-2 sm:p-3 text-center hidden sm:table-cell">
                       <ResultBadge result={best} />
                     </td>
-                    <td className="p-3 text-right text-xs">
+                    <td className="p-2 sm:p-3 text-right text-xs hidden sm:table-cell">
                       {entry.bonus_total > 0 ? (
                         <span className="text-yellow-400 font-medium flex items-center justify-end gap-0.5">
                           <Star className="w-3 h-3" />+{entry.bonus_total}
@@ -266,7 +266,7 @@ export default function OomPage() {
                         <span className="text-muted-foreground">—</span>
                       )}
                     </td>
-                    <td className="p-3 text-right">
+                    <td className="p-2 sm:p-3 text-right">
                       <span className="font-bold text-primary text-sm">
                         {entry.total_points.toLocaleString("de-DE")}
                       </span>

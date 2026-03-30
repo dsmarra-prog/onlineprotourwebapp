@@ -34,7 +34,7 @@ export default function HomeDashboard() {
       </div>
 
       {/* Stats row */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <StatCard icon={Trophy} label="Turniere gesamt" value={tournaments?.length ?? 0} />
         <StatCard icon={Users} label="Spieler" value={oom?.length ?? 0} />
         <StatCard icon={Zap} label="Aktive Turniere" value={laufend.length} accent />
@@ -59,7 +59,7 @@ export default function HomeDashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Active tournaments */}
         <div className="bg-card border border-border rounded-xl p-4">
           <div className="flex items-center gap-2 mb-4">
@@ -120,7 +120,7 @@ export default function HomeDashboard() {
             <Calendar className="w-4 h-4 text-primary" />
             <h2 className="font-semibold text-sm">Anstehende Turniere</h2>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {offen.slice(0, 4).map((t) => (
               <Link key={t.id} href={`/turniere/${t.id}`} className="p-3 rounded-lg bg-accent/30 hover:bg-accent/60 transition-colors border border-border">
                 <p className="font-medium text-sm">{t.name}</p>
@@ -176,12 +176,12 @@ function StatCard({ icon: Icon, label, value, accent }: {
   icon: any; label: string; value: number; accent?: boolean;
 }) {
   return (
-    <div className={`rounded-xl border p-4 ${accent ? "border-primary/30 bg-primary/5" : "border-border bg-card"}`}>
-      <div className="flex items-center gap-2 mb-2">
-        <Icon className={`w-4 h-4 ${accent ? "text-primary" : "text-muted-foreground"}`} />
-        <span className="text-xs text-muted-foreground">{label}</span>
+    <div className={`rounded-xl border p-3 sm:p-4 ${accent ? "border-primary/30 bg-primary/5" : "border-border bg-card"}`}>
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${accent ? "text-primary" : "text-muted-foreground"}`} />
+        <span className="text-[10px] sm:text-xs text-muted-foreground leading-tight">{label}</span>
       </div>
-      <p className={`text-2xl font-bold ${accent ? "text-primary" : "text-foreground"}`}>{value}</p>
+      <p className={`text-xl sm:text-2xl font-bold ${accent ? "text-primary" : "text-foreground"}`}>{value}</p>
     </div>
   );
 }

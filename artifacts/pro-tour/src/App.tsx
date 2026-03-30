@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { Switch, Route, Router as WouterRouter, Link, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Trophy, Users, BarChart3, Settings, Home, Target, CalendarDays, LogOut, Swords } from "lucide-react";
+import { Trophy, Users, BarChart3, Settings, Home, Target, CalendarDays, LogOut, Swords, Menu, X } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import TourniereListe from "@/pages/turniere";
 import TurnierDetail from "@/pages/turnier-detail";
@@ -34,19 +35,22 @@ const NAV_ITEMS = [
 function NavBar() {
   const [location] = useLocation();
   const { currentPlayer, logout } = usePlayer();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const handleNavClick = () => setMobileOpen(false);
 
   return (
     <nav className="border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 flex items-center h-14 gap-1">
-        <div className="flex items-center gap-2 mr-6">
-          <img
-            src="/pro-tour/opt-logo.png"
-            alt="OPT"
-            className="w-8 h-8 object-contain"
-          />
-          <span className="font-bold text-sm text-primary tracking-wide uppercase">Online Pro Tour</span>
+        {/* Logo */}
+        <div className="flex items-center gap-2 mr-4 flex-shrink-0">
+          <img src="/pro-tour/opt-logo.png" alt="OPT" className="w-8 h-8 object-contain" />
+          <span className="font-bold text-sm text-primary tracking-wide uppercase hidden sm:block">Online Pro Tour</span>
+          <span className="font-bold text-xs text-primary tracking-wide uppercase sm:hidden">OPT</span>
         </div>
-        <div className="flex items-center gap-1 flex-1 overflow-x-auto">
+
+        {/* Desktop nav */}
+        <div className="hidden md:flex items-center gap-1 flex-1">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
             const isActive = href === "/" ? location === "/" : location.startsWith(href);
             return (
@@ -65,10 +69,11 @@ function NavBar() {
             );
           })}
         </div>
-        {/* Player info + logout */}
+
+        {/* Desktop player info */}
         {currentPlayer && (
-          <div className="flex items-center gap-2 ml-2 pl-3 border-l border-border shrink-0">
-            <div className="text-right hidden sm:block">
+          <div className="hidden md:flex items-center gap-2 ml-2 pl-3 border-l border-border shrink-0">
+            <div className="text-right">
               <div className="text-xs font-semibold text-foreground leading-none">{currentPlayer.name}</div>
               <div className="text-[10px] text-muted-foreground leading-none mt-0.5">@{currentPlayer.autodarts_username}</div>
             </div>
@@ -81,7 +86,56 @@ function NavBar() {
             </button>
           </div>
         )}
+
+        {/* Mobile: active route label + hamburger */}
+        <div className="flex md:hidden items-center gap-2 flex-1 justify-end">
+          {currentPlayer && (
+            <span className="text-xs text-muted-foreground truncate max-w-[120px]">{currentPlayer.name}</span>
+          )}
+          <button
+            onClick={() => setMobileOpen((v) => !v)}
+            className="p-2 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            aria-label="Navigation"
+          >
+            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
       </div>
+
+      {/* Mobile menu */}
+      {mobileOpen && (
+        <div className="md:hidden border-t border-border bg-card/95 backdrop-blur-sm">
+          <div className="max-w-6xl mx-auto px-4 py-3 space-y-1">
+            {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+              const isActive = href === "/" ? location === "/" : location.startsWith(href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={handleNavClick}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-primary/15 text-primary border border-primary/30"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  {label}
+                </Link>
+              );
+            })}
+            {currentPlayer && (
+              <button
+                onClick={() => { logout(); setMobileOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Ausloggen
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </nav>
   );
 }
