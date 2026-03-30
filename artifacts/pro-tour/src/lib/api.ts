@@ -118,6 +118,10 @@ export type TourPlayerProfile = {
     legs_won: number;
     legs_lost: number;
     avg_score: number | null;
+    first9_avg: number | null;
+    double_rate: number | null;
+    doubles_hit: number | null;
+    doubles_att: number | null;
     tournaments_played: number;
     titles: number;
   };

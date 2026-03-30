@@ -1261,6 +1261,8 @@ router.get("/tour/players/:id", async (req, res) => {
     let totalWins = 0, totalLosses = 0;
     let legWins = 0, legLosses = 0;
     let avgSum = 0, avgCount = 0;
+    let first9Sum = 0, first9Count = 0;
+    let doublesHitTotal = 0, doublesAttTotal = 0;
 
     for (const tid of tournamentIds) {
       const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tid)).limit(1);
@@ -1283,6 +1285,13 @@ router.get("/tour/players/:id", async (req, res) => {
         legWins += myLegs; legLosses += oppLegs;
         const myAvg = isP1 ? m.avg_p1 : m.avg_p2;
         if (myAvg != null && myAvg > 0) { avgSum += myAvg; avgCount++; }
+        // Extended stats
+        const myFirst9 = isP1 ? m.first9_p1 : m.first9_p2;
+        if (myFirst9 != null && myFirst9 > 0) { first9Sum += myFirst9; first9Count++; }
+        const myDblHit = isP1 ? m.doubles_hit_p1 : m.doubles_hit_p2;
+        const myDblAtt = isP1 ? m.doubles_att_p1 : m.doubles_att_p2;
+        if (myDblHit != null) doublesHitTotal += myDblHit;
+        if (myDblAtt != null) doublesAttTotal += myDblAtt;
       }
 
       const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
@@ -1329,6 +1338,10 @@ router.get("/tour/players/:id", async (req, res) => {
         legs_won: legWins,
         legs_lost: legLosses,
         avg_score: avgCount > 0 ? Math.round((avgSum / avgCount) * 10) / 10 : null,
+        first9_avg: first9Count > 0 ? Math.round((first9Sum / first9Count) * 10) / 10 : null,
+        double_rate: doublesAttTotal > 0 ? Math.round((doublesHitTotal / doublesAttTotal) * 1000) / 10 : null,
+        doubles_hit: doublesHitTotal > 0 ? doublesHitTotal : null,
+        doubles_att: doublesAttTotal > 0 ? doublesAttTotal : null,
         tournaments_played: tourResults.length,
         titles: tourResults.filter((r) => r.round === "Sieger").length,
       },
@@ -2014,7 +2027,16 @@ function isMatchComplete(adMatch: any, winLegs: number): boolean {
   return (adMatch.players || []).some((p: any) => (p.legs ?? p.legsWon ?? 0) >= winLegs);
 }
 
-function getMatchScore(adMatch: any, username1: string, username2: string) {
+type MatchStats = {
+  legs1: number; legs2: number;
+  avg1: number; avg2: number;
+  // Extended stats (only populated from as/v0/matches with full games data)
+  first9_p1: number | null; first9_p2: number | null;
+  doubles_hit_p1: number | null; doubles_att_p1: number | null;
+  doubles_hit_p2: number | null; doubles_att_p2: number | null;
+};
+
+function getMatchScore(adMatch: any, username1: string, username2: string): MatchStats {
   const players: any[] = adMatch.players || [];
   const scores: any[] = adMatch.scores || [];           // scores[player.index] = { legs, sets }
   const games: any[] = adMatch.games || [];             // as/v0 only: individual leg data with turns
@@ -2028,17 +2050,68 @@ function getMatchScore(adMatch: any, username1: string, username2: string) {
   if (games.length > 0 && p1 && p2) {
     const legs1 = games.filter((g: any) => g.winnerPlayerId === p1.id).length;
     const legs2 = games.filter((g: any) => g.winnerPlayerId === p2.id).length;
-    const computeMatchAvg = (pid: string) => {
-      let total = 0;
-      let turns = 0;
+
+    const computeExtendedStats = (pid: string, legs_won: number) => {
+      let totalPts = 0, totalTurns = 0;
+      let first9Total = 0, first9Count = 0;
+      let doublesHit = 0, doublesAtt = 0;
+
       for (const g of games) {
-        for (const t of (g.turns || [])) {
-          if (t.playerId === pid && !t.busted) { total += t.points; turns++; }
+        let playerVisit = 0;
+        const legTurns: any[] = (g.turns || []).filter((t: any) => t.playerId === pid);
+
+        for (const t of legTurns) {
+          // Overall average (excluding busts)
+          if (!t.busted) { totalPts += t.points; totalTurns++; }
+
+          // First 9: first 3 visits per leg
+          if (!t.busted && playerVisit < 3) { first9Total += t.points; first9Count++; }
+          playerVisit++;
+
+          // Double stats from dart-level data
+          const darts: any[] = t.darts || [];
+          for (const d of darts) {
+            const seg = d.segment ?? d;
+            const isDouble = seg.type === "double" || seg.multiplier === 2
+              || seg.name === "Bull" || seg.name === "Bullseye" || seg.name === "DB";
+            if (isDouble) doublesHit++;
+          }
+        }
+
+        // Checkout attempts: last leg turn had darts aimed at doubles.
+        // Proxy: if player won this leg, they hit one (already counted via doublesHit above for last dart).
+        // Count double attempts as darts thrown at doubles (either hit or "aimed at" in winning/busted turns).
+        // For legs not won: any double dart in the last turn = checkout attempt.
+        const lastTurn = legTurns[legTurns.length - 1];
+        if (lastTurn) {
+          const darts: any[] = lastTurn.darts || [];
+          const hadDoubleAttempt = darts.some((d: any) => {
+            const seg = d.segment ?? d;
+            return seg.type === "double" || seg.multiplier === 2
+              || seg.name === "Bull" || seg.name === "Bullseye" || seg.name === "DB";
+          });
+          if (hadDoubleAttempt) doublesAtt++;
         }
       }
-      return turns > 0 ? Math.round((total / turns) * 10) / 10 : 0;
+
+      return {
+        avg: totalTurns > 0 ? Math.round((totalPts / totalTurns) * 10) / 10 : 0,
+        first9: first9Count > 0 ? Math.round((first9Total / first9Count) * 10) / 10 : null,
+        doublesHit,
+        doublesAtt,
+      };
     };
-    return { legs1, legs2, avg1: computeMatchAvg(p1.id), avg2: computeMatchAvg(p2.id) };
+
+    const s1 = computeExtendedStats(p1.id, legs1);
+    const s2 = computeExtendedStats(p2.id, legs2);
+
+    return {
+      legs1, legs2,
+      avg1: s1.avg, avg2: s2.avg,
+      first9_p1: s1.first9, first9_p2: s2.first9,
+      doubles_hit_p1: s1.doublesHit, doubles_att_p1: s1.doublesAtt,
+      doubles_hit_p2: s2.doublesHit, doubles_att_p2: s2.doublesAtt,
+    };
   }
 
   // gs/v0/matches: no games array → use scores[player.index].legs and account averages
@@ -2049,6 +2122,9 @@ function getMatchScore(adMatch: any, username1: string, username2: string) {
     legs2: s2.legs ?? p2?.legs ?? 0,
     avg1: p1?.user?.average ?? p1?.average ?? 0,
     avg2: p2?.user?.average ?? p2?.average ?? 0,
+    first9_p1: null, first9_p2: null,
+    doubles_hit_p1: null, doubles_att_p1: null,
+    doubles_hit_p2: null, doubles_att_p2: null,
   };
 }
 
@@ -2171,7 +2247,14 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
                 const a1 = Math.round(score.avg1 * 10) / 10;
                 const a2 = Math.round(score.avg2 * 10) / 10;
                 await db.update(tourMatchesTable)
-                  .set({ winner_id: winnerId, score_p1: score.legs1, score_p2: score.legs2, avg_p1: a1, avg_p2: a2, status: "abgeschlossen", autodarts_match_id: directMatch.id })
+                  .set({
+                    winner_id: winnerId, score_p1: score.legs1, score_p2: score.legs2,
+                    avg_p1: a1, avg_p2: a2,
+                    first9_p1: score.first9_p1, first9_p2: score.first9_p2,
+                    doubles_hit_p1: score.doubles_hit_p1, doubles_att_p1: score.doubles_att_p1,
+                    doubles_hit_p2: score.doubles_hit_p2, doubles_att_p2: score.doubles_att_p2,
+                    status: "abgeschlossen", autodarts_match_id: directMatch.id,
+                  })
                   .where(eq(tourMatchesTable.id, match.id));
                 await advanceWinner(tournamentId, match.runde, match.match_nr, winnerId);
                 await checkTournamentComplete(tournamentId);
@@ -2269,6 +2352,14 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
           winner_id: winnerId,
           score_p1: score.legs1,
           score_p2: score.legs2,
+          avg_p1: Math.round(score.avg1 * 10) / 10,
+          avg_p2: Math.round(score.avg2 * 10) / 10,
+          first9_p1: score.first9_p1,
+          first9_p2: score.first9_p2,
+          doubles_hit_p1: score.doubles_hit_p1,
+          doubles_att_p1: score.doubles_att_p1,
+          doubles_hit_p2: score.doubles_hit_p2,
+          doubles_att_p2: score.doubles_att_p2,
           status: "abgeschlossen",
           autodarts_match_id: scoreSource.id,
         })

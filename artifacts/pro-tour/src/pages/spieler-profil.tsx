@@ -66,13 +66,36 @@ export default function SpielerProfil() {
         </div>
         <div className="bg-card border border-border rounded-xl p-4 text-center">
           <p className="text-xl font-bold">{profile.stats?.legs_won ?? 0} : {profile.stats?.legs_lost ?? 0}</p>
-          <p className="text-xs text-muted-foreground mt-1">Legs (gewonnen : verloren)</p>
+          <p className="text-xs text-muted-foreground mt-1">Legs (W : L)</p>
         </div>
         <div className="bg-card border border-border rounded-xl p-4 text-center">
           <p className="text-xl font-bold text-yellow-400">{profile.stats?.titles ?? 0}</p>
           <p className="text-xs text-muted-foreground mt-1">Turniertitel</p>
         </div>
       </div>
+
+      {/* Extended autodarts stats */}
+      {(profile.stats?.first9_avg != null || profile.stats?.double_rate != null) && (
+        <div className="grid grid-cols-2 gap-3">
+          {profile.stats?.first9_avg != null && (
+            <div className="bg-card border border-border rounded-xl p-4 text-center">
+              <p className="text-xl font-bold text-primary">{profile.stats.first9_avg.toFixed(1)}</p>
+              <p className="text-xs text-muted-foreground mt-1">First 9 Average</p>
+            </div>
+          )}
+          {profile.stats?.double_rate != null && (
+            <div className="bg-card border border-border rounded-xl p-4 text-center">
+              <p className="text-xl font-bold text-green-400">{profile.stats.double_rate.toFixed(1)}%</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Doppelquote
+                {profile.stats.doubles_hit != null && profile.stats.doubles_att != null && (
+                  <span className="block text-[10px] opacity-60">{profile.stats.doubles_hit}/{profile.stats.doubles_att} Doubles</span>
+                )}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* H2H section */}
       <div className="bg-card border border-border rounded-xl p-4">

@@ -68,6 +68,13 @@ export const tourMatchesTable = pgTable("tour_matches", {
   score_p2: integer("score_p2"),
   avg_p1: real("avg_p1"),
   avg_p2: real("avg_p2"),
+  // Extended stats from Autodarts (populated on match completion)
+  first9_p1: real("first9_p1"),
+  first9_p2: real("first9_p2"),
+  doubles_hit_p1: integer("doubles_hit_p1"),
+  doubles_att_p1: integer("doubles_att_p1"),
+  doubles_hit_p2: integer("doubles_hit_p2"),
+  doubles_att_p2: integer("doubles_att_p2"),
   status: text("status").notNull().default("ausstehend"),
   is_bye: boolean("is_bye").notNull().default(false),
   autodarts_match_id: text("autodarts_match_id"),
