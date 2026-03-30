@@ -2498,7 +2498,7 @@ router.post("/tour/tournaments/:id/draw-next-round", async (req, res) => {
     const seeded = [...shuffled, ...Array(bracketSize - shuffled.length).fill(null)];
     const matchCount = seeded.length / 2;
 
-    const newMatches = [];
+    const newMatches: (typeof tourMatchesTable.$inferInsert)[] = [];
     for (let i = 0; i < matchCount; i++) {
       const p1 = seeded[i * 2] ?? null;
       const p2 = seeded[i * 2 + 1] ?? null;
@@ -2517,7 +2517,7 @@ router.post("/tour/tournaments/:id/draw-next-round", async (req, res) => {
       });
     }
 
-    await db.insert(tourMatchesTable).values(newMatches as any);
+    await db.insert(tourMatchesTable).values(newMatches);
 
     // Load player names for response and lobby/thread creation
     const playerNameMap = new Map<number, string>();

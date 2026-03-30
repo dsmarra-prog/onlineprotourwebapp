@@ -1515,6 +1515,13 @@ function DrawOverlay({
     return () => clearTimeout(t);
   }, [phase, revealCount, realPairings.length]);
 
+  // Auto-close 4 seconds after all pairings are revealed
+  useEffect(() => {
+    if (phase !== "done") return;
+    const t = setTimeout(() => onClose(), 4000);
+    return () => clearTimeout(t);
+  }, [phase, onClose]);
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/92 backdrop-blur-md p-6">
       <style>{`
