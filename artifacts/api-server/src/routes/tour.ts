@@ -402,7 +402,56 @@ async function sendPushToPlayer(playerId: number, title: string, body: string, u
   }
 }
 
-async function notifyMatchReady(matchId: number, tournamentName: string) {
+async function autoCreateLobby(matchId: number): Promise<string | null> {
+  try {
+    const [match] = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.id, matchId)).limit(1);
+    if (!match || match.status !== "ausstehend" || match.autodarts_match_id) return null;
+    if (!match.player1_id || !match.player2_id) return null;
+
+    const [tournament] = await db.select().from(tourTournamentsTable)
+      .where(eq(tourTournamentsTable.id, match.tournament_id)).limit(1);
+    if (!tournament) return null;
+
+    const winLegs = Math.ceil(tournament.legs_format / 2);
+
+    // Token priority: player1 → player2 → global admin
+    let accessToken: string | null = null;
+    for (const id of [match.player1_id, match.player2_id]) {
+      accessToken = await getPlayerAccessToken(id);
+      if (accessToken) break;
+    }
+    if (!accessToken) accessToken = await getAutodartAccessToken();
+    if (!accessToken) return null;
+
+    const lobbyBody = {
+      variant: "X01",
+      settings: { inMode: "Straight", outMode: "Double", bullMode: "25/50", maxRounds: 50, baseScore: 501 },
+      bullOffMode: "Normal",
+      legs: winLegs,
+      hasReferee: false,
+      isPrivate: true,
+    };
+
+    const lobbyRes = await fetch("https://api.autodarts.io/gs/v0/lobbies", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(lobbyBody),
+    });
+
+    if (!lobbyRes.ok) return null;
+
+    const lobby = await lobbyRes.json();
+    await db.update(tourMatchesTable)
+      .set({ autodarts_match_id: lobby.id })
+      .where(eq(tourMatchesTable.id, matchId));
+
+    return `https://play.autodarts.io/lobbies/${lobby.id}`;
+  } catch {
+    return null;
+  }
+}
+
+async function notifyMatchReady(matchId: number, tournamentName: string, lobbyUrl?: string | null) {
   try {
     const match = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.id, matchId)).limit(1);
     if (!match[0] || !match[0].player1_id || !match[0].player2_id) return;
@@ -415,11 +464,16 @@ async function notifyMatchReady(matchId: number, tournamentName: string) {
     const roundLabel: Record<string, string> = { R64: "R64", R32: "R32", R16: "Achtelfinale", QF: "Viertelfinale", SF: "Halbfinale", F: "Finale" };
     const round = roundLabel[match[0].runde] ?? match[0].runde;
 
+    const notifUrl = lobbyUrl ?? `/pro-tour/turniere/${match[0].tournament_id}`;
+    const bodyText = lobbyUrl
+      ? `${round}: ${p1Name} vs ${p2Name} — Lobby bereit! Jetzt joinen.`
+      : `${round}: ${p1Name} vs ${p2Name} — ${tournamentName}`;
+
     if (match[0].player1_id) {
-      sendPushToPlayer(match[0].player1_id, `🎯 Dein Match ist bereit!`, `${round}: ${p1Name} vs ${p2Name} — ${tournamentName}`, `/pro-tour/turniere/${match[0].tournament_id}`).catch(() => {});
+      sendPushToPlayer(match[0].player1_id, `🎯 Dein Match ist bereit!`, bodyText, notifUrl).catch(() => {});
     }
     if (match[0].player2_id) {
-      sendPushToPlayer(match[0].player2_id, `🎯 Dein Match ist bereit!`, `${round}: ${p1Name} vs ${p2Name} — ${tournamentName}`, `/pro-tour/turniere/${match[0].tournament_id}`).catch(() => {});
+      sendPushToPlayer(match[0].player2_id, `🎯 Dein Match ist bereit!`, bodyText, notifUrl).catch(() => {});
     }
   } catch (e) {
     console.warn("notifyMatchReady error:", String(e));
@@ -463,7 +517,9 @@ async function advanceWinner(tournamentId: number, currentRunde: string, matchNr
   const updated = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.id, nextMatches[0].id)).limit(1);
   if (updated[0]?.player1_id && updated[0]?.player2_id && !updated[0]?.is_bye) {
     const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
-    notifyMatchReady(updated[0].id, t[0]?.name ?? "Turnier").catch(() => {});
+    // Auto-create Autodarts lobby, then notify with the join URL
+    const lobbyUrl = await autoCreateLobby(updated[0].id).catch(() => null);
+    notifyMatchReady(updated[0].id, t[0]?.name ?? "Turnier", lobbyUrl).catch(() => {});
   }
 }
 
