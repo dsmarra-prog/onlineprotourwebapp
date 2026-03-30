@@ -181,6 +181,10 @@ export default function TurnierDetail() {
   const { data: detail, isLoading } = useQuery<TourTournamentDetail>({
     queryKey: ["tournament", id],
     queryFn: () => apiFetch(`/tour/tournaments/${id}`),
+    refetchInterval: (query) => {
+      const status = (query.state.data as TourTournamentDetail | undefined)?.tournament?.status;
+      return status === "laufend" ? 15_000 : false;
+    },
   });
 
   const { data: allPlayers } = useQuery<TourPlayer[]>({

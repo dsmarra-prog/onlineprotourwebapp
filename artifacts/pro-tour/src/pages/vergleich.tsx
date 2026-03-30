@@ -36,13 +36,13 @@ export default function VergleichPage() {
 
   const { data: profile1, isLoading: loading1 } = useQuery<TourPlayerProfile>({
     queryKey: ["player-profile", player1Id],
-    queryFn: () => apiFetch(`/tour/players/${player1Id}/profile`),
+    queryFn: () => apiFetch(`/tour/players/${player1Id}`),
     enabled: !!player1Id,
   });
 
   const { data: profile2, isLoading: loading2 } = useQuery<TourPlayerProfile>({
     queryKey: ["player-profile", player2Id],
-    queryFn: () => apiFetch(`/tour/players/${player2Id}/profile`),
+    queryFn: () => apiFetch(`/tour/players/${player2Id}`),
     enabled: !!player2Id,
   });
 
