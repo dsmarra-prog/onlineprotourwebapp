@@ -43,31 +43,26 @@ function isMajor(name: string): boolean {
   return name.includes("Major") || name.includes("Grand Final");
 }
 
-function ptsToBestRound(pts: number, major = false): string {
-  if (major) {
-    if (pts >= 750) return "Sieger";
-    if (pts >= 450) return "Finale";
-    if (pts >= 300) return "Halbfinale";
-    if (pts >= 188) return "Viertelfinale";
-    if (pts >= 113) return "Achtelfinale";
-    if (pts >= 60) return "Letzte 32";
-    return "Teilnahme";
+// Punktegrenzen passend zu den echten OOM-Werten (onlineprotour.eu)
+const DEV_CUP_PTS    = [1000, 600, 400, 250, 150, 75, 25];
+const DEV_MAJOR_PTS  = [1500, 900, 600, 375, 225, 125, 50];
+const DEV_FINAL_PTS  = [2000, 1200, 800, 500, 300, 150, 100];
+const ROUND_NAMES    = ["Sieger", "Finale", "Halbfinale", "Viertelfinale", "Achtelfinale", "Letzte 32", "Teilnahme"];
+
+function ptsToBestRound(pts: number, typ = "dev_cup"): string {
+  const table = typ === "dev_final" ? DEV_FINAL_PTS : typ === "dev_major" ? DEV_MAJOR_PTS : DEV_CUP_PTS;
+  for (let i = 0; i < table.length; i++) {
+    if (pts >= table[i]) return ROUND_NAMES[i];
   }
-  if (pts >= 500) return "Sieger";
-  if (pts >= 300) return "Finale";
-  if (pts >= 200) return "Halbfinale";
-  if (pts >= 125) return "Viertelfinale";
-  if (pts >= 75) return "Achtelfinale";
-  if (pts >= 40) return "Letzte 32";
   return "Teilnahme";
 }
 
 function bestResultFromResults(results: OomResult[]): string {
   const roundOrder = ["Sieger", "Finale", "Halbfinale", "Viertelfinale", "Achtelfinale", "Letzte 32", "Teilnahme"];
   let best = "Teilnahme";
-  let bestIdx = 6;
+  let bestIdx = roundOrder.length - 1;
   for (const r of results) {
-    const round = ptsToBestRound(r.points, isMajor(r.tournament_name));
+    const round = r.round || ptsToBestRound(r.points, isMajor(r.tournament_name) ? "dev_major" : "dev_cup");
     const idx = roundOrder.indexOf(round);
     if (idx !== -1 && idx < bestIdx) {
       best = round;
@@ -194,7 +189,7 @@ export default function DevOomPage() {
                       return (
                         <td key={name} className="p-2 text-right">
                           {r && r.points > 0 ? (
-                            <span className={`font-medium ${r.points >= 500 ? "text-yellow-400" : r.points >= 200 ? "text-primary" : "text-muted-foreground"}`}>
+                            <span className={`font-medium ${r.points >= 900 ? "text-yellow-400" : r.points >= 400 ? "text-primary" : "text-muted-foreground"}`}>
                               {r.points}
                             </span>
                           ) : (
@@ -219,9 +214,9 @@ export default function DevOomPage() {
               <tr className="border-b border-border bg-accent/30 text-xs text-muted-foreground">
                 <th className="text-left p-3 w-10">Pl.</th>
                 <th className="text-left p-3">Spieler</th>
-                <th className="text-center p-3">T</th>
-                <th className="text-center p-3">Bestes Ergebnis</th>
                 <th className="text-right p-3">Punkte</th>
+                <th className="text-center p-3 hidden sm:table-cell">T</th>
+                <th className="text-center p-3 hidden sm:table-cell">Bestes Ergebnis</th>
               </tr>
             </thead>
             <tbody>
@@ -238,14 +233,14 @@ export default function DevOomPage() {
                     <td className="p-3">
                       <div className="font-semibold text-sm">{entry.autodarts_username}</div>
                     </td>
-                    <td className="p-3 text-center text-sm text-muted-foreground">{entry.tournaments_played}</td>
-                    <td className="p-3 text-center">
-                      <ResultBadge result={best} />
-                    </td>
                     <td className="p-3 text-right">
                       <span className="font-bold text-primary text-sm">
                         {entry.total_points.toLocaleString("de-DE")}
                       </span>
+                    </td>
+                    <td className="p-3 text-center text-sm text-muted-foreground hidden sm:table-cell">{entry.tournaments_played}</td>
+                    <td className="p-3 text-center hidden sm:table-cell">
+                      <ResultBadge result={best} />
                     </td>
                   </tr>
                 );
@@ -269,18 +264,19 @@ export default function DevOomPage() {
               <tr className="text-muted-foreground border-b border-border">
                 <th className="text-left pb-2 pr-4">Runde</th>
                 <th className="text-right pb-2 px-3 text-primary">🟢 Dev Cup</th>
-                <th className="text-right pb-2 px-3 text-yellow-400">🟡 Dev Major</th>
+                <th className="text-right pb-2 px-3 text-yellow-400">🟡 Pre-Finals</th>
+                <th className="text-right pb-2 px-3 text-orange-400">🏆 Grand Final</th>
               </tr>
             </thead>
             <tbody>
               {[
-                ["Sieger", "500", "750"],
-                ["Finale", "300", "450"],
-                ["Halbfinale", "200", "300"],
-                ["Viertelfinale", "125", "188"],
-                ["Achtelfinale", "75", "113"],
-                ["Letzte 32", "40", "60"],
-                ["Teilnahme", "15", "25"],
+                ["Sieger",        "1.000", "1.500", "2.000"],
+                ["Finale",          "600",   "900", "1.200"],
+                ["Halbfinale",      "400",   "600",   "800"],
+                ["Viertelfinale",   "250",   "375",   "500"],
+                ["Achtelfinale",    "150",   "225",   "300"],
+                ["Letzte 32",        "75",   "125",   "150"],
+                ["Teilnahme",        "25",    "50",   "100"],
               ].map(([round, ...pts]) => (
                 <tr key={round} className="border-b border-border/30">
                   <td className="py-1.5 pr-4 font-medium">{round}</td>
@@ -294,8 +290,8 @@ export default function DevOomPage() {
         </div>
         <div className="mt-3 pt-3 border-t border-border/40 text-xs text-muted-foreground">
           <p className="font-medium text-foreground mb-1">Turnierformat</p>
-          <p>Dev Cup: Best of 3 · Dev Major: Best of 7 · Grand Final: Best of 7</p>
-          <p className="mt-1">Qualifikation für Dev Major & Grand Final: Top 16 OoM</p>
+          <p>Dev Cup: Best of 3 · Pre-Finals: Best of 7 · Grand Final: Best of 7</p>
+          <p className="mt-1">Qualifikation für Pre-Finals & Grand Final: Top 16 OoM</p>
         </div>
       </div>
     </div>
