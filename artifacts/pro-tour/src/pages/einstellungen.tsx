@@ -281,23 +281,6 @@ export default function EinstellungenPage() {
 
   const canUpdateToken = tokenForm.pin.length >= 4 && tokenForm.refresh_token.trim().length > 20;
 
-  // ── Discord ID ───────────────────────────────────────────────────────────
-  const [discordId, setDiscordId] = useState("");
-  const [discordPin, setDiscordPin] = useState("");
-
-  const discordMut = useMutation({
-    mutationFn: () =>
-      apiFetch<{ ok: boolean; message: string }>(`/tour/players/${currentPlayer!.id}/discord-id`, {
-        method: "PATCH",
-        body: JSON.stringify({ discord_id: discordId.trim() || null, player_pin: discordPin }),
-      }),
-    onSuccess: (data) => {
-      toast({ title: data.message });
-      setDiscordPin("");
-    },
-    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
-  });
-
   // ── Push Notifications ───────────────────────────────────────────────────
   const [pushPin, setPushPin] = useState("");
   const [pushLoading, setPushLoading] = useState(false);
@@ -519,44 +502,6 @@ export default function EinstellungenPage() {
               </Button>
             </div>
           )}
-        </div>
-      )}
-
-      {/* Discord ID */}
-      {currentPlayer && (
-        <div className="bg-card border border-border rounded-xl p-4 space-y-4">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-indigo-400" />
-            <span className="font-semibold text-sm">Discord-ID für @Mentions</span>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Trage deine Discord-Nutzer-ID ein, damit du 30 Minuten vor Turnierstart automatisch in Discord markiert wirst.<br />
-            <span className="text-muted-foreground/60">Zu finden unter: Discord → Einstellungen → Erweitert → Entwicklermodus → Rechtsklick auf deinen Namen → ID kopieren</span>
-          </p>
-          <div className="space-y-2">
-            <div className="space-y-1">
-              <Label className="text-xs">Discord-Nutzer-ID (reine Zahlenfolge)</Label>
-              <Input
-                value={discordId}
-                onChange={(e) => setDiscordId(e.target.value.replace(/\D/g, ""))}
-                placeholder="z.B. 123456789012345678"
-                className="h-8 text-sm font-mono"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Dein PIN zur Bestätigung</Label>
-              <Input type="password" value={discordPin} onChange={(e) => setDiscordPin(e.target.value)} placeholder="••••" className="h-8 text-sm" />
-            </div>
-            <Button
-              size="sm"
-              className="w-full gap-2"
-              disabled={discordPin.length < 4 || discordMut.isPending}
-              onClick={() => discordMut.mutate()}
-            >
-              {discordMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
-              {discordId.trim() ? "Discord-ID speichern" : "Discord-ID entfernen"}
-            </Button>
-          </div>
         </div>
       )}
 

@@ -602,15 +602,33 @@ export default function TurnierDetail() {
       {isCurrentPlayerRegistered && tournament.status === "offen" && (() => {
         const myEntry = players.find((p) => p.player_id === currentPlayer?.id);
         const isConfirmed = myEntry?.confirmed ?? false;
+
+        // Compute whether we're within 30 minutes of start
+        let confirmWindowOpen = false;
+        if (tournament.uhrzeit && tournament.datum) {
+          let dateStr = tournament.datum;
+          if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateStr)) {
+            const [d, m, y] = dateStr.split(".");
+            dateStr = `${y}-${m}-${d}`;
+          }
+          const startTime = new Date(`${dateStr}T${tournament.uhrzeit}:00`);
+          const diffMin = (startTime.getTime() - Date.now()) / 60000;
+          confirmWindowOpen = diffMin <= 30;
+        }
+
         return (
           <div className={`border rounded-xl px-4 py-3 flex items-center justify-between gap-4 ${isConfirmed ? "bg-green-500/5 border-green-500/20" : "bg-primary/5 border-primary/20"}`}>
             <div className="flex items-center gap-2 text-sm">
               <CheckCircle2 className={`w-4 h-4 shrink-0 ${isConfirmed ? "text-green-400" : "text-primary"}`} />
               <span className={isConfirmed ? "text-green-400" : "text-primary"}>
-                {isConfirmed ? "Teilnahme bestätigt ✓" : "Du bist angemeldet — Teilnahme noch nicht bestätigt"}
+                {isConfirmed
+                  ? "Teilnahme bestätigt ✓"
+                  : confirmWindowOpen
+                    ? "Bitte jetzt Teilnahme bestätigen!"
+                    : `Du bist angemeldet — Bestätigung ab 30 Min. vor Start${tournament.uhrzeit ? ` (${tournament.uhrzeit} Uhr)` : ""}`}
               </span>
             </div>
-            {!isConfirmed && (
+            {!isConfirmed && confirmWindowOpen && (
               <Dialog open={rsvpOpen} onOpenChange={(o) => { setRsvpOpen(o); if (!o) setRsvpPin(""); }}>
                 <DialogTrigger asChild>
                   <Button size="sm" variant="outline" className="shrink-0 border-primary/40 text-primary">Jetzt bestätigen</Button>
