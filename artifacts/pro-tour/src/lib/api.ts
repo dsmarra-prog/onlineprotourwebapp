@@ -19,6 +19,7 @@ export type TourPlayer = {
   created_at: string;
   oom_points: number;
   oom_rank: number;
+  oom_tour_type: "pro" | "development" | null;
 };
 
 export type TourScheduleEntry = {

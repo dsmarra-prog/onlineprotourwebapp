@@ -1302,43 +1302,110 @@ router.post("/tour/tournaments/seed-from-schedule", async (req, res) => {
 router.get("/tour/players", async (_req, res) => {
   try {
     const players = await db.select().from(tourPlayersTable).orderBy(tourPlayersTable.name);
-    const tournaments = await db.select().from(tourTournamentsTable)
-      .where(eq(tourTournamentsTable.status, "abgeschlossen"));
+
+    // ── OOM historical standings ─────────────────────────────────────────────
+    const proStandings = await db.select().from(tourOomStandingsTable);
+    const devStandings = await db.select().from(tourDevOomStandingsTable);
+
+    // Track which tournament names are already counted in historical standings
+    const proHistNames = new Set<string>();
+    const devHistNames = new Set<string>();
+
+    const proOomMap = new Map<string, number>(); // username → total_points (historical)
+    for (const s of proStandings) {
+      proOomMap.set(s.autodarts_username, s.total_points ?? 0);
+      try {
+        const raw = JSON.parse(s.tournament_breakdown || "{}");
+        const entries: [string, number][] = Array.isArray(raw)
+          ? raw.map((x: { t: string; p: number }) => [x.t, x.p])
+          : Object.entries(raw as Record<string, number>);
+        for (const [name] of entries) proHistNames.add(name);
+      } catch { /* ignore */ }
+    }
+
+    const devOomMap = new Map<string, number>(); // username → total_points (historical)
+    for (const s of devStandings) {
+      devOomMap.set(s.autodarts_username, s.total_points ?? 0);
+      try {
+        const raw = JSON.parse(s.tournament_breakdown || "[]");
+        const entries: [string, number][] = Array.isArray(raw)
+          ? raw.map((x: { t: string; p: number }) => [x.t, x.p])
+          : Object.entries(raw as Record<string, number>);
+        for (const [name] of entries) devHistNames.add(name);
+      } catch { /* ignore */ }
+    }
+
+    // ── New in-app tournament points (not already in historical base) ────────
+    const appTournaments = await db.select().from(tourTournamentsTable)
+      .where(and(eq(tourTournamentsTable.status, "abgeschlossen"), eq(tourTournamentsTable.is_test, false)));
     const allMatches = await db.select().from(tourMatchesTable);
     const allBonus = await db.select().from(tourBonusPointsTable);
+    const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
 
-    const result = players.map((p) => {
-      let totalPoints = 0;
-      for (const t of tournaments) {
-        const tMatches = allMatches.filter((m) => m.tournament_id === t.id);
+    const inAppProPts = new Map<number, number>(); // player_id → extra points
+    const inAppDevPts = new Map<number, number>();
+
+    for (const t of appTournaments) {
+      const histNames = t.tour_type === "pro" ? proHistNames : devHistNames;
+      if (histNames.has(t.name)) continue; // already counted in historical base
+
+      const tMatches = allMatches.filter((m) => m.tournament_id === t.id);
+      const ptsMap = t.tour_type === "pro" ? inAppProPts : inAppDevPts;
+
+      const participantIds = new Set<number>();
+      for (const m of tMatches) {
+        if (m.player1_id) participantIds.add(m.player1_id);
+        if (m.player2_id) participantIds.add(m.player2_id);
+      }
+
+      for (const playerId of participantIds) {
         const playerMatches = tMatches.filter(
-          (m) => (m.player1_id === p.id || m.player2_id === p.id) && m.status === "abgeschlossen" && !m.is_bye
+          (m) => (m.player1_id === playerId || m.player2_id === playerId)
+            && m.status === "abgeschlossen" && !m.is_bye
         );
         if (playerMatches.length === 0) continue;
-        const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
         const deepest = playerMatches.sort(
           (a, b) => roundOrder.indexOf(b.runde) - roundOrder.indexOf(a.runde)
         )[0];
-        const isWinner = deepest.runde === "F" && deepest.winner_id === p.id;
+        const isWinner = deepest.runde === "F" && deepest.winner_id === playerId;
         const roundKey = isWinner ? "Sieger" : roundToOomKey(deepest.runde);
-        totalPoints += OOM_POINTS[t.typ]?.[roundKey] ?? 0;
+        const pts = OOM_POINTS[t.typ]?.[roundKey] ?? 0;
+        const bonus = allBonus
+          .filter((b) => b.player_id === playerId && b.tournament_id === t.id)
+          .reduce((s, b) => s + b.points, 0);
+        ptsMap.set(playerId, (ptsMap.get(playerId) ?? 0) + pts + bonus);
       }
-      const bonusTotal = allBonus
-        .filter((b) => b.player_id === p.id)
-        .reduce((s, b) => s + b.points, 0);
+    }
+
+    // ── Build result per registered player ───────────────────────────────────
+    const result = players.map((p) => {
+      const username = p.autodarts_username;
+      const proTotal = (proOomMap.get(username) ?? 0) + (inAppProPts.get(p.id) ?? 0);
+      const devTotal = (devOomMap.get(username) ?? 0) + (inAppDevPts.get(p.id) ?? 0);
+
+      // Priority: Pro Tour > Dev Tour
+      const oomTourType: "pro" | "development" | null =
+        proTotal > 0 ? "pro" : devTotal > 0 ? "development" : null;
+      const oomPoints = proTotal > 0 ? proTotal : devTotal;
 
       return {
         id: p.id,
         name: p.name,
         autodarts_username: p.autodarts_username,
         created_at: p.created_at,
-        oom_points: totalPoints + bonusTotal,
+        oom_points: oomPoints,
         oom_rank: 0,
+        oom_tour_type: oomTourType,
       };
     });
 
+    // Sort by points desc, then assign ranks only to players with points
     result.sort((a, b) => b.oom_points - a.oom_points);
-    result.forEach((p, i) => { p.oom_rank = i + 1; });
+    let rank = 0;
+    for (const p of result) {
+      if (p.oom_points > 0) p.oom_rank = ++rank;
+    }
+
     res.json(result);
   } catch (e) {
     res.status(500).json({ error: String(e) });
