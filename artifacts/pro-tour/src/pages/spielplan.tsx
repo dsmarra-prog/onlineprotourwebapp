@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import { Calendar, CheckCircle2, Clock, Trophy, Zap, Star, ChevronRight, PlusCircle } from "lucide-react";
+import { Calendar, CheckCircle2, Clock, Trophy, Zap, Star, ChevronRight, PlusCircle, Download } from "lucide-react";
 import { useState } from "react";
 import { usePlayer } from "@/context/PlayerContext";
 
@@ -82,6 +82,60 @@ function parseDatum(datum: string): Date {
   return new Date(Number(y), Number(m) - 1, Number(d));
 }
 
+function generateICS(schedule: ScheduleEntry[]): string {
+  const lines: string[] = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Online Pro Tour//Spielplan Season 1//DE",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "X-WR-CALNAME:OPT Spielplan 2026",
+    "X-WR-CALDESC:Online Pro Tour & Development Tour – Season 1 2026",
+  ];
+
+  for (const event of schedule) {
+    const [d, m, y] = event.datum.split(".");
+    const [h, min] = event.uhrzeit.split(":");
+    const dd = d.padStart(2, "0");
+    const mm = m.padStart(2, "0");
+    const hh = h.padStart(2, "0");
+    const mi = min.padStart(2, "0");
+    const dtStart = `${y}${mm}${dd}T${hh}${mi}00`;
+    const endH = String(parseInt(h, 10) + 2).padStart(2, "0");
+    const dtEnd = `${y}${mm}${dd}T${endH}${mi}00`;
+
+    const tourLabel = TOUR_BADGE[event.tour_type] ?? event.tour_type;
+    const katLabel = KATEGORIE_LABEL[event.kategorie] ?? event.kategorie;
+    const desc = [event.mode, event.qualification].filter(Boolean).join(" | ");
+
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:opt-event-${event.id}@online-pro-tour.replit.app`,
+      `DTSTART:${dtStart}`,
+      `DTEND:${dtEnd}`,
+      `SUMMARY:[OPT ${tourLabel}] ${event.event_name}`,
+      `DESCRIPTION:${desc}`,
+      `CATEGORIES:${katLabel}`,
+      "END:VEVENT"
+    );
+  }
+
+  lines.push("END:VCALENDAR");
+  return lines.join("\r\n");
+}
+
+function downloadICS(content: string, filename: string) {
+  const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export default function SpielplanPage() {
   const qc = useQueryClient();
   const { currentPlayer, sessionPin } = usePlayer();
@@ -145,14 +199,30 @@ export default function SpielplanPage() {
             Tourkalender 2026 · Pro Tour & Dev Tour
           </p>
         </div>
-        <button
-          onClick={() => setShowSeedPanel((v) => !v)}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary border border-border hover:border-primary/30 px-2.5 py-1.5 rounded-lg transition-colors flex-shrink-0"
-        >
-          <PlusCircle className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Turniere anlegen</span>
-          <span className="sm:hidden">Anlegen</span>
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => {
+              if (!schedule || schedule.length === 0) return;
+              const ics = generateICS(schedule);
+              downloadICS(ics, "opt-spielplan-2026.ics");
+            }}
+            disabled={!schedule || schedule.length === 0}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary border border-border hover:border-primary/30 px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+            title="Spielplan als Kalender-Datei exportieren (.ics)"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Kalender exportieren</span>
+            <span className="sm:hidden">Export</span>
+          </button>
+          <button
+            onClick={() => setShowSeedPanel((v) => !v)}
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary border border-border hover:border-primary/30 px-2.5 py-1.5 rounded-lg transition-colors"
+          >
+            <PlusCircle className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Turniere anlegen</span>
+            <span className="sm:hidden">Anlegen</span>
+          </button>
+        </div>
       </div>
 
       {showSeedPanel && (

@@ -630,6 +630,55 @@ export default function TurnierDetail() {
         );
       })()}
 
+      {/* Admin check-in overview */}
+      {currentPlayer?.is_admin && tournament.status === "offen" && players.length > 0 && (() => {
+        const confirmed = players.filter((p) => (p as any).confirmed).length;
+        const total = players.length;
+        const pct = total > 0 ? Math.round((confirmed / total) * 100) : 0;
+        return (
+          <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-primary" />
+                <span className="text-sm font-semibold">Check-in Übersicht</span>
+              </div>
+              <span className="text-sm font-bold">
+                <span className="text-primary">{confirmed}</span>
+                <span className="text-muted-foreground">/{total} bestätigt</span>
+              </span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-1.5">
+              <div
+                className="bg-primary h-1.5 rounded-full transition-all duration-500"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+            <div className="space-y-1">
+              {players.map((p) => (
+                <div key={p.player_id} className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-muted/30 text-xs">
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+                      {p.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="font-medium">{p.name}</span>
+                    <span className="text-muted-foreground hidden sm:inline">@{p.autodarts_username}</span>
+                  </div>
+                  {(p as any).confirmed ? (
+                    <span className="flex items-center gap-1 text-green-400 font-medium">
+                      <CheckCircle2 className="w-3 h-3" /> Bestätigt
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-muted-foreground/60">
+                      <Clock className="w-3 h-3" /> Ausstehend
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Players section for open tournaments */}
       {tournament.status === "offen" && (
         <div className="bg-card border border-border rounded-xl p-4">
