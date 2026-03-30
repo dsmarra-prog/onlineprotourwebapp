@@ -1264,7 +1264,7 @@ router.get("/tour/players/:id", async (req, res) => {
 
     for (const tid of tournamentIds) {
       const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tid)).limit(1);
-      if (!t[0] || t[0].status !== "abgeschlossen") continue;
+      if (!t[0] || t[0].status !== "abgeschlossen" || t[0].is_test) continue;
 
       const tMatches = await db.select().from(tourMatchesTable)
         .where(eq(tourMatchesTable.tournament_id, tid));
@@ -1368,6 +1368,9 @@ router.get("/tour/players/:id/h2h/:opponentId", async (req, res) => {
     const history: any[] = [];
 
     for (const m of h2hMatches) {
+      const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, m.tournament_id)).limit(1);
+      if (!t[0] || t[0].is_test) continue;
+
       const isP1 = m.player1_id === id;
       const won = m.winner_id === id;
       if (won) wins++; else losses++;
@@ -1377,18 +1380,17 @@ router.get("/tour/players/:id/h2h/:opponentId", async (req, res) => {
       const myAvg = isP1 ? m.avg_p1 : m.avg_p2;
       const oppAvg = isP1 ? m.avg_p2 : m.avg_p1;
 
-      const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, m.tournament_id)).limit(1);
       history.push({
         match_id: m.id,
         tournament_id: m.tournament_id,
-        tournament_name: t[0]?.name ?? "Unbekannt",
+        tournament_name: t[0].name,
         runde: m.runde,
         won,
         my_score: myLegs,
         opp_score: oppLegs,
         my_avg: myAvg,
         opp_avg: oppAvg,
-        datum: t[0]?.datum ?? "",
+        datum: t[0].datum ?? "",
       });
     }
 
