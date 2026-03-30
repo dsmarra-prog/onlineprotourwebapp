@@ -1669,7 +1669,7 @@ router.get("/tour/players", async (_req, res) => {
 // POST /tour/players/register
 router.post("/tour/players/register", async (req, res) => {
   try {
-    const { name, autodarts_username, pin } = req.body;
+    const { name, autodarts_username, oom_name, pin } = req.body;
     if (!name || !autodarts_username || !pin) {
       return res.status(400).json({ error: "name, autodarts_username und pin erforderlich" });
     }
@@ -1677,8 +1677,9 @@ router.post("/tour/players/register", async (req, res) => {
       .where(eq(tourPlayersTable.autodarts_username, autodarts_username)).limit(1);
     if (existing[0]) return res.status(409).json({ error: "Autodarts-Benutzername bereits registriert" });
 
+    const oomNameValue = typeof oom_name === "string" && oom_name.trim() ? oom_name.trim() : null;
     const [player] = await db.insert(tourPlayersTable)
-      .values({ name, autodarts_username, pin_hash: hashPin(pin) })
+      .values({ name, autodarts_username, oom_name: oomNameValue, pin_hash: hashPin(pin) })
       .returning();
 
     res.json({ id: player.id, name: player.name, autodarts_username: player.autodarts_username, created_at: player.created_at, oom_points: 0, oom_rank: 0 });

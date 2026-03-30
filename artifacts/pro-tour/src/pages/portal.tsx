@@ -18,7 +18,7 @@ export default function Portal() {
   const [registered, setRegistered] = useState<{ name: string } | null>(null);
 
   const [loginForm, setLoginForm] = useState({ autodarts_username: "", pin: "" });
-  const [regForm, setRegForm] = useState({ name: "", autodarts_username: "", pin: "", pin_confirm: "" });
+  const [regForm, setRegForm] = useState({ name: "", autodarts_username: "", oom_name: "", pin: "", pin_confirm: "" });
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,6 +46,7 @@ export default function Portal() {
         body: JSON.stringify({
           name: regForm.name.trim(),
           autodarts_username: regForm.autodarts_username.trim(),
+          oom_name: regForm.oom_name.trim() || undefined,
           pin: regForm.pin,
         }),
       });
@@ -53,7 +54,7 @@ export default function Portal() {
       toast({ title: "Registrierung erfolgreich!", description: `Willkommen, ${player.name}! Du kannst dich jetzt einloggen.` });
       setMode("login");
       setLoginForm({ autodarts_username: regForm.autodarts_username.trim(), pin: "" });
-      setRegForm({ name: "", autodarts_username: "", pin: "", pin_confirm: "" });
+      setRegForm({ name: "", autodarts_username: "", oom_name: "", pin: "", pin_confirm: "" });
     } catch (err: any) {
       toast({ title: "Registrierung fehlgeschlagen", description: err.message, variant: "destructive" });
     } finally {
@@ -192,6 +193,18 @@ export default function Portal() {
                     disabled={loading}
                   />
                   <p className="text-xs text-muted-foreground">Muss exakt mit deinem Autodarts-Account übereinstimmen</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5">
+                    OOM-Name <span className="text-muted-foreground font-normal">(optional)</span>
+                  </Label>
+                  <Input
+                    value={regForm.oom_name}
+                    onChange={(e) => setRegForm((f) => ({ ...f, oom_name: e.target.value }))}
+                    placeholder="Nur wenn abweichend von Anzeigename"
+                    disabled={loading}
+                  />
+                  <p className="text-xs text-muted-foreground">Name auf der Order of Merit — nur ausfüllen wenn er sich von deinem Anzeigenamen unterscheidet</p>
                 </div>
                 <div className="space-y-1.5">
                   <Label>PIN festlegen (mind. 4 Zeichen)</Label>

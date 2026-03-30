@@ -625,7 +625,7 @@ export default function EinstellungenPage() {
       {currentPlayer?.is_admin && <AdminOomNamesPanel />}
 
       {/* Admin: Discord Settings */}
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
+      {currentPlayer?.is_admin && <div className="bg-card border border-border rounded-xl overflow-hidden">
         <button
           className="w-full flex items-center justify-between p-4 text-left hover:bg-accent/30 transition-colors"
           onClick={() => setDiscordOpen((o) => !o)}
@@ -752,10 +752,10 @@ export default function EinstellungenPage() {
             </div>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Admin: Autodarts Global Token Update */}
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
+      {currentPlayer?.is_admin && <div className="bg-card border border-border rounded-xl overflow-hidden">
         <button
           className="w-full flex items-center justify-between p-4 text-left hover:bg-accent/30 transition-colors"
           onClick={() => setTokenSectionOpen((o) => !o)}
@@ -809,7 +809,7 @@ export default function EinstellungenPage() {
             </Button>
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
