@@ -77,6 +77,7 @@ export const tourEntriesTable = pgTable("tour_entries", {
   tournament_id: integer("tournament_id").notNull(),
   player_id: integer("player_id").notNull(),
   seed: integer("seed"),
+  confirmed: boolean("confirmed").default(false),
 });
 
 export const tourBonusPointsTable = pgTable("tour_bonus_points", {
@@ -101,7 +102,17 @@ export const tourDevOomStandingsTable = pgTable("tour_dev_oom_standings", {
   last_updated: text("last_updated").notNull(),
 });
 
+export const tourPushSubscriptionsTable = pgTable("tour_push_subscriptions", {
+  id: serial("id").primaryKey(),
+  player_id: integer("player_id").notNull(),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
 export type TourPlayer = typeof tourPlayersTable.$inferSelect;
+export type TourPushSubscription = typeof tourPushSubscriptionsTable.$inferSelect;
 export const systemSettingsTable = pgTable("system_settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),

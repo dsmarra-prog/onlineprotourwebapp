@@ -173,6 +173,8 @@ export default function TurnierDetail() {
   // Self-registration
   const [selfRegOpen, setSelfRegOpen] = useState(false);
   const [selfRegPin, setSelfRegPin] = useState("");
+  const [rsvpOpen, setRsvpOpen] = useState(false);
+  const [rsvpPin, setRsvpPin] = useState("");
 
   const { data: detail, isLoading } = useQuery<TourTournamentDetail>({
     queryKey: ["tournament", id],
@@ -247,6 +249,20 @@ export default function TurnierDetail() {
       body: JSON.stringify({ admin_pin: adminPin }),
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tournament", id] }); toast({ title: "Spieler entfernt" }); },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const rsvpMut = useMutation({
+    mutationFn: () => apiFetch(`/tour/tournaments/${id}/entries/${currentPlayer?.id}/confirm`, {
+      method: "POST",
+      body: JSON.stringify({ pin: rsvpPin }),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tournament", id] });
+      setRsvpOpen(false);
+      setRsvpPin("");
+      toast({ title: "Teilnahme bestätigt!" });
+    },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
@@ -488,13 +504,44 @@ export default function TurnierDetail() {
         </div>
       )}
 
-      {/* Already registered indicator */}
-      {isCurrentPlayerRegistered && tournament.status === "offen" && (
-        <div className="bg-primary/5 border border-primary/20 rounded-xl px-4 py-2.5 flex items-center gap-2 text-sm text-primary">
-          <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>Du bist für dieses Turnier angemeldet.</span>
-        </div>
-      )}
+      {/* Already registered indicator + RSVP */}
+      {isCurrentPlayerRegistered && tournament.status === "offen" && (() => {
+        const myEntry = players.find((p) => p.player_id === currentPlayer?.id);
+        const isConfirmed = myEntry?.confirmed ?? false;
+        return (
+          <div className={`border rounded-xl px-4 py-3 flex items-center justify-between gap-4 ${isConfirmed ? "bg-green-500/5 border-green-500/20" : "bg-primary/5 border-primary/20"}`}>
+            <div className="flex items-center gap-2 text-sm">
+              <CheckCircle2 className={`w-4 h-4 shrink-0 ${isConfirmed ? "text-green-400" : "text-primary"}`} />
+              <span className={isConfirmed ? "text-green-400" : "text-primary"}>
+                {isConfirmed ? "Teilnahme bestätigt ✓" : "Du bist angemeldet — Teilnahme noch nicht bestätigt"}
+              </span>
+            </div>
+            {!isConfirmed && (
+              <Dialog open={rsvpOpen} onOpenChange={(o) => { setRsvpOpen(o); if (!o) setRsvpPin(""); }}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline" className="shrink-0 border-primary/40 text-primary">Jetzt bestätigen</Button>
+                </DialogTrigger>
+                <DialogContent className="bg-card border-border">
+                  <DialogHeader><DialogTitle>Teilnahme bestätigen</DialogTitle></DialogHeader>
+                  <div className="space-y-4 mt-2">
+                    <p className="text-sm text-muted-foreground">
+                      Bestätige deine Teilnahme für <span className="text-foreground font-medium">{tournament.name}</span>.
+                    </p>
+                    <div className="space-y-1.5">
+                      <Label>Dein PIN</Label>
+                      <Input type="password" value={rsvpPin} onChange={(e) => setRsvpPin(e.target.value)} placeholder="••••" autoFocus />
+                    </div>
+                    <Button className="w-full" disabled={rsvpPin.length < 4 || rsvpMut.isPending} onClick={() => rsvpMut.mutate()}>
+                      {rsvpMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+                      Teilnahme bestätigen
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Players section for open tournaments */}
       {tournament.status === "offen" && (
@@ -541,12 +588,17 @@ export default function TurnierDetail() {
           <div className="space-y-2">
             {players.map((p, i) => (
               <div key={p.player_id} className="flex items-center justify-between p-2 rounded-lg bg-accent/30">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs text-muted-foreground w-5">{i + 1}</span>
                   <span className="text-sm font-medium">{p.name}</span>
                   <span className="text-xs text-muted-foreground">@{p.autodarts_username}</span>
                   {currentPlayer?.id === p.player_id && (
                     <span className="text-[10px] text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.5 rounded-full font-medium">Du</span>
+                  )}
+                  {(p as any).confirmed ? (
+                    <span className="text-[10px] text-green-400 bg-green-400/10 border border-green-400/20 px-1.5 py-0.5 rounded-full font-medium">✓ Bestätigt</span>
+                  ) : (
+                    <span className="text-[10px] text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-1.5 py-0.5 rounded-full font-medium">Ausstehend</span>
                   )}
                 </div>
                 {/* Admin-only remove button — only visible when admin PIN is entered */}

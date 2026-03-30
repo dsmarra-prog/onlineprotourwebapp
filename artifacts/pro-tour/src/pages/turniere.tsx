@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Plus, Trophy, Calendar, Users, Lock, Loader2 } from "lucide-react";
+import { Plus, Trophy, Calendar, Users, Lock, Loader2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -23,12 +23,21 @@ export default function TourniereListe() {
   const [form, setForm] = useState({
     name: "",
     typ: "pc",
+    tour_type: "pro",
     datum: new Date().toISOString().slice(0, 10),
     legs_format: "5",
     max_players: "32",
     admin_pin: "",
     is_test: false,
   });
+
+  const TEMPLATES = [
+    { label: "Players Championship", typ: "pc", tour_type: "pro", legs_format: "5", max_players: "32" },
+    { label: "Major", typ: "m1", tour_type: "pro", legs_format: "7", max_players: "32" },
+    { label: "Grand Final", typ: "m2", tour_type: "pro", legs_format: "9", max_players: "32" },
+    { label: "Dev Cup", typ: "dev_cup", tour_type: "development", legs_format: "3", max_players: "32" },
+    { label: "Dev Major", typ: "dev_major", tour_type: "development", legs_format: "7", max_players: "16" },
+  ];
 
   const createMut = useMutation({
     mutationFn: () =>
@@ -44,7 +53,7 @@ export default function TourniereListe() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tournaments"] });
       setOpen(false);
-      setForm({ name: "", typ: "pc", datum: new Date().toISOString().slice(0, 10), legs_format: "5", max_players: "32", admin_pin: "", is_test: false });
+      setForm({ name: "", typ: "pc", tour_type: "pro", datum: new Date().toISOString().slice(0, 10), legs_format: "5", max_players: "32", admin_pin: "", is_test: false });
       toast({ title: "Turnier erstellt" });
     },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
@@ -76,6 +85,22 @@ export default function TourniereListe() {
               <DialogTitle>Neues Turnier erstellen</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-2">
+              {/* Templates */}
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1"><Zap className="w-3 h-3" /> Vorlage</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {TEMPLATES.map((t) => (
+                    <button
+                      key={t.typ}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, typ: t.typ, tour_type: t.tour_type, legs_format: t.legs_format, max_players: t.max_players }))}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${form.typ === t.typ ? "bg-primary/20 border-primary/50 text-primary" : "bg-accent/30 border-border text-muted-foreground hover:border-primary/30"}`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="space-y-1">
                 <Label>Name</Label>
                 <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="z.B. Players Championship Berlin" />

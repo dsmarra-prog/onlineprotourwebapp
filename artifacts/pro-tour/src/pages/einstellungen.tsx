@@ -94,6 +94,78 @@ export default function EinstellungenPage() {
 
   const canUpdateToken = tokenForm.pin.length >= 4 && tokenForm.refresh_token.trim().length > 20;
 
+  // ── Push Notifications ───────────────────────────────────────────────────
+  const [pushPin, setPushPin] = useState("");
+  const [pushLoading, setPushLoading] = useState(false);
+
+  const { data: pushStatus, refetch: refetchPush } = useQuery({
+    queryKey: ["push-status", currentPlayer?.id],
+    queryFn: () => apiFetch<{ subscribed: boolean }>(`/tour/players/${currentPlayer!.id}/push-status`),
+    enabled: !!currentPlayer,
+    staleTime: 30_000,
+  });
+
+  const { data: vapidKey } = useQuery({
+    queryKey: ["vapid-key"],
+    queryFn: () => apiFetch<{ public_key: string }>("/tour/vapid-public-key"),
+    staleTime: Infinity,
+  });
+
+  const pushSubscribe = async () => {
+    if (!currentPlayer || !vapidKey?.public_key || pushPin.length < 4) return;
+    setPushLoading(true);
+    try {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+        toast({ title: "Push nicht unterstützt", description: "Dein Browser unterstützt keine Push-Benachrichtigungen.", variant: "destructive" });
+        return;
+      }
+      const reg = await navigator.serviceWorker.register("/pro-tour/sw.js");
+      await navigator.serviceWorker.ready;
+
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") {
+        toast({ title: "Berechtigung verweigert", description: "Bitte erlaube Benachrichtigungen in den Browser-Einstellungen.", variant: "destructive" });
+        return;
+      }
+
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: vapidKey.public_key,
+      });
+      const json = sub.toJSON();
+
+      await apiFetch(`/tour/players/${currentPlayer.id}/push-subscribe`, {
+        method: "POST",
+        body: JSON.stringify({ pin: pushPin, endpoint: json.endpoint, p256dh: json.keys?.p256dh, auth: json.keys?.auth }),
+      });
+      toast({ title: "Push-Benachrichtigungen aktiviert!" });
+      setPushPin("");
+      refetchPush();
+    } catch (e: any) {
+      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  const pushUnsubscribe = async () => {
+    if (!currentPlayer) return;
+    try {
+      if ("serviceWorker" in navigator) {
+        const reg = await navigator.serviceWorker.getRegistration("/pro-tour/sw.js");
+        if (reg) {
+          const sub = await reg.pushManager.getSubscription();
+          if (sub) await sub.unsubscribe();
+        }
+      }
+      await apiFetch(`/tour/players/${currentPlayer.id}/push-unsubscribe`, { method: "DELETE" });
+      toast({ title: "Push-Benachrichtigungen deaktiviert" });
+      refetchPush();
+    } catch (e: any) {
+      toast({ title: "Fehler", description: e.message, variant: "destructive" });
+    }
+  };
+
   // ── Player Autodarts connection ──────────────────────────────────────────
   const [disconnectPin, setDisconnectPin] = useState("");
   const [connectPin, setConnectPin] = useState("");
@@ -211,6 +283,40 @@ export default function EinstellungenPage() {
           <LogOut className="w-4 h-4" /> Ausloggen
         </Button>
       </div>
+
+      {/* Push Benachrichtigungen */}
+      {currentPlayer && (
+        <div className="bg-card border border-border rounded-xl p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Bell className="w-4 h-4 text-primary" />
+              <span className="font-semibold text-sm">Push-Benachrichtigungen</span>
+            </div>
+            {pushStatus?.subscribed && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-500/10 text-green-400 border border-green-500/20">Aktiv</span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Erhalte eine Benachrichtigung direkt im Browser wenn dein Match bereit ist — auch wenn du die App im Hintergrund hast.
+          </p>
+          {pushStatus?.subscribed ? (
+            <Button variant="outline" size="sm" className="w-full text-muted-foreground gap-2" onClick={pushUnsubscribe}>
+              <Bell className="w-3.5 h-3.5" /> Benachrichtigungen deaktivieren
+            </Button>
+          ) : (
+            <div className="space-y-2">
+              <div className="space-y-1">
+                <Label className="text-xs">Dein PIN zur Bestätigung</Label>
+                <Input type="password" value={pushPin} onChange={(e) => setPushPin(e.target.value)} placeholder="••••" className="h-8 text-sm" />
+              </div>
+              <Button size="sm" className="w-full gap-2" disabled={pushPin.length < 4 || pushLoading} onClick={pushSubscribe}>
+                {pushLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Bell className="w-3.5 h-3.5" />}
+                Benachrichtigungen aktivieren
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Autodarts Account verbinden */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">

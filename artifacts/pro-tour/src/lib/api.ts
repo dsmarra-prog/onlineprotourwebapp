@@ -77,6 +77,7 @@ export type TourTournamentDetail = {
   players: Array<{
     player_id: number;
     seed: number | null;
+    confirmed: boolean;
     name: string;
     autodarts_username: string;
   }>;
@@ -109,12 +110,28 @@ export type TourPlayerProfile = {
   autodarts_username: string;
   created_at: string;
   oom_points: number;
+  dev_oom_points: number;
+  stats: {
+    matches_won: number;
+    matches_lost: number;
+    win_rate: number;
+    legs_won: number;
+    legs_lost: number;
+    avg_score: number | null;
+    tournaments_played: number;
+    titles: number;
+  };
   tournament_results: Array<{
     tournament_id: number;
     tournament_name: string;
     typ: string;
+    tour_type: string;
     round: string;
     points: number;
+    dev_points: number;
+    matches_won: number;
+    matches_lost: number;
+    datum: string;
   }>;
   bonus_points: Array<{
     id: number;
@@ -122,6 +139,42 @@ export type TourPlayerProfile = {
     points: number;
     tournament_id: number;
   }>;
+};
+
+export type TourH2H = {
+  player: { id: number; name: string; autodarts_username: string };
+  opponent: { id: number; name: string; autodarts_username: string };
+  wins: number;
+  losses: number;
+  leg_wins: number;
+  leg_losses: number;
+  history: Array<{
+    match_id: number;
+    tournament_id: number;
+    tournament_name: string;
+    runde: string;
+    won: boolean;
+    my_score: number;
+    opp_score: number;
+    my_avg: number | null;
+    opp_avg: number | null;
+    datum: string;
+  }>;
+};
+
+export type LiveTickerMatch = {
+  tournament_id: number;
+  tournament_name: string;
+  match_id: number;
+  runde: string;
+  player1: string;
+  player2: string;
+  score_p1: number | null;
+  score_p2: number | null;
+  avg_p1: number | null;
+  avg_p2: number | null;
+  status: string;
+  autodarts_match_id: string | null;
 };
 
 export const TYP_LABELS: Record<string, string> = {

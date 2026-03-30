@@ -9,10 +9,18 @@ import {
   tourMatchesTable,
   tourEntriesTable,
   tourBonusPointsTable,
+  tourPushSubscriptionsTable,
   systemSettingsTable,
 } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import crypto from "crypto";
+import webpush from "web-push";
+
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY ?? "";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY ?? "";
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails("mailto:admin@onlineprotour.de", VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
 import {
   notifyRegistration,
   notifyTournamentStart,
@@ -326,6 +334,7 @@ async function buildTournamentDetail(tournamentId: number) {
     players: entries.map((e) => ({
       player_id: e.player_id,
       seed: e.seed,
+      confirmed: e.confirmed ?? false,
       name: playerMap[e.player_id]?.name ?? "?",
       autodarts_username: playerMap[e.player_id]?.autodarts_username ?? "",
     })),
@@ -349,6 +358,50 @@ async function buildTournamentDetail(tournamentId: number) {
     })),
     rounds,
   };
+}
+
+// ─── Push Notification Helper ─────────────────────────────────────────────────
+async function sendPushToPlayer(playerId: number, title: string, body: string, url = "/") {
+  try {
+    const subs = await db.select().from(tourPushSubscriptionsTable)
+      .where(eq(tourPushSubscriptionsTable.player_id, playerId)).limit(1);
+    if (!subs[0]) return;
+    const sub = subs[0];
+    await webpush.sendNotification(
+      { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+      JSON.stringify({ title, body, url })
+    );
+  } catch (e) {
+    // Remove invalid subscriptions
+    if ((e as any)?.statusCode === 410) {
+      await db.delete(tourPushSubscriptionsTable).where(eq(tourPushSubscriptionsTable.player_id, playerId)).catch(() => {});
+    }
+    console.warn("Push notification failed for player", playerId, String(e));
+  }
+}
+
+async function notifyMatchReady(matchId: number, tournamentName: string) {
+  try {
+    const match = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.id, matchId)).limit(1);
+    if (!match[0] || !match[0].player1_id || !match[0].player2_id) return;
+    const [p1, p2] = await Promise.all([
+      db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, match[0].player1_id)).limit(1),
+      db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, match[0].player2_id)).limit(1),
+    ]);
+    const p1Name = p1[0]?.name ?? "Gegner";
+    const p2Name = p2[0]?.name ?? "Gegner";
+    const roundLabel: Record<string, string> = { R64: "R64", R32: "R32", R16: "Achtelfinale", QF: "Viertelfinale", SF: "Halbfinale", F: "Finale" };
+    const round = roundLabel[match[0].runde] ?? match[0].runde;
+
+    if (match[0].player1_id) {
+      sendPushToPlayer(match[0].player1_id, `🎯 Dein Match ist bereit!`, `${round}: ${p1Name} vs ${p2Name} — ${tournamentName}`, `/pro-tour/turniere/${match[0].tournament_id}`).catch(() => {});
+    }
+    if (match[0].player2_id) {
+      sendPushToPlayer(match[0].player2_id, `🎯 Dein Match ist bereit!`, `${round}: ${p1Name} vs ${p2Name} — ${tournamentName}`, `/pro-tour/turniere/${match[0].tournament_id}`).catch(() => {});
+    }
+  } catch (e) {
+    console.warn("notifyMatchReady error:", String(e));
+  }
 }
 
 async function advanceWinner(tournamentId: number, currentRunde: string, matchNr: number, winnerId: number) {
@@ -382,6 +435,13 @@ async function advanceWinner(tournamentId: number, currentRunde: string, matchNr
     await db.update(tourMatchesTable)
       .set({ player2_id: winnerId })
       .where(eq(tourMatchesTable.id, nextMatches[0].id));
+  }
+
+  // Notify both players if next match is now fully populated
+  const updated = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.id, nextMatches[0].id)).limit(1);
+  if (updated[0]?.player1_id && updated[0]?.player2_id && !updated[0]?.is_bye) {
+    const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
+    notifyMatchReady(updated[0].id, t[0]?.name ?? "Turnier").catch(() => {});
   }
 }
 
@@ -1000,6 +1060,10 @@ router.get("/tour/players/:id", async (req, res) => {
     const tournamentIds = entries.map((e) => e.tournament_id);
     const tourResults: any[] = [];
 
+    let totalWins = 0, totalLosses = 0;
+    let legWins = 0, legLosses = 0;
+    let avgSum = 0, avgCount = 0;
+
     for (const tid of tournamentIds) {
       const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tid)).limit(1);
       if (!t[0] || t[0].status !== "abgeschlossen") continue;
@@ -1011,20 +1075,47 @@ router.get("/tour/players/:id", async (req, res) => {
       );
       if (playerMatches.length === 0) continue;
 
+      // Count wins/losses and leg stats
+      for (const m of playerMatches) {
+        const isP1 = m.player1_id === id;
+        const won = m.winner_id === id;
+        if (won) totalWins++; else totalLosses++;
+        const myLegs = isP1 ? (m.score_p1 ?? 0) : (m.score_p2 ?? 0);
+        const oppLegs = isP1 ? (m.score_p2 ?? 0) : (m.score_p1 ?? 0);
+        legWins += myLegs; legLosses += oppLegs;
+        const myAvg = isP1 ? m.avg_p1 : m.avg_p2;
+        if (myAvg != null && myAvg > 0) { avgSum += myAvg; avgCount++; }
+      }
+
       const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
       const deepest = playerMatches.sort(
         (a, b) => roundOrder.indexOf(b.runde) - roundOrder.indexOf(a.runde)
       )[0];
       const isWinner = deepest.runde === "F" && deepest.winner_id === id;
       const roundKey = isWinner ? "Sieger" : roundToOomKey(deepest.runde);
-      const pts = OOM_POINTS[t[0].typ]?.[roundKey] ?? 0;
+      // Only count pro tournaments for pro OOM points
+      const isDevTour = t[0].tour_type === "development";
+      const pts = isDevTour ? 0 : (OOM_POINTS[t[0].typ]?.[roundKey] ?? 0);
+      const devPts = isDevTour ? (OOM_POINTS[t[0].typ]?.[roundKey] ?? 0) : 0;
 
-      tourResults.push({ tournament_id: tid, tournament_name: t[0].name, typ: t[0].typ, round: roundKey, points: pts });
+      tourResults.push({
+        tournament_id: tid,
+        tournament_name: t[0].name,
+        typ: t[0].typ,
+        tour_type: t[0].tour_type,
+        round: roundKey,
+        points: pts,
+        dev_points: devPts,
+        matches_won: playerMatches.filter((m) => m.winner_id === id).length,
+        matches_lost: playerMatches.filter((m) => m.winner_id !== id && m.winner_id != null).length,
+        datum: t[0].datum,
+      });
     }
 
     const bonusRows = await db.select().from(tourBonusPointsTable).where(eq(tourBonusPointsTable.player_id, id));
     const bonusTotal = bonusRows.reduce((s, b) => s + b.points, 0);
     const totalPoints = tourResults.reduce((s, r) => s + r.points, 0) + bonusTotal;
+    const devTotalPoints = tourResults.reduce((s, r) => s + r.dev_points, 0);
 
     res.json({
       id: player[0].id,
@@ -1032,8 +1123,85 @@ router.get("/tour/players/:id", async (req, res) => {
       autodarts_username: player[0].autodarts_username,
       created_at: player[0].created_at,
       oom_points: totalPoints,
-      tournament_results: tourResults,
+      dev_oom_points: devTotalPoints,
+      stats: {
+        matches_won: totalWins,
+        matches_lost: totalLosses,
+        win_rate: totalWins + totalLosses > 0 ? Math.round((totalWins / (totalWins + totalLosses)) * 100) : 0,
+        legs_won: legWins,
+        legs_lost: legLosses,
+        avg_score: avgCount > 0 ? Math.round((avgSum / avgCount) * 10) / 10 : null,
+        tournaments_played: tourResults.length,
+        titles: tourResults.filter((r) => r.round === "Sieger").length,
+      },
+      tournament_results: tourResults.sort((a, b) => b.datum.localeCompare(a.datum)),
       bonus_points: bonusRows,
+    });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /tour/players/:id/h2h/:opponentId — head-to-head stats
+router.get("/tour/players/:id/h2h/:opponentId", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const opponentId = parseInt(req.params.opponentId);
+    if (isNaN(id) || isNaN(opponentId)) return res.status(400).json({ error: "Ungültige IDs" });
+
+    const [p1, p2] = await Promise.all([
+      db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, id)).limit(1),
+      db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, opponentId)).limit(1),
+    ]);
+    if (!p1[0] || !p2[0]) return res.status(404).json({ error: "Spieler nicht gefunden" });
+
+    const allMatches = await db.select().from(tourMatchesTable).where(
+      and(eq(tourMatchesTable.status, "abgeschlossen"))
+    );
+
+    const h2hMatches = allMatches.filter(
+      (m) => !m.is_bye && (
+        (m.player1_id === id && m.player2_id === opponentId) ||
+        (m.player1_id === opponentId && m.player2_id === id)
+      )
+    );
+
+    let wins = 0, losses = 0, legWins = 0, legLosses = 0;
+    const history: any[] = [];
+
+    for (const m of h2hMatches) {
+      const isP1 = m.player1_id === id;
+      const won = m.winner_id === id;
+      if (won) wins++; else losses++;
+      const myLegs = isP1 ? (m.score_p1 ?? 0) : (m.score_p2 ?? 0);
+      const oppLegs = isP1 ? (m.score_p2 ?? 0) : (m.score_p1 ?? 0);
+      legWins += myLegs; legLosses += oppLegs;
+      const myAvg = isP1 ? m.avg_p1 : m.avg_p2;
+      const oppAvg = isP1 ? m.avg_p2 : m.avg_p1;
+
+      const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, m.tournament_id)).limit(1);
+      history.push({
+        match_id: m.id,
+        tournament_id: m.tournament_id,
+        tournament_name: t[0]?.name ?? "Unbekannt",
+        runde: m.runde,
+        won,
+        my_score: myLegs,
+        opp_score: oppLegs,
+        my_avg: myAvg,
+        opp_avg: oppAvg,
+        datum: t[0]?.datum ?? "",
+      });
+    }
+
+    res.json({
+      player: { id: p1[0].id, name: p1[0].name, autodarts_username: p1[0].autodarts_username },
+      opponent: { id: p2[0].id, name: p2[0].name, autodarts_username: p2[0].autodarts_username },
+      wins,
+      losses,
+      leg_wins: legWins,
+      leg_losses: legLosses,
+      history: history.sort((a, b) => b.datum.localeCompare(a.datum)),
     });
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -1219,6 +1387,123 @@ router.delete("/tour/tournaments/:id/entries/:playerId", async (req, res) => {
   }
 });
 
+// POST /tour/tournaments/:id/entries/:playerId/confirm — player confirms attendance (RSVP)
+router.post("/tour/tournaments/:id/entries/:playerId/confirm", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const playerId = parseInt(req.params.playerId);
+    const { pin } = req.body;
+
+    const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
+    if (!t[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
+    if (t[0].status !== "offen") return res.status(400).json({ error: "Bestätigung nur bei offenen Turnieren möglich" });
+
+    const player = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, playerId)).limit(1);
+    if (!player[0]) return res.status(404).json({ error: "Spieler nicht gefunden" });
+    if (!verifyPin(String(pin), player[0].pin_hash)) return res.status(403).json({ error: "Falscher PIN" });
+
+    const entry = await db.select().from(tourEntriesTable)
+      .where(and(eq(tourEntriesTable.tournament_id, tournamentId), eq(tourEntriesTable.player_id, playerId))).limit(1);
+    if (!entry[0]) return res.status(404).json({ error: "Nicht angemeldet" });
+
+    await db.update(tourEntriesTable)
+      .set({ confirmed: true })
+      .where(and(eq(tourEntriesTable.tournament_id, tournamentId), eq(tourEntriesTable.player_id, playerId)));
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /tour/vapid-public-key — return VAPID public key for push setup
+router.get("/tour/vapid-public-key", (_req, res) => {
+  res.json({ public_key: VAPID_PUBLIC_KEY });
+});
+
+// POST /tour/players/:id/push-subscribe — store push subscription
+router.post("/tour/players/:id/push-subscribe", async (req, res) => {
+  try {
+    const playerId = parseInt(req.params.id);
+    const { endpoint, p256dh, auth, pin } = req.body;
+    if (!endpoint || !p256dh || !auth) return res.status(400).json({ error: "subscription fields required" });
+
+    const player = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, playerId)).limit(1);
+    if (!player[0]) return res.status(404).json({ error: "Spieler nicht gefunden" });
+    if (!verifyPin(String(pin), player[0].pin_hash)) return res.status(403).json({ error: "Falscher PIN" });
+
+    await db.delete(tourPushSubscriptionsTable).where(eq(tourPushSubscriptionsTable.player_id, playerId));
+    await db.insert(tourPushSubscriptionsTable).values({ player_id: playerId, endpoint, p256dh, auth });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// DELETE /tour/players/:id/push-unsubscribe
+router.delete("/tour/players/:id/push-unsubscribe", async (req, res) => {
+  try {
+    const playerId = parseInt(req.params.id);
+    await db.delete(tourPushSubscriptionsTable).where(eq(tourPushSubscriptionsTable.player_id, playerId));
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /tour/players/:id/push-status — check if player has push subscription
+router.get("/tour/players/:id/push-status", async (req, res) => {
+  try {
+    const playerId = parseInt(req.params.id);
+    const sub = await db.select().from(tourPushSubscriptionsTable)
+      .where(eq(tourPushSubscriptionsTable.player_id, playerId)).limit(1);
+    res.json({ subscribed: sub.length > 0 });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /tour/live-ticker — all active matches from running tournaments
+router.get("/tour/live-ticker", async (_req, res) => {
+  try {
+    const running = await db.select().from(tourTournamentsTable)
+      .where(and(eq(tourTournamentsTable.status, "laufend"), eq(tourTournamentsTable.is_test, false)));
+
+    if (running.length === 0) return res.json([]);
+
+    const allPlayers = await db.select().from(tourPlayersTable);
+    const playerMap = new Map(allPlayers.map((p) => [p.id, p]));
+
+    const ticker: any[] = [];
+    for (const t of running) {
+      const matches = await db.select().from(tourMatchesTable)
+        .where(and(eq(tourMatchesTable.tournament_id, t.id)));
+
+      const active = matches.filter((m) => !m.is_bye && m.player1_id && m.player2_id && m.status !== "abgeschlossen");
+      for (const m of active) {
+        ticker.push({
+          tournament_id: t.id,
+          tournament_name: t.name,
+          match_id: m.id,
+          runde: m.runde,
+          player1: playerMap.get(m.player1_id!)?.name ?? "?",
+          player2: playerMap.get(m.player2_id!)?.name ?? "?",
+          score_p1: m.score_p1,
+          score_p2: m.score_p2,
+          avg_p1: m.avg_p1,
+          avg_p2: m.avg_p2,
+          status: m.status,
+          autodarts_match_id: m.autodarts_match_id,
+        });
+      }
+    }
+
+    res.json(ticker);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // POST /tour/tournaments/:id/start
 router.post("/tour/tournaments/:id/start", async (req, res) => {
   try {
@@ -1267,6 +1552,13 @@ router.post("/tour/tournaments/:id/start", async (req, res) => {
         }));
 
         await notifyTournamentStart(t[0], matchData);
+
+        // Push notifications to all first-round players
+        for (const m of r1Matches) {
+          if (!m.is_bye && m.player1_id && m.player2_id) {
+            notifyMatchReady(m.id, t[0].name).catch(() => {});
+          }
+        }
       } catch { /* non-critical */ }
     })();
 

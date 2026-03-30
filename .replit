@@ -27,3 +27,9 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+VAPID_PUBLIC_KEY = "BEPrDutnCsuiU2CufcH8ZOUb6iGlhUXeawruUvdXNW-26U4uU3jHujaRnMXXaiqbIQG0C-WCfyGAa0JnZdvbKtA"
+VAPID_PRIVATE_KEY = "z27i9oS3YZOp1phD7CzUj4sgLp5hxvONARpwhBwvjBY"
