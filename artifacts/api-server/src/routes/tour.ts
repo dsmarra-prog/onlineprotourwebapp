@@ -4205,7 +4205,7 @@ router.get("/tour/admin/fairness", async (req, res) => {
 // ─── Support Tickets ────────────────────────────────────────────────────────
 
 // POST /tour/support/tickets — player submits a ticket
-router.post("/support/tickets", async (req, res) => {
+router.post("/tour/support/tickets", async (req, res) => {
   try {
     const { player_id, pin, subject, message } = req.body ?? {};
     if (!player_id || !pin || !subject?.trim() || !message?.trim()) {
@@ -4227,7 +4227,7 @@ router.post("/support/tickets", async (req, res) => {
 });
 
 // GET /tour/support/tickets/mine — player views own tickets
-router.get("/support/tickets/mine", async (req, res) => {
+router.get("/tour/support/tickets/mine", async (req, res) => {
   try {
     const player_id = Number(req.query.player_id);
     const pin = String(req.query.pin ?? "");
@@ -4245,7 +4245,7 @@ router.get("/support/tickets/mine", async (req, res) => {
 });
 
 // GET /tour/support/tickets — admin views all tickets
-router.get("/support/tickets", async (req, res) => {
+router.get("/tour/support/tickets", async (req, res) => {
   try {
     const player_id = Number(req.query.player_id);
     const pin = String(req.query.pin ?? "");
@@ -4275,7 +4275,7 @@ router.get("/support/tickets", async (req, res) => {
 });
 
 // POST /tour/support/tickets/:id/reply — admin replies
-router.post("/support/tickets/:id/reply", async (req, res) => {
+router.post("/tour/support/tickets/:id/reply", async (req, res) => {
   try {
     const ticketId = Number(req.params.id);
     const { player_id, pin, reply, status } = req.body ?? {};
@@ -4299,7 +4299,7 @@ router.post("/support/tickets/:id/reply", async (req, res) => {
 });
 
 // POST /tour/support/tickets/:id/close — player closes own ticket
-router.post("/support/tickets/:id/close", async (req, res) => {
+router.post("/tour/support/tickets/:id/close", async (req, res) => {
   try {
     const ticketId = Number(req.params.id);
     const { player_id, pin } = req.body ?? {};
