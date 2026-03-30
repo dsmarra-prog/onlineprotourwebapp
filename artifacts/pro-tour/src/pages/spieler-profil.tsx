@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
-import { ArrowLeft, Trophy, Star, Loader2, Target, TrendingUp, Swords, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Trophy, Star, Loader2, Target, TrendingUp, Swords, ChevronDown, ChevronUp, Medal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { apiFetch, TourPlayerProfile, TourH2H, TYP_LABELS, RUNDE_LABELS } from "@/lib/api";
+import { apiFetch, TourPlayerProfile, TourH2H, Achievement, TYP_LABELS, RUNDE_LABELS } from "@/lib/api";
 
 type TourPlayer = { id: number; name: string; autodarts_username: string };
 
@@ -28,6 +28,12 @@ export default function SpielerProfil() {
     queryKey: ["h2h", id, h2hOpponent],
     queryFn: () => apiFetch(`/tour/players/${id}/h2h/${h2hOpponent}`),
     enabled: !!h2hOpponent,
+  });
+
+  const { data: achievements } = useQuery<Achievement[]>({
+    queryKey: ["achievements", id],
+    queryFn: () => apiFetch(`/tour/players/${id}/achievements`),
+    enabled: !!id,
   });
 
   if (isLoading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>;
@@ -95,6 +101,11 @@ export default function SpielerProfil() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Achievements section */}
+      {achievements && (
+        <AchievementSection achievements={achievements} />
       )}
 
       {/* H2H section */}
@@ -260,6 +271,99 @@ function StatCard({ label, value, highlight }: { label: string; value: string; h
     <div className={`rounded-xl border p-4 text-center ${highlight ? "border-primary/30 bg-primary/5" : "border-border bg-card"}`}>
       <p className={`text-lg font-bold ${highlight ? "text-primary" : "text-foreground"}`}>{value}</p>
       <p className="text-xs text-muted-foreground mt-1">{label}</p>
+    </div>
+  );
+}
+
+const TIER_STYLES = {
+  bronze: { ring: "ring-amber-700/50", bg: "bg-amber-900/20", label: "text-amber-600", dot: "bg-amber-600" },
+  silver: { ring: "ring-slate-400/50", bg: "bg-slate-700/20", label: "text-slate-300", dot: "bg-slate-300" },
+  gold: { ring: "ring-yellow-400/60", bg: "bg-yellow-900/20", label: "text-yellow-400", dot: "bg-yellow-400" },
+};
+
+function AchievementSection({ achievements }: { achievements: Achievement[] }) {
+  const [open, setOpen] = useState(false);
+  const unlockedCount = achievements.filter((a) => a.unlocked).length;
+
+  const grouped = achievements.reduce<Record<string, Achievement[]>>((acc, a) => {
+    if (!acc[a.category_label]) acc[a.category_label] = [];
+    acc[a.category_label].push(a);
+    return acc;
+  }, {});
+
+  return (
+    <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <button
+        className="flex items-center justify-between w-full p-4"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <div className="flex items-center gap-2">
+          <Medal className="w-4 h-4 text-yellow-400" />
+          <h2 className="font-semibold text-sm">Achievements</h2>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-400/10 text-yellow-400 font-medium">
+            {unlockedCount}/{achievements.length}
+          </span>
+        </div>
+        {open ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+      </button>
+
+      {open && (
+        <div className="border-t border-border divide-y divide-border/50">
+          {Object.entries(grouped).map(([category, items]) => (
+            <div key={category} className="p-4 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">{category}</p>
+              <div className="grid grid-cols-1 gap-2">
+                {items.map((a) => {
+                  const tier = TIER_STYLES[a.tier];
+                  return (
+                    <div
+                      key={a.key}
+                      className={`flex items-center gap-3 rounded-xl p-3 ring-1 transition-all ${
+                        a.unlocked
+                          ? `${tier.ring} ${tier.bg}`
+                          : "ring-border/30 bg-muted/20 opacity-50"
+                      }`}
+                    >
+                      {/* Icon */}
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0 ${
+                        a.unlocked ? tier.bg : "bg-muted/30"
+                      } ring-1 ${a.unlocked ? tier.ring : "ring-border/20"}`}>
+                        <span className={a.unlocked ? "" : "grayscale"}>{a.emoji}</span>
+                      </div>
+
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <p className={`text-sm font-semibold truncate ${a.unlocked ? "text-foreground" : "text-muted-foreground"}`}>
+                            {a.name}
+                          </p>
+                          <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                            a.unlocked ? tier.label : "text-muted-foreground"
+                          } bg-current/10`}
+                            style={{ backgroundColor: "transparent", border: "1px solid currentColor" }}>
+                            {a.tier}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-tight">{a.description}</p>
+                        {a.unlocked && a.unlocked_at && (
+                          <p className="text-[10px] text-muted-foreground/60 mt-1">
+                            Freigeschaltet {new Date(a.unlocked_at).toLocaleDateString("de-DE", { day: "2-digit", month: "short", year: "numeric" })}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Unlock badge */}
+                      {a.unlocked && (
+                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${tier.dot}`} />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

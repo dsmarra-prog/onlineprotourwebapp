@@ -192,6 +192,21 @@ export const TYP_LABELS: Record<string, string> = {
   dev_final: "Dev Grand Final",
 };
 
+export type Achievement = {
+  key: string;
+  name: string;
+  description: string;
+  category: string;
+  category_label: string;
+  emoji: string;
+  tier: "bronze" | "silver" | "gold";
+  unlocked: boolean;
+  unlocked_at: string | null;
+  match_id: number | null;
+  tournament_id: number | null;
+  meta: Record<string, any> | null;
+};
+
 export const RUNDE_LABELS: Record<string, string> = {
   R64: "Letzte 64",
   R32: "Letzte 32",

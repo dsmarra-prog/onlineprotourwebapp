@@ -76,9 +76,23 @@ export const tourMatchesTable = pgTable("tour_matches", {
   doubles_att_p1: integer("doubles_att_p1"),
   doubles_hit_p2: integer("doubles_hit_p2"),
   doubles_att_p2: integer("doubles_att_p2"),
+  count_180s_p1: integer("count_180s_p1"),
+  count_180s_p2: integer("count_180s_p2"),
+  high_checkout_p1: integer("high_checkout_p1"),
+  high_checkout_p2: integer("high_checkout_p2"),
   status: text("status").notNull().default("ausstehend"),
   is_bye: boolean("is_bye").notNull().default(false),
   autodarts_match_id: text("autodarts_match_id"),
+});
+
+export const tourPlayerAchievementsTable = pgTable("tour_player_achievements", {
+  id: serial("id").primaryKey(),
+  player_id: integer("player_id").notNull(),
+  achievement_key: text("achievement_key").notNull(),
+  unlocked_at: timestamp("unlocked_at").defaultNow().notNull(),
+  match_id: integer("match_id"),
+  tournament_id: integer("tournament_id"),
+  meta: text("meta"),
 });
 
 export const tourEntriesTable = pgTable("tour_entries", {
@@ -135,3 +149,4 @@ export type TourMatch = typeof tourMatchesTable.$inferSelect;
 export type TourEntry = typeof tourEntriesTable.$inferSelect;
 export type TourBonusPoints = typeof tourBonusPointsTable.$inferSelect;
 export type TourDevOomStanding = typeof tourDevOomStandingsTable.$inferSelect;
+export type TourPlayerAchievement = typeof tourPlayerAchievementsTable.$inferSelect;

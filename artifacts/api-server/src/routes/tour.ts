@@ -10,9 +10,10 @@ import {
   tourEntriesTable,
   tourBonusPointsTable,
   tourPushSubscriptionsTable,
+  tourPlayerAchievementsTable,
   systemSettingsTable,
 } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, or } from "drizzle-orm";
 import crypto from "crypto";
 import webpush from "web-push";
 
@@ -2310,6 +2311,8 @@ type MatchStats = {
   first9_p1: number | null; first9_p2: number | null;
   doubles_hit_p1: number | null; doubles_att_p1: number | null;
   doubles_hit_p2: number | null; doubles_att_p2: number | null;
+  count_180s_p1: number | null; count_180s_p2: number | null;
+  high_checkout_p1: number | null; high_checkout_p2: number | null;
 };
 
 function getMatchScore(adMatch: any, username1: string, username2: string): MatchStats {
@@ -2327,10 +2330,12 @@ function getMatchScore(adMatch: any, username1: string, username2: string): Matc
     const legs1 = games.filter((g: any) => g.winnerPlayerId === p1.id).length;
     const legs2 = games.filter((g: any) => g.winnerPlayerId === p2.id).length;
 
-    const computeExtendedStats = (pid: string, legs_won: number) => {
+    const computeExtendedStats = (pid: string, _legs_won: number) => {
       let totalPts = 0, totalTurns = 0;
       let first9Total = 0, first9Count = 0;
       let doublesHit = 0, doublesAtt = 0;
+      let count180s = 0;
+      let highCheckout = 0;
 
       for (const g of games) {
         let playerVisit = 0;
@@ -2338,7 +2343,12 @@ function getMatchScore(adMatch: any, username1: string, username2: string): Matc
 
         for (const t of legTurns) {
           // Overall average (excluding busts)
-          if (!t.busted) { totalPts += t.points; totalTurns++; }
+          if (!t.busted) {
+            totalPts += t.points;
+            totalTurns++;
+            // Count 180s
+            if (t.points === 180) count180s++;
+          }
 
           // First 9: first 3 visits per leg
           if (!t.busted && playerVisit < 3) { first9Total += t.points; first9Count++; }
@@ -2355,9 +2365,6 @@ function getMatchScore(adMatch: any, username1: string, username2: string): Matc
         }
 
         // Checkout attempts: last leg turn had darts aimed at doubles.
-        // Proxy: if player won this leg, they hit one (already counted via doublesHit above for last dart).
-        // Count double attempts as darts thrown at doubles (either hit or "aimed at" in winning/busted turns).
-        // For legs not won: any double dart in the last turn = checkout attempt.
         const lastTurn = legTurns[legTurns.length - 1];
         if (lastTurn) {
           const darts: any[] = lastTurn.darts || [];
@@ -2368,6 +2375,14 @@ function getMatchScore(adMatch: any, username1: string, username2: string): Matc
           });
           if (hadDoubleAttempt) doublesAtt++;
         }
+
+        // High checkout: if player won this leg, last non-busted turn.points = checkout value
+        if (g.winnerPlayerId === pid && legTurns.length > 0) {
+          const lastNonBusted = [...legTurns].reverse().find((t: any) => !t.busted);
+          if (lastNonBusted && lastNonBusted.points > highCheckout) {
+            highCheckout = lastNonBusted.points;
+          }
+        }
       }
 
       return {
@@ -2375,6 +2390,8 @@ function getMatchScore(adMatch: any, username1: string, username2: string): Matc
         first9: first9Count > 0 ? Math.round((first9Total / first9Count) * 10) / 10 : null,
         doublesHit,
         doublesAtt,
+        count180s,
+        highCheckout: highCheckout > 0 ? highCheckout : null,
       };
     };
 
@@ -2387,6 +2404,8 @@ function getMatchScore(adMatch: any, username1: string, username2: string): Matc
       first9_p1: s1.first9, first9_p2: s2.first9,
       doubles_hit_p1: s1.doublesHit, doubles_att_p1: s1.doublesAtt,
       doubles_hit_p2: s2.doublesHit, doubles_att_p2: s2.doublesAtt,
+      count_180s_p1: s1.count180s, count_180s_p2: s2.count180s,
+      high_checkout_p1: s1.highCheckout, high_checkout_p2: s2.highCheckout,
     };
   }
 
@@ -2401,8 +2420,277 @@ function getMatchScore(adMatch: any, username1: string, username2: string): Matc
     first9_p1: null, first9_p2: null,
     doubles_hit_p1: null, doubles_att_p1: null,
     doubles_hit_p2: null, doubles_att_p2: null,
+    count_180s_p1: null, count_180s_p2: null,
+    high_checkout_p1: null, high_checkout_p2: null,
   };
 }
+
+// ─── Achievements ─────────────────────────────────────────────────────────────
+
+export const ACHIEVEMENTS = [
+  // Category 1: Checkout-Künstler
+  {
+    key: "clean_sweep",
+    name: "Clean Sweep",
+    description: "Gewinne ein Match mit einer Checkout-Quote von über 50% (mind. 4 Versuche)",
+    category: "checkout",
+    category_label: "Checkout-Künstler",
+    emoji: "🎯",
+    tier: "silver" as const,
+  },
+  {
+    key: "big_fish",
+    name: "The Big Fish",
+    description: "Checke die magische 170 (Maximum Checkout)",
+    category: "checkout",
+    category_label: "Checkout-Künstler",
+    emoji: "🐟",
+    tier: "gold" as const,
+  },
+  // Category 2: Scoring & Dominanz
+  {
+    key: "robin_hood",
+    name: "Robin Hood",
+    description: "Wirf deine erste offizielle 180 in einem Pro/Dev Tour Match",
+    category: "scoring",
+    category_label: "Scoring & Dominanz",
+    emoji: "🏹",
+    tier: "bronze" as const,
+  },
+  {
+    key: "maximum_overdrive",
+    name: "Maximum Overdrive",
+    description: "Wirf drei 180er in einem einzigen Match",
+    category: "scoring",
+    category_label: "Scoring & Dominanz",
+    emoji: "💥",
+    tier: "gold" as const,
+  },
+  {
+    key: "whitewash",
+    name: "Whitewash",
+    description: "Gewinne ein Match ohne dem Gegner ein einziges Leg zu überlassen",
+    category: "scoring",
+    category_label: "Scoring & Dominanz",
+    emoji: "🚿",
+    tier: "silver" as const,
+  },
+  // Category 3: Der absolute Grind
+  {
+    key: "rookie_of_the_year",
+    name: "Rookie of the Year",
+    description: "Gewinne dein allererstes Turnier auf der Pro Tour",
+    category: "grind",
+    category_label: "Der absolute Grind",
+    emoji: "🌟",
+    tier: "gold" as const,
+  },
+  {
+    key: "top_of_the_world",
+    name: "Top of the World",
+    description: "Erreiche Platz 1 der offiziellen Order of Merit",
+    category: "grind",
+    category_label: "Der absolute Grind",
+    emoji: "👑",
+    tier: "gold" as const,
+  },
+  {
+    key: "the_veteran",
+    name: "The Veteran",
+    description: "Absolviere 100 Pro Tour-Matches",
+    category: "grind",
+    category_label: "Der absolute Grind",
+    emoji: "🎖️",
+    tier: "gold" as const,
+  },
+  // Category 4: Nervenstärke
+  {
+    key: "ice_in_the_veins",
+    name: "Ice in the Veins",
+    description: "Gewinne ein Match im Decider (letztes entscheidendes Leg)",
+    category: "clutch",
+    category_label: "Nervenstärke",
+    emoji: "🧊",
+    tier: "silver" as const,
+  },
+  {
+    key: "giant_killer",
+    name: "Giant Killer",
+    description: "Besiege einen Gegner, dessen Average mindestens 10 Punkte höher war als deiner",
+    category: "clutch",
+    category_label: "Nervenstärke",
+    emoji: "🗡️",
+    tier: "gold" as const,
+  },
+] as const;
+
+type AchievementKey = typeof ACHIEVEMENTS[number]["key"];
+
+/** Unlock an achievement for a player (idempotent – ignores duplicates) */
+async function unlockAchievement(
+  playerId: number,
+  key: AchievementKey,
+  matchId?: number,
+  tournamentId?: number,
+  meta?: object,
+) {
+  try {
+    const existing = await db.select({ id: tourPlayerAchievementsTable.id })
+      .from(tourPlayerAchievementsTable)
+      .where(and(
+        eq(tourPlayerAchievementsTable.player_id, playerId),
+        eq(tourPlayerAchievementsTable.achievement_key, key),
+      ))
+      .limit(1);
+    if (existing.length > 0) return; // already unlocked
+    await db.insert(tourPlayerAchievementsTable).values({
+      player_id: playerId,
+      achievement_key: key,
+      match_id: matchId ?? null,
+      tournament_id: tournamentId ?? null,
+      meta: meta ? JSON.stringify(meta) : null,
+    });
+  } catch { /* ignore race conditions */ }
+}
+
+/** Check and unlock achievements triggered by a completed match */
+async function checkAndUnlockAchievements(matchId: number, tournamentId: number) {
+  const [match] = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.id, matchId)).limit(1);
+  if (!match || !match.winner_id) return;
+
+  const [tournament] = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
+  if (!tournament || tournament.is_test) return;
+
+  const playerIds = [match.player1_id, match.player2_id].filter((id): id is number => id != null);
+
+  for (const playerId of playerIds) {
+    const isWinner = match.winner_id === playerId;
+    const isP1 = match.player1_id === playerId;
+
+    const myLegs    = isP1 ? match.score_p1 : match.score_p2;
+    const oppLegs   = isP1 ? match.score_p2 : match.score_p1;
+    const myAvg     = isP1 ? match.avg_p1 : match.avg_p2;
+    const oppAvg    = isP1 ? match.avg_p2 : match.avg_p1;
+    const myDblHit  = isP1 ? match.doubles_hit_p1 : match.doubles_hit_p2;
+    const myDblAtt  = isP1 ? match.doubles_att_p1 : match.doubles_att_p2;
+    const my180s    = isP1 ? match.count_180s_p1 : match.count_180s_p2;
+    const myCheckout = isP1 ? match.high_checkout_p1 : match.high_checkout_p2;
+
+    // ── Robin Hood: first 180 ever (win or lose) ───────────────────────────
+    if (my180s != null && my180s >= 1) {
+      await unlockAchievement(playerId, "robin_hood", matchId, tournamentId, { count: my180s });
+    }
+
+    // ── Maximum Overdrive: 3+ 180s in one match ────────────────────────────
+    if (my180s != null && my180s >= 3) {
+      await unlockAchievement(playerId, "maximum_overdrive", matchId, tournamentId, { count: my180s });
+    }
+
+    // ── The Big Fish: high checkout ≥ 170 ─────────────────────────────────
+    if (myCheckout != null && myCheckout >= 170) {
+      await unlockAchievement(playerId, "big_fish", matchId, tournamentId, { checkout: myCheckout });
+    }
+
+    if (isWinner) {
+      // ── Whitewash: won without opponent winning a leg ──────────────────
+      if (oppLegs === 0 && (myLegs ?? 0) > 0) {
+        await unlockAchievement(playerId, "whitewash", matchId, tournamentId);
+      }
+
+      // ── Clean Sweep: checkout rate > 50% (min 4 attempts) ─────────────
+      if (myDblHit != null && myDblAtt != null && myDblAtt >= 4 && myDblHit / myDblAtt > 0.5) {
+        await unlockAchievement(playerId, "clean_sweep", matchId, tournamentId,
+          { rate: Math.round(myDblHit / myDblAtt * 100), hit: myDblHit, att: myDblAtt });
+      }
+
+      // ── Ice in the Veins: won in decider ──────────────────────────────
+      const format = tournament.legs_format;
+      if (myLegs === format && oppLegs === format - 1) {
+        await unlockAchievement(playerId, "ice_in_the_veins", matchId, tournamentId,
+          { score: `${myLegs}:${oppLegs}` });
+      }
+
+      // ── Giant Killer: won with avg ≥ 10 lower than opponent ───────────
+      if (myAvg != null && oppAvg != null && oppAvg - myAvg >= 10) {
+        await unlockAchievement(playerId, "giant_killer", matchId, tournamentId,
+          { my_avg: myAvg, opp_avg: oppAvg, diff: Math.round((oppAvg - myAvg) * 10) / 10 });
+      }
+
+      // ── Rookie of the Year: first Pro Tour final win ───────────────────
+      if (match.runde === "F" && tournament.tour_type === "pro") {
+        await unlockAchievement(playerId, "rookie_of_the_year", matchId, tournamentId);
+      }
+    }
+
+    // ── The Veteran: 100 completed non-bye matches ─────────────────────────
+    const matchCount = await db.select({ id: tourMatchesTable.id })
+      .from(tourMatchesTable)
+      .where(and(
+        or(eq(tourMatchesTable.player1_id, playerId), eq(tourMatchesTable.player2_id, playerId)),
+        eq(tourMatchesTable.status, "abgeschlossen"),
+        eq(tourMatchesTable.is_bye, false),
+      ));
+    if (matchCount.length >= 100) {
+      await unlockAchievement(playerId, "the_veteran", matchId, tournamentId, { matches: matchCount.length });
+    }
+  }
+}
+
+// GET /tour/achievements — all achievement definitions
+router.get("/tour/achievements", (_req, res) => {
+  res.json(ACHIEVEMENTS);
+});
+
+// GET /tour/players/:id/achievements — player's achievement status
+router.get("/tour/players/:id/achievements", async (req, res) => {
+  try {
+    const playerId = parseInt(req.params.id);
+
+    // Load unlocked achievements
+    const unlocked = await db.select()
+      .from(tourPlayerAchievementsTable)
+      .where(eq(tourPlayerAchievementsTable.player_id, playerId))
+      .orderBy(desc(tourPlayerAchievementsTable.unlocked_at));
+
+    const unlockedKeys = new Set(unlocked.map((u) => u.achievement_key));
+
+    // Check "Top of the World" dynamically (current OOM rank)
+    if (!unlockedKeys.has("top_of_the_world")) {
+      // Reuse OOM computation: find player rank
+      const proStandings = await db.select().from(tourOomStandingsTable);
+      const player = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, playerId)).limit(1);
+      if (player[0]) {
+        const lookupKey = normalizeUsername(player[0].oom_name ?? player[0].autodarts_username);
+        const proEntry = proStandings.find((s) => normalizeUsername(s.autodarts_username) === lookupKey);
+        if (proEntry?.rank === 1) {
+          await unlockAchievement(playerId, "top_of_the_world", undefined, undefined, { rank: 1 });
+          unlockedKeys.add("top_of_the_world");
+          const fresh = await db.select().from(tourPlayerAchievementsTable)
+            .where(and(eq(tourPlayerAchievementsTable.player_id, playerId), eq(tourPlayerAchievementsTable.achievement_key, "top_of_the_world")))
+            .limit(1);
+          if (fresh[0]) unlocked.push(fresh[0]);
+        }
+      }
+    }
+
+    // Build full list: merge definitions with unlock status
+    const result = ACHIEVEMENTS.map((def) => {
+      const unlock = unlocked.find((u) => u.achievement_key === def.key);
+      return {
+        ...def,
+        unlocked: !!unlock,
+        unlocked_at: unlock?.unlocked_at ?? null,
+        match_id: unlock?.match_id ?? null,
+        tournament_id: unlock?.tournament_id ?? null,
+        meta: unlock?.meta ? JSON.parse(unlock.meta) : null,
+      };
+    });
+
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
 
 // GET /tour/autodarts-debug — see raw Autodarts API response (admin only)
 router.get("/tour/autodarts-debug", async (_req, res) => {
@@ -2529,11 +2817,14 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
                     first9_p1: score.first9_p1, first9_p2: score.first9_p2,
                     doubles_hit_p1: score.doubles_hit_p1, doubles_att_p1: score.doubles_att_p1,
                     doubles_hit_p2: score.doubles_hit_p2, doubles_att_p2: score.doubles_att_p2,
+                    count_180s_p1: score.count_180s_p1, count_180s_p2: score.count_180s_p2,
+                    high_checkout_p1: score.high_checkout_p1, high_checkout_p2: score.high_checkout_p2,
                     status: "abgeschlossen", autodarts_match_id: directMatch.id,
                   })
                   .where(eq(tourMatchesTable.id, match.id));
                 await advanceWinner(tournamentId, match.runde, match.match_nr, winnerId);
                 await checkTournamentComplete(tournamentId);
+                await checkAndUnlockAchievements(match.id, tournamentId).catch(() => {});
                 results.push({ match_id: match.id, status: "auto_completed", winner_id: winnerId, legs1: score.legs1, legs2: score.legs2, avg1: a1, avg2: a2, autodarts_id: directMatch.id });
                 synced++;
                 continue;
@@ -2636,6 +2927,10 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
           doubles_att_p1: score.doubles_att_p1,
           doubles_hit_p2: score.doubles_hit_p2,
           doubles_att_p2: score.doubles_att_p2,
+          count_180s_p1: score.count_180s_p1,
+          count_180s_p2: score.count_180s_p2,
+          high_checkout_p1: score.high_checkout_p1,
+          high_checkout_p2: score.high_checkout_p2,
           status: "abgeschlossen",
           autodarts_match_id: scoreSource.id,
         })
@@ -2643,6 +2938,7 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
 
       await advanceWinner(tournamentId, match.runde, match.match_nr, winnerId);
       await checkTournamentComplete(tournamentId);
+      await checkAndUnlockAchievements(match.id, tournamentId).catch(() => {});
 
       results.push({
         match_id: match.id,
