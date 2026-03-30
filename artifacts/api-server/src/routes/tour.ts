@@ -154,6 +154,15 @@ function verifyPin(pin: string, hash: string): boolean {
   return hashPin(pin) === hash;
 }
 
+async function isAdminPlayer(playerId: number, pin: string): Promise<boolean> {
+  try {
+    const [p] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, playerId)).limit(1);
+    return !!(p && p.is_admin && verifyPin(String(pin), p.pin_hash));
+  } catch {
+    return false;
+  }
+}
+
 function roundToOomKey(runde: string): string {
   const map: Record<string, string> = {
     F: "Finale",
@@ -1043,7 +1052,39 @@ router.post("/tour/players/login", async (req, res) => {
       return res.status(403).json({ error: "Falscher PIN" });
     }
     const p = players[0];
-    res.json({ id: p.id, name: p.name, autodarts_username: p.autodarts_username });
+    res.json({ id: p.id, name: p.name, autodarts_username: p.autodarts_username, is_admin: p.is_admin });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/admin/grant-admin — ADMIN_SECRET required
+router.post("/tour/admin/grant-admin", async (req, res) => {
+  try {
+    const { admin_secret, player_id } = req.body;
+    if (!admin_secret || admin_secret !== process.env.ADMIN_SECRET) {
+      return res.status(403).json({ error: "Ungültiges Admin-Secret" });
+    }
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, parseInt(player_id))).limit(1);
+    if (!player) return res.status(404).json({ error: "Spieler nicht gefunden" });
+    await db.update(tourPlayersTable).set({ is_admin: true }).where(eq(tourPlayersTable.id, parseInt(player_id)));
+    res.json({ ok: true, message: `${player.name} ist jetzt Admin` });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/admin/revoke-admin — ADMIN_SECRET required
+router.post("/tour/admin/revoke-admin", async (req, res) => {
+  try {
+    const { admin_secret, player_id } = req.body;
+    if (!admin_secret || admin_secret !== process.env.ADMIN_SECRET) {
+      return res.status(403).json({ error: "Ungültiges Admin-Secret" });
+    }
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, parseInt(player_id))).limit(1);
+    if (!player) return res.status(404).json({ error: "Spieler nicht gefunden" });
+    await db.update(tourPlayersTable).set({ is_admin: false }).where(eq(tourPlayersTable.id, parseInt(player_id)));
+    res.json({ ok: true, message: `${player.name} ist kein Admin mehr` });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
@@ -1269,13 +1310,14 @@ router.post("/tour/tournaments", async (req, res) => {
 router.delete("/tour/tournaments/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
-    const { admin_pin } = req.body;
+    const { admin_pin, admin_player_id, admin_player_pin } = req.body;
 
     const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, id)).limit(1);
     if (!t[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
-    if (!admin_pin || !verifyPin(String(admin_pin), t[0].admin_pin)) {
-      return res.status(403).json({ error: "Falscher Admin-PIN" });
-    }
+
+    const byPin = admin_pin && verifyPin(String(admin_pin), t[0].admin_pin);
+    const byAdmin = admin_player_id && admin_player_pin && await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!byPin && !byAdmin) return res.status(403).json({ error: "Keine Berechtigung" });
 
     // Delete all related data first (FK order)
     await db.delete(tourMatchesTable).where(eq(tourMatchesTable.tournament_id, id));
@@ -1508,11 +1550,14 @@ router.get("/tour/live-ticker", async (_req, res) => {
 router.post("/tour/tournaments/:id/start", async (req, res) => {
   try {
     const tournamentId = parseInt(req.params.id);
-    const { admin_pin } = req.body;
+    const { admin_pin, admin_player_id, admin_player_pin } = req.body;
 
     const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
     if (!t[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
-    if (!verifyPin(String(admin_pin), t[0].admin_pin)) return res.status(403).json({ error: "Falscher Admin-PIN" });
+
+    const byPin = admin_pin && verifyPin(String(admin_pin), t[0].admin_pin);
+    const byAdmin = admin_player_id && admin_player_pin && await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!byPin && !byAdmin) return res.status(403).json({ error: "Keine Berechtigung" });
     if (t[0].status !== "offen") return res.status(400).json({ error: "Turnier bereits gestartet" });
 
     const entries = await db.select().from(tourEntriesTable).where(eq(tourEntriesTable.tournament_id, tournamentId));
@@ -1574,7 +1619,7 @@ router.post("/tour/tournaments/:id/start", async (req, res) => {
 router.post("/tour/matches/:matchId/result", async (req, res) => {
   try {
     const matchId = parseInt(req.params.matchId);
-    const { winner_id, score_p1, score_p2, admin_pin } = req.body;
+    const { winner_id, score_p1, score_p2, admin_pin, admin_player_id, admin_player_pin } = req.body;
 
     const match = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.id, matchId)).limit(1);
     if (!match[0]) return res.status(404).json({ error: "Match nicht gefunden" });
@@ -1582,7 +1627,10 @@ router.post("/tour/matches/:matchId/result", async (req, res) => {
 
     const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, match[0].tournament_id)).limit(1);
     if (!t[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
-    if (!verifyPin(String(admin_pin), t[0].admin_pin)) return res.status(403).json({ error: "Falscher Admin-PIN" });
+
+    const byPin = admin_pin && verifyPin(String(admin_pin), t[0].admin_pin);
+    const byAdmin = admin_player_id && admin_player_pin && await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!byPin && !byAdmin) return res.status(403).json({ error: "Keine Berechtigung" });
 
     await db.update(tourMatchesTable)
       .set({ winner_id, score_p1, score_p2, status: "abgeschlossen" })

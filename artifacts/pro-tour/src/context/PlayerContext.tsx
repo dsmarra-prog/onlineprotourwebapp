@@ -5,6 +5,7 @@ export type CurrentPlayer = {
   id: number;
   name: string;
   autodarts_username: string;
+  is_admin: boolean;
 };
 
 type PlayerContextType = {

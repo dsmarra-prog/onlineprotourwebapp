@@ -13,6 +13,95 @@ import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api";
 import { usePlayer } from "@/context/PlayerContext";
 
+type TourPlayer = { id: number; name: string; autodarts_username: string; is_admin: boolean };
+
+function AdminPanel() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [adminSecret, setAdminSecret] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const { data: players, refetch } = useQuery<TourPlayer[]>({
+    queryKey: ["all-players-admin"],
+    queryFn: () => apiFetch("/tour/players"),
+    enabled: open,
+    staleTime: 30_000,
+  });
+
+  const grantMut = useMutation({
+    mutationFn: (player_id: number) =>
+      apiFetch<{ ok: boolean; message: string }>("/tour/admin/grant-admin", {
+        method: "POST",
+        body: JSON.stringify({ admin_secret: adminSecret, player_id }),
+      }),
+    onSuccess: (d) => { toast({ title: d.message }); refetch(); qc.invalidateQueries({ queryKey: ["all-players-admin"] }); },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const revokeMut = useMutation({
+    mutationFn: (player_id: number) =>
+      apiFetch<{ ok: boolean; message: string }>("/tour/admin/revoke-admin", {
+        method: "POST",
+        body: JSON.stringify({ admin_secret: adminSecret, player_id }),
+      }),
+    onSuccess: (d) => { toast({ title: d.message }); refetch(); qc.invalidateQueries({ queryKey: ["all-players-admin"] }); },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="bg-card border border-primary/20 rounded-xl overflow-hidden">
+      <button
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-accent/30 transition-colors"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="w-4 h-4 text-primary" />
+          <span className="font-semibold text-sm">Admin: Rollenverwaltung</span>
+          <span className="text-xs px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30 font-semibold">Admin</span>
+        </div>
+        <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="border-t border-border px-4 pb-4 pt-4 space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Vergib oder entziehe Admin-Rechte. Admins können alle Turniere verwalten. Das Admin-Secret findest du in den Server-Einstellungen (Replit Secrets).
+          </p>
+          <div className="space-y-1">
+            <Label className="text-xs">Admin-Secret</Label>
+            <Input type="password" value={adminSecret} onChange={(e) => setAdminSecret(e.target.value)} placeholder="Admin-Secret eingeben" className="h-8 text-sm" />
+          </div>
+          <div className="space-y-2">
+            {players?.map((p) => (
+              <div key={p.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-accent/20">
+                <div className="flex items-center gap-2">
+                  <User className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="text-sm font-medium">{p.name}</span>
+                  <span className="text-xs text-muted-foreground">@{p.autodarts_username}</span>
+                  {p.is_admin && (
+                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30">Admin</span>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className={`h-6 text-xs gap-1 ${p.is_admin ? "text-red-400 border-red-400/30 hover:bg-red-400/10" : "text-green-400 border-green-400/30 hover:bg-green-400/10"}`}
+                  disabled={!adminSecret || grantMut.isPending || revokeMut.isPending}
+                  onClick={() => p.is_admin ? revokeMut.mutate(p.id) : grantMut.mutate(p.id)}
+                >
+                  <ShieldCheck className="w-3 h-3" />
+                  {p.is_admin ? "Entziehen" : "Admin machen"}
+                </Button>
+              </div>
+            ))}
+            {players?.length === 0 && <p className="text-xs text-muted-foreground">Keine Spieler gefunden.</p>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function EinstellungenPage() {
   const { toast } = useToast();
   const { currentPlayer, logout } = usePlayer();
@@ -432,6 +521,9 @@ export default function EinstellungenPage() {
           ))}
         </div>
       </div>
+
+      {/* Admin: Rollenverwaltung */}
+      {currentPlayer?.is_admin && <AdminPanel />}
 
       {/* Admin: Discord Settings */}
       <div className="bg-card border border-border rounded-xl overflow-hidden">

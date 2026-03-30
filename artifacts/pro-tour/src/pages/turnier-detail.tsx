@@ -224,11 +224,17 @@ export default function TurnierDetail() {
     prevSyncedRef.current = syncResult.synced;
   }, [syncResult]);
 
+  // Helper: build auth body based on whether current player is admin
+  const adminAuth = () =>
+    currentPlayer?.is_admin
+      ? { admin_player_id: currentPlayer.id, admin_player_pin: adminPin }
+      : { admin_pin: adminPin };
+
   // Mutations
   const startMut = useMutation({
     mutationFn: () => apiFetch(`/tour/tournaments/${id}/start`, {
       method: "POST",
-      body: JSON.stringify({ admin_pin: adminPin }),
+      body: JSON.stringify(adminAuth()),
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tournament", id] }); toast({ title: "Turnier gestartet! Bracket generiert." }); },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
@@ -237,7 +243,7 @@ export default function TurnierDetail() {
   const addPlayerMut = useMutation({
     mutationFn: (player_id: number) => apiFetch(`/tour/tournaments/${id}/entries`, {
       method: "POST",
-      body: JSON.stringify({ player_id, admin_pin: adminPin }),
+      body: JSON.stringify({ player_id, ...adminAuth() }),
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tournament", id] }); setAddPlayerOpen(false); toast({ title: "Spieler hinzugefügt" }); },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
@@ -246,7 +252,7 @@ export default function TurnierDetail() {
   const removePlayerMut = useMutation({
     mutationFn: (player_id: number) => apiFetch(`/tour/tournaments/${id}/entries/${player_id}`, {
       method: "DELETE",
-      body: JSON.stringify({ admin_pin: adminPin }),
+      body: JSON.stringify(adminAuth()),
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tournament", id] }); toast({ title: "Spieler entfernt" }); },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
@@ -269,7 +275,7 @@ export default function TurnierDetail() {
   const deleteMut = useMutation({
     mutationFn: () => apiFetch(`/tour/tournaments/${id}`, {
       method: "DELETE",
-      body: JSON.stringify({ admin_pin: adminPin }),
+      body: JSON.stringify(adminAuth()),
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tournaments"] });
@@ -296,7 +302,7 @@ export default function TurnierDetail() {
   const resultMut = useMutation({
     mutationFn: ({ matchId, ...data }: any) => apiFetch(`/tour/matches/${matchId}/result`, {
       method: "POST",
-      body: JSON.stringify({ ...data, admin_pin: adminPin }),
+      body: JSON.stringify({ ...data, ...adminAuth() }),
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tournament", id] });
@@ -408,14 +414,19 @@ export default function TurnierDetail() {
       <div className="bg-card border border-border rounded-xl p-4">
         <div className="flex items-center gap-2 mb-2">
           <Lock className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm font-medium">Admin-PIN (für manuelle Eingabe)</span>
+          <span className="text-sm font-medium">
+            {currentPlayer?.is_admin ? "Dein PIN (Admin-Zugang)" : "Admin-PIN (für manuelle Eingabe)"}
+          </span>
+          {currentPlayer?.is_admin && (
+            <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30 font-semibold">Admin</span>
+          )}
         </div>
         <div className="flex items-center gap-3">
           <Input
             type="password"
             value={adminPin}
             onChange={(e) => setAdminPin(e.target.value)}
-            placeholder="PIN eingeben"
+            placeholder={currentPlayer?.is_admin ? "Dein Spieler-PIN" : "Turnier-Admin-PIN"}
             className="max-w-xs"
           />
           {adminPin && (
@@ -430,6 +441,9 @@ export default function TurnierDetail() {
             </Button>
           )}
         </div>
+        {currentPlayer?.is_admin && (
+          <p className="text-xs text-muted-foreground mt-2">Als Admin kannst du alle Turniere verwalten — gib einfach deinen eigenen PIN ein.</p>
+        )}
       </div>
 
       {/* Delete confirmation dialog */}
