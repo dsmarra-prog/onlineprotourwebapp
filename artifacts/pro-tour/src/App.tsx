@@ -61,6 +61,11 @@ const TUTORIAL_STEPS = [
   },
   {
     icon: Trophy,
+    title: "Pro Tour & Dev Tour",
+    body: "Es gibt zwei Touren: Die Pro Tour für alle Spieler, und die Dev Tour speziell für Einsteiger mit einem Autodarts-Average unter 50. Die Dev Tour ist der ideale Einstieg, um Turniererfahrung zu sammeln, bevor es auf der Pro Tour weitergeht.",
+  },
+  {
+    icon: Trophy,
     title: "Turniere",
     body: "Unter \"Turniere\" findest du alle anstehenden und laufenden Events. Melde dich rechtzeitig an und checke vor dem Start ein (meistens 30 Minuten vorher). Wer den Check-In verpasst, fliegt raus!",
   },
@@ -72,12 +77,12 @@ const TUTORIAL_STEPS = [
   {
     icon: CheckCircle,
     title: "Matches spielen",
-    body: "Sobald das Bracket steht, öffnet der oben stehende Spieler die Autodarts-Lobby. Gespielt wird 501 Double Out. Ergebnisse trägst du direkt in der App ein — einfach auf dein Match klicken.",
+    body: "Gespielt wird 501 Double Out. Ergebnisse werden vollautomatisch übernommen — sobald das Match auf Autodarts beendet ist, trägt die App das Ergebnis selbst ein. Du musst nichts manuell melden.",
   },
   {
     icon: BarChart3,
     title: "Order of Merit",
-    body: "Für jedes Turnierergebnis gibt es Punkte. Die Rangliste findest du unter \"Pro OOM\". Je besser dein Ergebnis, desto mehr Punkte! Am Saisonende qualifizieren sich die besten Spieler für große Events.",
+    body: "Für jedes Turnierergebnis gibt es Punkte. Die Rangliste findest du unter \"Pro OOM\" bzw. \"Dev OOM\". Je besser dein Ergebnis, desto mehr Punkte! Am Saisonende qualifizieren sich die besten Spieler für große Events.",
   },
   {
     icon: HelpCircle,
