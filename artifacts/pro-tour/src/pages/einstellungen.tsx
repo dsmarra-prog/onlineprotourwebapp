@@ -603,6 +603,14 @@ export default function EinstellungenPage() {
     staleTime: 30_000,
   });
 
+  const { data: globalAdStatus } = useQuery({
+    queryKey: ["autodarts-global-status"],
+    queryFn: () => apiFetch<{ configured: boolean }>("/tour/autodarts-global-status"),
+    staleTime: 60_000,
+  });
+
+  const [showOwnConnect, setShowOwnConnect] = useState(false);
+
   const disconnectMut = useMutation({
     mutationFn: () =>
       apiFetch<{ ok: boolean }>(`/tour/players/${currentPlayer!.id}/autodarts-disconnect`, {
@@ -729,18 +737,22 @@ export default function EinstellungenPage() {
               <Loader2 className="w-4 h-4 text-primary animate-spin" />
             ) : isConnected ? (
               <Wifi className="w-4 h-4 text-green-400" />
+            ) : globalAdStatus?.configured ? (
+              <Wifi className="w-4 h-4 text-blue-400" />
             ) : (
               <WifiOff className="w-4 h-4 text-muted-foreground" />
             )}
-            <span className="font-semibold text-sm">Autodarts verbinden</span>
+            <span className="font-semibold text-sm">Autodarts</span>
           </div>
           {!statusLoading && (
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
               isConnected
                 ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                : globalAdStatus?.configured
+                ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
                 : "bg-muted text-muted-foreground border border-border"
             }`}>
-              {isConnected ? "Verbunden" : "Nicht verbunden"}
+              {isConnected ? "Eigenes Konto" : globalAdStatus?.configured ? "Automatisch aktiv" : "Nicht verbunden"}
             </span>
           )}
         </div>
@@ -751,7 +763,7 @@ export default function EinstellungenPage() {
               <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/5 border border-green-500/20">
                 <Link2 className="w-4 h-4 text-green-400 shrink-0" />
                 <p className="text-xs text-muted-foreground">
-                  Dein Autodarts-Account ist verbunden. Du kannst Lobbys für deine Matches selbst erstellen.
+                  Dein Autodarts-Account ist verbunden. Lobbys werden über deinen eigenen Account erstellt.
                 </p>
               </div>
 
@@ -793,6 +805,33 @@ export default function EinstellungenPage() {
                   manualPending={manualConnectMut.isPending}
                 />
               </div>
+            </>
+          ) : globalAdStatus?.configured ? (
+            <>
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
+                <CheckCircle className="w-4 h-4 text-blue-400 shrink-0" />
+                <p className="text-xs text-muted-foreground">
+                  Lobbys werden automatisch über den Admin-Account erstellt — du musst nichts einrichten.
+                </p>
+              </div>
+              <button
+                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                onClick={() => setShowOwnConnect(v => !v)}
+              >
+                <ChevronDown className={`w-3 h-3 transition-transform ${showOwnConnect ? "rotate-180" : ""}`} />
+                Optional: Lobbys über eigenes Autodarts-Konto erstellen
+              </button>
+              {showOwnConnect && (
+                <ConnectFlow
+                  pin={connectPin} onPinChange={setConnectPin}
+                  step={connectStep} onStart={handleStartConnect}
+                  onBack={() => { setConnectStep("form"); setManualToken(""); }}
+                  script={connectScript} copied={copied} onCopy={handleCopyScript}
+                  manualToken={manualToken} onManualTokenChange={setManualToken}
+                  onManualSubmit={() => manualConnectMut.mutate()}
+                  manualPending={manualConnectMut.isPending}
+                />
+              )}
             </>
           ) : (
             <>

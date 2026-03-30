@@ -3732,6 +3732,17 @@ router.post("/tour/matches/:matchId/create-lobby", async (req, res) => {
   }
 });
 
+// GET /tour/autodarts-global-status — check if a global admin Autodarts token is configured
+router.get("/tour/autodarts-global-status", async (_req, res) => {
+  try {
+    const dbToken = await loadRefreshTokenFromDb();
+    const configured = !!(dbToken || process.env.AUTODARTS_REFRESH_TOKEN || activeRefreshToken);
+    res.json({ configured });
+  } catch {
+    res.json({ configured: false });
+  }
+});
+
 // POST /tour/admin/autodarts-token — admin: update Autodarts refresh token (survives restarts via DB)
 router.post("/tour/admin/autodarts-token", async (req, res) => {
   try {
