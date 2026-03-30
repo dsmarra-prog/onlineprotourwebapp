@@ -636,6 +636,177 @@ const OOM_SEED_DATA = [
   { season: 1, rank: 119, autodarts_username: "zorax0681", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC4\":25}", last_updated: "26.03.2026" },
 ];
 
+// ─── Hall of Fame ──────────────────────────────────────────────────────────────
+
+// Maps short OOM breakdown keys → tournament metadata
+const PRO_BREAKDOWN_META: Record<string, { name: string; datum: string; typ: string; tour_type: string }> = {
+  "PC1":         { name: "Players Championship 1",  datum: "18.01.2026", typ: "pc",  tour_type: "pro" },
+  "PC2":         { name: "Players Championship 2",  datum: "22.01.2026", typ: "pc",  tour_type: "pro" },
+  "PC3":         { name: "Players Championship 3",  datum: "25.01.2026", typ: "pc",  tour_type: "pro" },
+  "PC4":         { name: "Players Championship 4",  datum: "29.01.2026", typ: "pc",  tour_type: "pro" },
+  "PC5":         { name: "Players Championship 5",  datum: "08.02.2026", typ: "pc",  tour_type: "pro" },
+  "PC6":         { name: "Players Championship 6",  datum: "19.02.2026", typ: "pc",  tour_type: "pro" },
+  "PC7":         { name: "Players Championship 7",  datum: "01.03.2026", typ: "pc",  tour_type: "pro" },
+  "PC8":         { name: "Players Championship 8",  datum: "26.03.2026", typ: "pc",  tour_type: "pro" },
+  "Spring Open": { name: "Spring Open 2026",        datum: "15.03.2026", typ: "m1",  tour_type: "pro" },
+};
+const PRO_WINNER_PTS: Record<string, number> = { pc: 1000, m1: 1500, m2: 2000 };
+
+const DEV_BREAKDOWN_META: Record<string, { name: string; datum: string; typ: string; tour_type: string }> = {
+  "DC1": { name: "Development Cup 1", datum: "01.02.2026", typ: "dev_cup",   tour_type: "development" },
+  "DC2": { name: "Development Cup 2", datum: "05.02.2026", typ: "dev_cup",   tour_type: "development" },
+  "DC3": { name: "Development Cup 3", datum: "15.02.2026", typ: "dev_cup",   tour_type: "development" },
+  "DC4": { name: "Development Cup 4", datum: "22.02.2026", typ: "dev_cup",   tour_type: "development" },
+  "DC5": { name: "Development Cup 5", datum: "05.03.2026", typ: "dev_cup",   tour_type: "development" },
+  "DC6": { name: "Development Cup 6", datum: "21.03.2026", typ: "dev_cup",   tour_type: "development" },
+  "April Major": { name: "April Major",  datum: "02.04.2026", typ: "dev_major", tour_type: "development" },
+  "May Major":   { name: "May Major",    datum: "03.05.2026", typ: "dev_major", tour_type: "development" },
+  "Grand Final": { name: "Grand Final",  datum: "24.05.2026", typ: "dev_final", tour_type: "development" },
+};
+const DEV_WINNER_PTS: Record<string, number> = { dev_cup: 1000, dev_major: 1500, dev_final: 2000 };
+
+// GET /tour/hall-of-fame — all tournament champions (Pro + Dev Tour)
+router.get("/tour/hall-of-fame", async (_req, res) => {
+  try {
+    const entries: any[] = [];
+    const seenKeys = new Set<string>(); // prevent duplicates between sources
+
+    // ── 1. In-app tournaments (have a real Final match) ────────────────────
+    const appTournaments = await db
+      .select()
+      .from(tourTournamentsTable)
+      .where(and(eq(tourTournamentsTable.status, "abgeschlossen")));
+
+    for (const t of appTournaments) {
+      if (t.is_test) continue;
+      const allMatches = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.tournament_id, t.id));
+      const finalMatch = allMatches.find((m) => m.runde === "F" && m.winner_id != null && !m.is_bye);
+      if (!finalMatch?.winner_id) continue;
+      const winnerRows = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, finalMatch.winner_id)).limit(1);
+      if (!winnerRows[0]) continue;
+      const loserId = finalMatch.player1_id === finalMatch.winner_id ? finalMatch.player2_id : finalMatch.player1_id;
+      let runnerUp: string | null = null;
+      if (loserId) {
+        const loserRows = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, loserId)).limit(1);
+        runnerUp = loserRows[0]?.autodarts_username ?? null;
+      }
+      const key = `app-${t.id}`;
+      seenKeys.add(key);
+      entries.push({
+        key,
+        tournament_id: t.id,
+        tournament_name: t.name,
+        typ: t.typ,
+        tour_type: t.tour_type,
+        datum: t.datum,
+        source: "app",
+        champion_id: winnerRows[0].id,
+        champion_name: winnerRows[0].name,
+        champion_username: winnerRows[0].autodarts_username,
+        runner_up: runnerUp,
+        score: finalMatch.score_p1 != null && finalMatch.score_p2 != null
+          ? (finalMatch.winner_id === finalMatch.player1_id ? `${finalMatch.score_p1}:${finalMatch.score_p2}` : `${finalMatch.score_p2}:${finalMatch.score_p1}`)
+          : null,
+        avg_winner: finalMatch.winner_id === finalMatch.player1_id ? finalMatch.avg_p1 : finalMatch.avg_p2,
+      });
+    }
+
+    // ── 2. Historical Pro OOM standings (breakdowns) ───────────────────────
+    const proStandings = await db.select().from(tourOomStandingsTable);
+    // Build per-tournament winner: find player(s) with max points
+    const proTourneyMap: Record<string, { username: string; pts: number }> = {};
+    for (const row of proStandings) {
+      let breakdown: Record<string, number> = {};
+      try { breakdown = JSON.parse(row.tournament_breakdown); } catch { continue; }
+      for (const [key, pts] of Object.entries(breakdown)) {
+        if (typeof pts !== "number") continue;
+        if (!proTourneyMap[key] || pts > proTourneyMap[key].pts) {
+          proTourneyMap[key] = { username: row.autodarts_username, pts };
+        }
+      }
+    }
+    for (const [shortKey, meta] of Object.entries(PRO_BREAKDOWN_META)) {
+      const winnerPts = PRO_WINNER_PTS[meta.typ] ?? 1000;
+      const candidate = proTourneyMap[shortKey];
+      if (!candidate || candidate.pts < winnerPts) continue;
+      const hofKey = `pro-${shortKey}`;
+      if (seenKeys.has(hofKey)) continue;
+      seenKeys.add(hofKey);
+      // Try to find player in our DB for linkability
+      const playerRows = await db.select().from(tourPlayersTable)
+        .where(eq(tourPlayersTable.autodarts_username, candidate.username)).limit(1);
+      entries.push({
+        key: hofKey,
+        tournament_id: null,
+        tournament_name: meta.name,
+        typ: meta.typ,
+        tour_type: meta.tour_type,
+        datum: meta.datum,
+        source: "oom",
+        champion_id: playerRows[0]?.id ?? null,
+        champion_name: playerRows[0]?.name ?? candidate.username,
+        champion_username: candidate.username,
+        runner_up: null,
+        score: null,
+        avg_winner: null,
+      });
+    }
+
+    // ── 3. Historical Dev OOM standings (breakdowns) ───────────────────────
+    const devStandings = await db.select().from(tourDevOomStandingsTable);
+    // Dev breakdown is stored as JSON array: [{t:"DC1",p:1000},...] or object
+    const devTourneyMap: Record<string, { username: string; pts: number }> = {};
+    for (const row of devStandings) {
+      let breakdown: any;
+      try { breakdown = JSON.parse(row.tournament_breakdown); } catch { continue; }
+      const pairs: Array<{ t: string; p: number }> = Array.isArray(breakdown)
+        ? breakdown
+        : Object.entries(breakdown).map(([t, p]) => ({ t, p: p as number }));
+      for (const { t: key, p: pts } of pairs) {
+        if (typeof pts !== "number") continue;
+        if (!devTourneyMap[key] || pts > devTourneyMap[key].pts) {
+          devTourneyMap[key] = { username: row.autodarts_username, pts };
+        }
+      }
+    }
+    for (const [shortKey, meta] of Object.entries(DEV_BREAKDOWN_META)) {
+      const winnerPts = DEV_WINNER_PTS[meta.typ] ?? 1000;
+      const candidate = devTourneyMap[shortKey];
+      if (!candidate || candidate.pts < winnerPts) continue;
+      const hofKey = `dev-${shortKey}`;
+      if (seenKeys.has(hofKey)) continue;
+      seenKeys.add(hofKey);
+      const playerRows = await db.select().from(tourPlayersTable)
+        .where(eq(tourPlayersTable.autodarts_username, candidate.username)).limit(1);
+      entries.push({
+        key: hofKey,
+        tournament_id: null,
+        tournament_name: meta.name,
+        typ: meta.typ,
+        tour_type: meta.tour_type,
+        datum: meta.datum,
+        source: "oom",
+        champion_id: playerRows[0]?.id ?? null,
+        champion_name: playerRows[0]?.name ?? candidate.username,
+        champion_username: candidate.username,
+        runner_up: null,
+        score: null,
+        avg_winner: null,
+      });
+    }
+
+    // Sort by date descending (newest first)
+    entries.sort((a, b) => {
+      const parseDatum = (d: string) => { const [dd, mm, yy] = d.split(".").map(Number); return new Date(yy, mm - 1, dd).getTime(); };
+      return parseDatum(b.datum) - parseDatum(a.datum);
+    });
+
+    res.json(entries);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // GET /tour/oom - Pro OOM: historische Basis + automatisch neue App-Turniere
 router.get("/tour/oom", async (_req, res) => {
   try {
