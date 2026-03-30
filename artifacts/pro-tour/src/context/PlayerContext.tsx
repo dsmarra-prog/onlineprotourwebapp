@@ -77,8 +77,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     try {
       await login(currentPlayer.autodarts_username, pinInput.trim());
       setPinInput("");
-    } catch {
-      setPinError("Falscher PIN. Bitte erneut versuchen.");
+    } catch (e: any) {
+      const msg = e?.message || "";
+      if (msg.includes("nicht gefunden") || msg.includes("not found")) {
+        setPinError("Spieler nicht gefunden. Bitte melde dich neu an.");
+      } else if (msg.includes("PIN") || msg.includes("Falscher")) {
+        setPinError("Falscher PIN. Bitte erneut versuchen.");
+      } else {
+        setPinError(msg || "Fehler beim Anmelden. Bitte erneut versuchen.");
+      }
     } finally {
       setPinLoading(false);
     }

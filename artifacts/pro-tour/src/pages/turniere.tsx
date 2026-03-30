@@ -42,6 +42,18 @@ export default function TourniereListe() {
     { label: "Dev Major", typ: "dev_major", tour_type: "development", legs_format: "7", max_players: "16" },
   ];
 
+  const handleCreate = () => {
+    if (!sessionPin) {
+      toast({ title: "PIN fehlt", description: "Bitte lade die Seite neu und gib deinen PIN ein, bevor du ein Turnier erstellst.", variant: "destructive" });
+      return;
+    }
+    if (!currentPlayer?.is_admin) {
+      toast({ title: "Keine Berechtigung", description: "Nur Admins können Turniere erstellen.", variant: "destructive" });
+      return;
+    }
+    createMut.mutate();
+  };
+
   const createMut = useMutation({
     mutationFn: () =>
       apiFetch("/tour/tournaments", {
@@ -62,7 +74,7 @@ export default function TourniereListe() {
       setForm({ name: "", typ: "pc", tour_type: "pro", datum: new Date().toISOString().slice(0, 10), uhrzeit: "19:00", legs_format: "5", max_players: "32", is_test: false, random_draw: false });
       toast({ title: "Turnier erstellt" });
     },
-    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Fehler beim Erstellen", description: e.message === "Keine Admin-Berechtigung" ? "PIN falsch oder fehlende Admin-Rechte. Bitte lade die Seite neu." : e.message, variant: "destructive" }),
   });
 
   const statusColor = (s: string) =>
@@ -140,10 +152,17 @@ export default function TourniereListe() {
                   <Select value={form.legs_format} onValueChange={(v) => setForm((f) => ({ ...f, legs_format: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="1">Best of 1</SelectItem>
                       <SelectItem value="3">Best of 3</SelectItem>
                       <SelectItem value="5">Best of 5</SelectItem>
                       <SelectItem value="7">Best of 7</SelectItem>
                       <SelectItem value="9">Best of 9</SelectItem>
+                      <SelectItem value="11">Best of 11</SelectItem>
+                      <SelectItem value="13">Best of 13</SelectItem>
+                      <SelectItem value="15">Best of 15</SelectItem>
+                      <SelectItem value="17">Best of 17</SelectItem>
+                      <SelectItem value="19">Best of 19</SelectItem>
+                      <SelectItem value="21">Best of 21</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -179,7 +198,7 @@ export default function TourniereListe() {
                 />
                 <span className="text-sm text-muted-foreground">Zufaellige Auslosung nach jeder Runde</span>
               </label>
-              <Button className="w-full" onClick={() => createMut.mutate()} disabled={createMut.isPending || !form.name}>
+              <Button className="w-full" onClick={handleCreate} disabled={createMut.isPending || !form.name}>
                 {createMut.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Erstellen...</> : "Turnier erstellen"}
               </Button>
             </div>
