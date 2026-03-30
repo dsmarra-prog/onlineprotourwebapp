@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Settings, CheckCircle, Loader2, Target, KeyRound, RefreshCw, ShieldCheck, LogOut,
   User, Link2, Link2Off, ChevronDown, Wifi, WifiOff, Copy, Check, ExternalLink,
-  Terminal, ClipboardPaste, MessageSquare, Bell, GitBranch, Send,
+  MessageSquare, Bell, GitBranch, Send,
   AlertTriangle, ThumbsUp, ThumbsDown, Flag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -574,7 +574,6 @@ export default function EinstellungenPage() {
   const [disconnectPin, setDisconnectPin] = useState("");
   const [connectPin, setConnectPin] = useState("");
   const [connectStep, setConnectStep] = useState<"form" | "script">("form");
-  const [connectMode, setConnectMode] = useState<"auto" | "manual">("auto");
   const [manualToken, setManualToken] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -787,9 +786,8 @@ export default function EinstellungenPage() {
                 <ConnectFlow
                   pin={connectPin} onPinChange={setConnectPin}
                   step={connectStep} onStart={handleStartConnect}
-                  onBack={() => { setConnectStep("form"); setConnectMode("auto"); setManualToken(""); }}
+                  onBack={() => { setConnectStep("form"); setManualToken(""); }}
                   script={connectScript} copied={copied} onCopy={handleCopyScript}
-                  mode={connectMode} onModeChange={setConnectMode}
                   manualToken={manualToken} onManualTokenChange={setManualToken}
                   onManualSubmit={() => manualConnectMut.mutate()}
                   manualPending={manualConnectMut.isPending}
@@ -798,16 +796,11 @@ export default function EinstellungenPage() {
             </>
           ) : (
             <>
-              <p className="text-sm text-muted-foreground">
-                Verbinde deinen Autodarts-Account, um Lobby-Links für deine Matches selbst zu erstellen —
-                auch wenn der Admin nicht online ist.
-              </p>
               <ConnectFlow
                 pin={connectPin} onPinChange={setConnectPin}
                 step={connectStep} onStart={handleStartConnect}
-                onBack={() => { setConnectStep("form"); setConnectMode("auto"); setManualToken(""); }}
+                onBack={() => { setConnectStep("form"); setManualToken(""); }}
                 script={connectScript} copied={copied} onCopy={handleCopyScript}
-                mode={connectMode} onModeChange={setConnectMode}
                 manualToken={manualToken} onManualTokenChange={setManualToken}
                 onManualSubmit={() => manualConnectMut.mutate()}
                 manualPending={manualConnectMut.isPending}
@@ -1011,7 +1004,7 @@ export default function EinstellungenPage() {
 
 function ConnectFlow({
   pin, onPinChange, step, onStart, onBack, script, copied, onCopy,
-  mode, onModeChange, manualToken, onManualTokenChange, onManualSubmit, manualPending,
+  manualToken, onManualTokenChange, onManualSubmit, manualPending,
 }: {
   pin: string;
   onPinChange: (v: string) => void;
@@ -1021,18 +1014,21 @@ function ConnectFlow({
   script: string;
   copied: boolean;
   onCopy: () => void;
-  mode: "auto" | "manual";
-  onModeChange: (m: "auto" | "manual") => void;
   manualToken: string;
   onManualTokenChange: (v: string) => void;
   onManualSubmit: () => void;
   manualPending: boolean;
 }) {
+  const [fallbackOpen, setFallbackOpen] = useState(false);
+
   if (step === "form") {
     return (
       <div className="space-y-3">
+        <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20 text-xs text-muted-foreground">
+          <span className="text-blue-400 font-semibold">Optional:</span> Wenn du verbunden bist, kannst du Lobbys selbst erstellen — auch wenn der Admin gerade nicht online ist.
+        </div>
         <div className="space-y-1.5">
-          <Label className="text-xs">Pro Tour PIN eingeben</Label>
+          <Label className="text-xs">Dein Pro Tour PIN</Label>
           <Input
             type="password"
             placeholder="PIN eingeben"
@@ -1055,122 +1051,125 @@ function ConnectFlow({
     );
   }
 
+  const bookmarkletHref = script ? `javascript:${script}` : "#";
+
   return (
-    <div className="space-y-3">
-      {/* Mode tabs */}
-      <div className="flex gap-1 p-1 bg-muted rounded-lg">
-        <button
-          onClick={() => onModeChange("auto")}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
-            mode === "auto"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Terminal className="w-3.5 h-3.5" /> Console-Script
-        </button>
-        <button
-          onClick={() => onModeChange("manual")}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
-            mode === "manual"
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <ClipboardPaste className="w-3.5 h-3.5" /> Manuell einfügen
-        </button>
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/5 border border-green-500/20">
+        <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
+        <p className="text-xs text-muted-foreground">
+          <span className="text-green-400 font-semibold">play.autodarts.io wurde geöffnet.</span> Logge dich ein und folge den 3 Schritten:
+        </p>
       </div>
 
-      {mode === "auto" ? (
-        <>
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
-            <CheckCircle className="w-4 h-4 text-primary shrink-0" />
-            <p className="text-xs text-muted-foreground">
-              play.autodarts.io wurde geöffnet. Folge den Schritten:
-            </p>
-          </div>
-
-          <ol className="text-xs text-muted-foreground space-y-2">
-            <li className="flex gap-2">
-              <span className="text-primary font-bold shrink-0">1.</span>
-              <span>Einloggen auf <span className="font-mono text-foreground">play.autodarts.io</span></span>
-            </li>
-            <li className="flex gap-2">
-              <span className="text-primary font-bold shrink-0">2.</span>
-              <span><span className="font-mono bg-muted px-1 rounded">F12</span> → Reiter <span className="font-mono bg-muted px-1 rounded">Console</span></span>
-            </li>
-            <li className="flex gap-2">
-              <span className="text-primary font-bold shrink-0">3.</span>
-              <span>Befehl einfügen und <span className="font-mono bg-muted px-1 rounded">Enter</span> drücken</span>
-            </li>
-            <li className="flex gap-2">
-              <span className="text-primary font-bold shrink-0">4.</span>
-              <span>Du wirst automatisch zurückgeleitet. Falls nicht: <span className="text-foreground">Manuell einfügen</span> oben wählen.</span>
-            </li>
-          </ol>
-
-          <button
-            onClick={onCopy}
-            className="w-full flex items-center justify-between gap-2 p-3 rounded-lg bg-muted/50 hover:bg-muted border border-border hover:border-primary/30 transition-colors"
+      {/* Step 1 – Drag bookmarklet */}
+      <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
+        <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+          <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-black flex items-center justify-center shrink-0">1</span>
+          Lesezeichen einmalig speichern
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Zeige die Lesezeichen-Leiste an <span className="font-mono bg-muted px-1 rounded text-foreground">Strg+Shift+B</span>, dann ziehe diesen Knopf dorthin:
+        </p>
+        <div className="flex justify-center">
+          <a
+            href={bookmarkletHref}
+            onClick={(e) => e.preventDefault()}
+            draggable
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl font-bold text-sm cursor-grab active:cursor-grabbing select-none shadow-lg hover:bg-primary/90 transition-colors"
+            title="Auf die Lesezeichen-Leiste ziehen"
           >
-            <span className="font-mono text-xs text-muted-foreground truncate text-left">
-              {script.slice(0, 55)}…
-            </span>
-            <span className="shrink-0 flex items-center gap-1.5 text-xs font-semibold text-primary">
-              {copied ? <><Check className="w-4 h-4" /> Kopiert!</> : <><Copy className="w-4 h-4" /> Kopieren</>}
-            </span>
-          </button>
-        </>
-      ) : (
-        <>
-          <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 space-y-2">
-            <p className="text-xs font-semibold text-amber-400">Token aus dem Netzwerk-Tab kopieren</p>
-            <ol className="text-xs text-muted-foreground space-y-1.5">
+            🎯 Autodarts Connector
+          </a>
+        </div>
+        <p className="text-[10px] text-muted-foreground text-center opacity-60">
+          Schon gespeichert? Weiter mit Schritt 2.
+        </p>
+      </div>
+
+      {/* Steps 2 & 3 */}
+      <div className="space-y-2">
+        <div className="flex items-start gap-3 p-3 rounded-lg bg-card border border-border">
+          <span className="w-5 h-5 rounded-full bg-muted text-foreground text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">2</span>
+          <div className="text-xs text-muted-foreground">
+            Einloggen auf <span className="font-mono text-foreground">play.autodarts.io</span> (falls noch nicht geschehen)
+          </div>
+        </div>
+        <div className="flex items-start gap-3 p-3 rounded-lg bg-card border border-border">
+          <span className="w-5 h-5 rounded-full bg-muted text-foreground text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">3</span>
+          <div className="text-xs text-muted-foreground">
+            Lesezeichen <span className="font-semibold text-foreground">🎯 Autodarts Connector</span> anklicken → du wirst automatisch zurückgeleitet
+          </div>
+        </div>
+      </div>
+
+      {/* Fallback toggle */}
+      <button
+        onClick={() => setFallbackOpen((v) => !v)}
+        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${fallbackOpen ? "rotate-180" : ""}`} />
+        Kein Lesezeichen möglich? Alternative Methoden
+      </button>
+
+      {fallbackOpen && (
+        <div className="space-y-3 border-t border-border pt-3">
+          {/* Console method */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-muted-foreground">Option A — Browser-Konsole</p>
+            <ol className="text-xs text-muted-foreground space-y-1.5 pl-1">
               <li className="flex gap-2">
-                <span className="text-amber-400 font-bold shrink-0">1.</span>
-                <span>Öffne <span className="font-mono text-foreground">play.autodarts.io</span> und logge dich ein</span>
+                <span className="text-primary font-bold shrink-0">1.</span>
+                <span>Auf <span className="font-mono text-foreground">play.autodarts.io</span> einloggen</span>
               </li>
               <li className="flex gap-2">
-                <span className="text-amber-400 font-bold shrink-0">2.</span>
-                <span><span className="font-mono bg-muted px-1 rounded">F12</span> → Reiter <span className="font-mono bg-muted px-1 rounded">Network</span> (Netzwerk)</span>
+                <span className="text-primary font-bold shrink-0">2.</span>
+                <span><span className="font-mono bg-muted px-1 rounded">F12</span> → Reiter <span className="font-mono bg-muted px-1 rounded">Console</span></span>
               </li>
               <li className="flex gap-2">
-                <span className="text-amber-400 font-bold shrink-0">3.</span>
-                <span>Seite neu laden (<span className="font-mono bg-muted px-1 rounded">F5</span>), dann im Filter <span className="font-mono bg-muted px-1 rounded">token</span> eingeben</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="text-amber-400 font-bold shrink-0">4.</span>
-                <span>POST-Request zu <span className="font-mono text-foreground">login.autodarts.io</span> anklicken → Tab <span className="font-mono bg-muted px-1 rounded">Response</span></span>
-              </li>
-              <li className="flex gap-2">
-                <span className="text-amber-400 font-bold shrink-0">5.</span>
-                <span>Den Wert von <span className="font-mono bg-muted px-1 rounded text-foreground">refresh_token</span> kopieren und unten einfügen</span>
+                <span className="text-primary font-bold shrink-0">3.</span>
+                <span>Folgenden Code einfügen und <span className="font-mono bg-muted px-1 rounded">Enter</span> drücken:</span>
               </li>
             </ol>
+            <button
+              onClick={onCopy}
+              className="w-full flex items-center justify-between gap-2 p-3 rounded-lg bg-muted/50 hover:bg-muted border border-border hover:border-primary/30 transition-colors"
+            >
+              <span className="font-mono text-xs text-muted-foreground truncate text-left">
+                {script.slice(0, 50)}…
+              </span>
+              <span className="shrink-0 flex items-center gap-1.5 text-xs font-semibold text-primary">
+                {copied ? <><Check className="w-3.5 h-3.5" /> Kopiert!</> : <><Copy className="w-3.5 h-3.5" /> Kopieren</>}
+              </span>
+            </button>
           </div>
 
-          <div className="space-y-1.5">
-            <Label className="text-xs">refresh_token einfügen</Label>
+          {/* Manual method */}
+          <div className="space-y-2 pt-2 border-t border-border">
+            <p className="text-xs font-semibold text-muted-foreground">Option B — Token manuell einfügen</p>
+            <p className="text-xs text-muted-foreground">
+              Öffne <span className="font-mono text-foreground">play.autodarts.io</span>, drücke <span className="font-mono bg-muted px-1 rounded">F12</span> → <span className="font-mono bg-muted px-1 rounded">Network</span>, lade neu und suche nach <span className="font-mono bg-muted px-1 rounded">token</span>. Im POST-Request zu <span className="font-mono text-foreground">login.autodarts.io</span> → Response → <span className="font-mono bg-muted px-1 rounded">refresh_token</span> kopieren:
+            </p>
             <Textarea
               value={manualToken}
               onChange={(e) => onManualTokenChange(e.target.value)}
               placeholder="eyJhbGciO..."
-              className="font-mono text-xs h-20 resize-none"
+              className="font-mono text-xs h-16 resize-none"
             />
+            <Button
+              size="sm"
+              className="w-full"
+              disabled={manualToken.trim().length < 20 || manualPending}
+              onClick={onManualSubmit}
+            >
+              {manualPending ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> Wird verbunden...</>
+              ) : (
+                <><Link2 className="w-3.5 h-3.5 mr-2" /> Manuell verbinden</>
+              )}
+            </Button>
           </div>
-
-          <Button
-            className="w-full"
-            disabled={manualToken.trim().length < 20 || manualPending}
-            onClick={onManualSubmit}
-          >
-            {manualPending ? (
-              <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Wird verbunden...</>
-            ) : (
-              <><Link2 className="w-4 h-4 mr-2" /> Jetzt verbinden</>
-            )}
-          </Button>
-        </>
+        </div>
       )}
 
       <button onClick={onBack} className="text-xs text-muted-foreground underline">
