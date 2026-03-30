@@ -166,6 +166,18 @@ export const tourMatchFairnessTable = pgTable("tour_match_fairness", {
   created_at: timestamp("created_at").defaultNow().notNull(),
 });
 
+export const tourSupportTicketsTable = pgTable("tour_support_tickets", {
+  id: serial("id").primaryKey(),
+  player_id: integer("player_id").notNull(),
+  subject: text("subject").notNull(),
+  message: text("message").notNull(),
+  status: text("status").notNull().default("offen"), // offen | beantwortet | geschlossen
+  admin_reply: text("admin_reply"),
+  replied_by: integer("replied_by"),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+  replied_at: timestamp("replied_at"),
+});
+
 export type TourPlayer = typeof tourPlayersTable.$inferSelect;
 export type TourPushSubscription = typeof tourPushSubscriptionsTable.$inferSelect;
 export const systemSettingsTable = pgTable("system_settings", {

@@ -15,6 +15,7 @@ import {
   tourMatchMessagesTable,
   tourMatchDisputesTable,
   tourMatchFairnessTable,
+  tourSupportTicketsTable,
 } from "@workspace/db";
 import { eq, and, desc, or } from "drizzle-orm";
 import crypto from "crypto";
@@ -4087,6 +4088,123 @@ router.get("/tour/admin/fairness", async (req, res) => {
       .orderBy(desc(tourMatchFairnessTable.created_at));
 
     res.json(votes);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// ─── Support Tickets ────────────────────────────────────────────────────────
+
+// POST /tour/support/tickets — player submits a ticket
+router.post("/support/tickets", async (req, res) => {
+  try {
+    const { player_id, pin, subject, message } = req.body ?? {};
+    if (!player_id || !pin || !subject?.trim() || !message?.trim()) {
+      return res.status(400).json({ error: "Pflichtfelder fehlen" });
+    }
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, player_id)).limit(1);
+    if (!player || !verifyPin(pin, player.pin_hash)) return res.status(403).json({ error: "Ungueltige Anmeldedaten" });
+
+    const [ticket] = await db.insert(tourSupportTicketsTable).values({
+      player_id,
+      subject: subject.trim(),
+      message: message.trim(),
+      status: "offen",
+    }).returning();
+    res.json(ticket);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /tour/support/tickets/mine — player views own tickets
+router.get("/support/tickets/mine", async (req, res) => {
+  try {
+    const player_id = Number(req.query.player_id);
+    const pin = String(req.query.pin ?? "");
+    if (!player_id || !pin) return res.status(400).json({ error: "Pflichtfelder fehlen" });
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, player_id)).limit(1);
+    if (!player || !verifyPin(pin, player.pin_hash)) return res.status(403).json({ error: "Ungueltige Anmeldedaten" });
+
+    const tickets = await db.select().from(tourSupportTicketsTable)
+      .where(eq(tourSupportTicketsTable.player_id, player_id))
+      .orderBy(desc(tourSupportTicketsTable.created_at));
+    res.json(tickets);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /tour/support/tickets — admin views all tickets
+router.get("/support/tickets", async (req, res) => {
+  try {
+    const player_id = Number(req.query.player_id);
+    const pin = String(req.query.pin ?? "");
+    if (!player_id || !pin) return res.status(400).json({ error: "Pflichtfelder fehlen" });
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, player_id)).limit(1);
+    if (!player || !verifyPin(pin, player.pin_hash) || !player.is_admin) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
+    const tickets = await db.select({
+      id: tourSupportTicketsTable.id,
+      player_id: tourSupportTicketsTable.player_id,
+      player_name: tourPlayersTable.name,
+      subject: tourSupportTicketsTable.subject,
+      message: tourSupportTicketsTable.message,
+      status: tourSupportTicketsTable.status,
+      admin_reply: tourSupportTicketsTable.admin_reply,
+      replied_by: tourSupportTicketsTable.replied_by,
+      created_at: tourSupportTicketsTable.created_at,
+      replied_at: tourSupportTicketsTable.replied_at,
+    })
+      .from(tourSupportTicketsTable)
+      .leftJoin(tourPlayersTable, eq(tourSupportTicketsTable.player_id, tourPlayersTable.id))
+      .orderBy(desc(tourSupportTicketsTable.created_at));
+    res.json(tickets);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/support/tickets/:id/reply — admin replies
+router.post("/support/tickets/:id/reply", async (req, res) => {
+  try {
+    const ticketId = Number(req.params.id);
+    const { player_id, pin, reply, status } = req.body ?? {};
+    if (!player_id || !pin || !reply?.trim()) return res.status(400).json({ error: "Pflichtfelder fehlen" });
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, player_id)).limit(1);
+    if (!player || !verifyPin(pin, player.pin_hash) || !player.is_admin) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
+    const newStatus = status === "geschlossen" ? "geschlossen" : "beantwortet";
+    const [updated] = await db.update(tourSupportTicketsTable).set({
+      admin_reply: reply.trim(),
+      replied_by: player_id,
+      status: newStatus,
+      replied_at: new Date(),
+    }).where(eq(tourSupportTicketsTable.id, ticketId)).returning();
+
+    if (!updated) return res.status(404).json({ error: "Ticket nicht gefunden" });
+    res.json(updated);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/support/tickets/:id/close — player closes own ticket
+router.post("/support/tickets/:id/close", async (req, res) => {
+  try {
+    const ticketId = Number(req.params.id);
+    const { player_id, pin } = req.body ?? {};
+    if (!player_id || !pin) return res.status(400).json({ error: "Pflichtfelder fehlen" });
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, player_id)).limit(1);
+    if (!player || !verifyPin(pin, player.pin_hash)) return res.status(403).json({ error: "Ungueltige Anmeldedaten" });
+
+    const [ticket] = await db.select().from(tourSupportTicketsTable).where(eq(tourSupportTicketsTable.id, ticketId)).limit(1);
+    if (!ticket) return res.status(404).json({ error: "Ticket nicht gefunden" });
+    if (ticket.player_id !== player_id && !player.is_admin) return res.status(403).json({ error: "Kein Zugriff" });
+
+    const [updated] = await db.update(tourSupportTicketsTable).set({ status: "geschlossen" })
+      .where(eq(tourSupportTicketsTable.id, ticketId)).returning();
+    res.json(updated);
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }

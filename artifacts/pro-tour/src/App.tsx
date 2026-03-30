@@ -3,7 +3,8 @@ import { Switch, Route, Router as WouterRouter, Link, useLocation } from "wouter
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Trophy, Users, BarChart3, Settings, Home, Target, CalendarDays, LogOut, Swords, Menu, X, Star, TrendingUp, GitCompare } from "lucide-react";
+import { Trophy, Users, BarChart3, Settings, Home, Target, CalendarDays, LogOut, Swords, Menu, X, Star, TrendingUp, GitCompare, HelpCircle, ChevronRight, CheckCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import NotFound from "@/pages/not-found";
 import TourniereListe from "@/pages/turniere";
 import TurnierDetail from "@/pages/turnier-detail";
@@ -20,6 +21,7 @@ import Portal from "@/pages/portal";
 import AutodartsCallback from "@/pages/autodarts-callback";
 import SaisonPage from "@/pages/saison";
 import VergleichPage from "@/pages/vergleich";
+import HilfePage from "@/pages/hilfe";
 import { PlayerProvider, usePlayer } from "@/context/PlayerContext";
 
 const queryClient = new QueryClient({
@@ -37,17 +39,132 @@ const NAV_ITEMS = [
   { href: "/hall-of-fame", label: "Hall of Fame", icon: Star },
   { href: "/saison", label: "Saison", icon: Trophy },
   { href: "/vergleich", label: "Vergleich", icon: GitCompare },
+  { href: "/hilfe", label: "Hilfe", icon: HelpCircle },
   { href: "/einstellungen", label: "Mein Account", icon: Settings },
 ];
 
-// Bottom nav shows only 5 main items on mobile
 const BOTTOM_NAV = [
   { href: "/", label: "Start", icon: Home },
   { href: "/turniere", label: "Turniere", icon: Trophy },
   { href: "/oom", label: "Pro OOM", icon: BarChart3 },
-  { href: "/spieler", label: "Spieler", icon: Users },
+  { href: "/hilfe", label: "Hilfe", icon: HelpCircle },
   { href: "/einstellungen", label: "Account", icon: Settings },
 ];
+
+// ─── Tutorial Overlay ────────────────────────────────────────────────────────
+
+const TUTORIAL_STEPS = [
+  {
+    icon: Target,
+    title: "Willkommen bei der Online Pro Tour!",
+    body: "Schoen, dass du dabei bist! Die OPT ist eine professionelle Online-Dartstour auf Basis von Autodarts. Hier trittst du in Turnieren gegen andere Spieler an, sammelst Punkte in der Order of Merit und kaempfst um Titel.",
+  },
+  {
+    icon: Trophy,
+    title: "Turniere",
+    body: "Unter \"Turniere\" findest du alle anstehenden und laufenden Events. Melde dich rechtzeitig an und checke vor dem Start ein (meistens 30 Minuten vorher). Wer den Check-In verpasst, fliegt raus!",
+  },
+  {
+    icon: Target,
+    title: "Autodarts & Discord",
+    body: "Du brauchst ein laufendes Autodarts-System sowie einen Discord-Account. Wichtig: Dein Discord-Name muss deinen Autodarts-Namen enthalten. Alle Matches laufen ueber Autodarts-Lobbies, die automatisch erstellt werden.",
+  },
+  {
+    icon: CheckCircle,
+    title: "Matches spielen",
+    body: "Sobald das Bracket steht, oeffnet der oben stehende Spieler die Autodarts-Lobby und teilt den Link. Gespielt wird 501 Double Out. Ergebnisse werden direkt in der App eingetragen — einfach auf dein Match klicken.",
+  },
+  {
+    icon: BarChart3,
+    title: "Order of Merit",
+    body: "Fuer jedes Turnierergebnis gibt es Punkte. Die Rangliste findest du unter \"Pro OOM\". Je besser dein Ergebnis, desto mehr Punkte! Am Saisonende qualifizieren sich die besten Spieler fuer grosse Events.",
+  },
+  {
+    icon: HelpCircle,
+    title: "Hilfe & Support",
+    body: "Fragen oder Probleme? Unter \"Hilfe\" kannst du jederzeit ein Support-Ticket einreichen. Ein Admin antwortet dir so schnell wie moeglich. Jetzt viel Spass und gute Darts!",
+  },
+];
+
+function TutorialOverlay() {
+  const { showTutorial, dismissTutorial, currentPlayer } = usePlayer();
+  const [step, setStep] = useState(0);
+
+  if (!showTutorial || !currentPlayer) return null;
+
+  const current = TUTORIAL_STEPS[step];
+  const Icon = current.icon;
+  const isLast = step === TUTORIAL_STEPS.length - 1;
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+      <div className="w-full max-w-md bg-card border border-border rounded-2xl shadow-2xl overflow-hidden">
+        <div className="h-1.5 bg-muted">
+          <div
+            className="h-full bg-primary transition-all duration-300"
+            style={{ width: `${((step + 1) / TUTORIAL_STEPS.length) * 100}%` }}
+          />
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-primary/10 shrink-0">
+              <Icon className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">
+                Schritt {step + 1} von {TUTORIAL_STEPS.length}
+              </p>
+              <h2 className="font-bold text-lg leading-tight">{current.title}</h2>
+            </div>
+          </div>
+
+          <p className="text-sm text-muted-foreground leading-relaxed">{current.body}</p>
+
+          <div className="flex items-center gap-2 pt-2">
+            <button
+              onClick={dismissTutorial}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Ueberspringen
+            </button>
+            <div className="flex-1" />
+            {step > 0 && (
+              <Button variant="outline" size="sm" onClick={() => setStep((s) => s - 1)}>
+                Zurueck
+              </Button>
+            )}
+            <Button
+              size="sm"
+              onClick={() => {
+                if (isLast) dismissTutorial();
+                else setStep((s) => s + 1);
+              }}
+            >
+              {isLast ? (
+                <><CheckCircle className="w-3.5 h-3.5 mr-1.5" />Los geht&apos;s!</>
+              ) : (
+                <>Weiter<ChevronRight className="w-3.5 h-3.5 ml-1" /></>
+              )}
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-center gap-1.5 pb-4">
+          {TUTORIAL_STEPS.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setStep(i)}
+              className={`w-2 h-2 rounded-full transition-all ${i === step ? "bg-primary w-4" : "bg-muted-foreground/30 hover:bg-muted-foreground/50"}`}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── NavBar ──────────────────────────────────────────────────────────────────
 
 function NavBar() {
   const [location] = useLocation();
@@ -59,14 +176,12 @@ function NavBar() {
   return (
     <nav className="border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 flex items-center h-14 gap-1">
-        {/* Logo */}
         <Link href="/" className="flex items-center gap-2 mr-4 flex-shrink-0 hover:opacity-80 transition-opacity">
           <img src="/pro-tour/opt-logo.png" alt="OPT" className="w-8 h-8 object-contain" />
           <span className="font-bold text-sm text-primary tracking-wide uppercase hidden sm:block">Online Pro Tour</span>
           <span className="font-bold text-xs text-primary tracking-wide uppercase sm:hidden">OPT</span>
         </Link>
 
-        {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-1 flex-1">
           {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
             const isActive = href === "/" ? location === "/" : location.startsWith(href);
@@ -87,7 +202,6 @@ function NavBar() {
           })}
         </div>
 
-        {/* Desktop player info */}
         {currentPlayer && (
           <div className="hidden md:flex items-center gap-2 ml-2 pl-3 border-l border-border shrink-0">
             <div className="text-right">
@@ -104,7 +218,6 @@ function NavBar() {
           </div>
         )}
 
-        {/* Mobile: hamburger for full menu */}
         <div className="flex md:hidden items-center gap-2 flex-1 justify-end">
           {currentPlayer && (
             <span className="text-xs text-muted-foreground truncate max-w-[120px]">{currentPlayer.name}</span>
@@ -119,7 +232,6 @@ function NavBar() {
         </div>
       </div>
 
-      {/* Mobile full menu (hamburger) */}
       {mobileOpen && (
         <div className="md:hidden border-t border-border bg-card/95 backdrop-blur-sm">
           <div className="max-w-6xl mx-auto px-4 py-3 space-y-1">
@@ -196,7 +308,7 @@ function Router() {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
           <Target className="w-8 h-8 text-primary animate-pulse" />
-          <span className="text-sm">Laden…</span>
+          <span className="text-sm">Laden...</span>
         </div>
       </div>
     );
@@ -236,10 +348,12 @@ function Router() {
           <Route path="/einstellungen" component={EinstellungenPage} />
           <Route path="/saison" component={SaisonPage} />
           <Route path="/vergleich" component={VergleichPage} />
+          <Route path="/hilfe" component={HilfePage} />
           <Route component={NotFound} />
         </Switch>
       </main>
       <BottomNav />
+      <TutorialOverlay />
     </div>
   );
 }
