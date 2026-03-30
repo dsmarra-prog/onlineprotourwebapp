@@ -106,7 +106,19 @@ function Router() {
   }
 
   if (!currentPlayer) {
-    return <Portal />;
+    return (
+      <Switch>
+        <Route path="/spielplan">
+          <div className="min-h-screen bg-background text-foreground">
+            <NavBar />
+            <main className="max-w-6xl mx-auto px-4 py-6">
+              <SpielplanPage />
+            </main>
+          </div>
+        </Route>
+        <Route component={Portal} />
+      </Switch>
+    );
   }
 
   return (
