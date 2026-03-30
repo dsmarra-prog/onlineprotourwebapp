@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useRef, forwardRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
-import { ArrowLeft, Trophy, Star, Loader2, Target, TrendingUp, Swords, ChevronDown, ChevronUp, Medal } from "lucide-react";
+import { ArrowLeft, Trophy, Star, Loader2, Target, TrendingUp, Swords, ChevronDown, ChevronUp, Medal, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { toPng } from "html-to-image";
 import { apiFetch, TourPlayerProfile, TourH2H, Achievement, TYP_LABELS, RUNDE_LABELS } from "@/lib/api";
 
 type TourPlayer = { id: number; name: string; autodarts_username: string };
@@ -13,6 +14,8 @@ export default function SpielerProfil() {
   const { id } = useParams<{ id: string }>();
   const [h2hOpponent, setH2hOpponent] = useState<string>("");
   const [h2hOpen, setH2hOpen] = useState(false);
+  const [generatingCard, setGeneratingCard] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   const { data: profile, isLoading } = useQuery<TourPlayerProfile>({
     queryKey: ["player", id],
@@ -45,16 +48,47 @@ export default function SpielerProfil() {
   const devResults = profile.tournament_results?.filter((r) => r.tour_type === "development") ?? [];
   const opponents = allPlayers?.filter((p) => String(p.id) !== id) ?? [];
 
+  async function downloadCard() {
+    if (!cardRef.current) return;
+    setGeneratingCard(true);
+    try {
+      const dataUrl = await toPng(cardRef.current, { cacheBust: true, pixelRatio: 2 });
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `${profile!.name.replace(/\s/g, "_")}_OPT_Card.png`;
+      a.click();
+    } catch (e) {
+      console.error("Card generation failed:", e);
+    } finally {
+      setGeneratingCard(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Link href="/spieler" className="p-1.5 rounded-lg hover:bg-accent transition-colors">
           <ArrowLeft className="w-4 h-4" />
         </Link>
-        <div>
+        <div className="flex-1">
           <h1 className="text-xl font-bold">{profile.name}</h1>
           <p className="text-sm text-muted-foreground">@{profile.autodarts_username}</p>
         </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="shrink-0 gap-1.5 text-xs"
+          onClick={downloadCard}
+          disabled={generatingCard}
+        >
+          {generatingCard ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+          Karte
+        </Button>
+      </div>
+
+      {/* Hidden player card for image generation */}
+      <div className="absolute -left-[9999px] -top-[9999px] pointer-events-none">
+        <PlayerCard ref={cardRef} profile={profile} />
       </div>
 
       {/* Stats grid */}
@@ -271,6 +305,77 @@ export default function SpielerProfil() {
     </div>
   );
 }
+
+const PlayerCard = forwardRef<HTMLDivElement, { profile: TourPlayerProfile }>(({ profile }, ref) => {
+  const winRate = profile.stats?.win_rate ?? 0;
+  const avg = profile.stats?.avg_score;
+  const titles = profile.stats?.titles ?? 0;
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        width: 400, padding: 28, background: "linear-gradient(135deg, #0f0f12 0%, #16162a 100%)",
+        borderRadius: 20, fontFamily: "system-ui, -apple-system, sans-serif", color: "#fff",
+        border: "1px solid rgba(99,102,241,0.25)", boxSizing: "border-box",
+      }}
+    >
+      {/* Logo row */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <div style={{ fontSize: 11, letterSpacing: 3, color: "#6366f1", fontWeight: 700, textTransform: "uppercase" }}>
+          Online Pro Tour
+        </div>
+        <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", fontWeight: 500 }}>Saison 2026</div>
+      </div>
+
+      {/* Player avatar + name */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 24 }}>
+        <div style={{
+          width: 64, height: 64, borderRadius: "50%", background: "rgba(99,102,241,0.2)",
+          border: "2px solid rgba(99,102,241,0.5)", display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 28, fontWeight: 900, color: "#6366f1",
+        }}>
+          {profile.name.charAt(0).toUpperCase()}
+        </div>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 900, letterSpacing: -0.5 }}>{profile.name}</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>@{profile.autodarts_username}</div>
+        </div>
+      </div>
+
+      {/* Stats grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 20 }}>
+        {[
+          { label: "Pro OOM", value: profile.oom_points.toString(), color: "#6366f1" },
+          { label: "Siege", value: (profile.stats?.matches_won ?? 0).toString(), color: "#10b981" },
+          { label: "Titel", value: titles.toString(), color: "#f59e0b" },
+          { label: "Winrate", value: `${winRate}%`, color: "#06b6d4" },
+        ].map(({ label, value, color }) => (
+          <div key={label} style={{ background: "rgba(255,255,255,0.04)", borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
+            <div style={{ fontSize: 18, fontWeight: 900, color }}>{value}</div>
+            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.45)", marginTop: 3, letterSpacing: 0.5 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Average */}
+      {avg != null && (
+        <div style={{
+          background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)",
+          borderRadius: 10, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}>
+          <span style={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }}>Ø Three-Dart Average</span>
+          <span style={{ fontSize: 20, fontWeight: 900, color: "#6366f1" }}>{avg.toFixed(1)}</span>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div style={{ marginTop: 16, borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 12, fontSize: 9, color: "rgba(255,255,255,0.25)", textAlign: "center", letterSpacing: 1 }}>
+        onlineprotour.eu
+      </div>
+    </div>
+  );
+});
 
 function StatCard({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (

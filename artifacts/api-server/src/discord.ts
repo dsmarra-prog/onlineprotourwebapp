@@ -190,19 +190,18 @@ async function createMatchThread(
   matchNr: number,
   p1: string,
   p2: string,
-) {
+): Promise<string | null> {
   const threadName = `${tournamentShort} · Match ${matchNr}: ${p1} vs ${p2}`.substring(0, 100);
   const content = `🎯 **${p1}** vs **${p2}** — Verabredet hier euren Spieltermin!\n\nNutzt diesen Thread um euch abzusprechen wann ihr das Match spielen wollt.`;
 
-  // Post a message to the channel
   const msg = await botRequest(botToken, "POST", `/channels/${channelId}/messages`, { content });
-  if (!msg?.id) return;
+  if (!msg?.id) return null;
 
-  // Create thread from the message
-  await botRequest(botToken, "POST", `/channels/${channelId}/messages/${msg.id}/threads`, {
+  const thread = await botRequest(botToken, "POST", `/channels/${channelId}/messages/${msg.id}/threads`, {
     name: threadName,
-    auto_archive_duration: 1440, // 24h
+    auto_archive_duration: 1440,
   });
+  return thread?.id ?? null;
 }
 
 // ─── Standalone match thread creator (used by advanceWinner for all rounds) ───
@@ -215,9 +214,9 @@ export async function createMatchThreadForMatch(
   p1Name: string,
   p2Name: string,
   lobbyUrl?: string | null,
-) {
+): Promise<string | null> {
   const { botToken, channelId } = await getDiscordSettings();
-  if (!botToken || !channelId) return;
+  if (!botToken || !channelId) return null;
 
   const shortName = tournamentName
     .replace("Players Championship", "PC")
@@ -238,12 +237,98 @@ export async function createMatchThreadForMatch(
   const content = `🎯 **${p1Name}** vs **${p2Name}** — ${roundText} in **${tournamentName}**\n\nNutzt diesen Thread um euch abzusprechen wann ihr das Match spielen wollt.${lobbyLine}`;
 
   const msg = await botRequest(botToken, "POST", `/channels/${channelId}/messages`, { content });
-  if (!msg?.id) return;
+  if (!msg?.id) return null;
 
-  await botRequest(botToken, "POST", `/channels/${channelId}/messages/${msg.id}/threads`, {
+  const thread = await botRequest(botToken, "POST", `/channels/${channelId}/messages/${msg.id}/threads`, {
     name: threadName,
     auto_archive_duration: 1440,
   });
+  return thread?.id ?? null;
+}
+
+// ─── Live Score Updates ────────────────────────────────────────────────────────
+
+export async function postLiveScoreToThread(
+  threadId: string,
+  p1Name: string,
+  p2Name: string,
+  legs1: number,
+  legs2: number,
+  avg1: number,
+  avg2: number,
+  legsFormat: number,
+): Promise<string | null> {
+  const { botToken } = await getDiscordSettings();
+  if (!botToken) return null;
+
+  const winLegs = Math.ceil(legsFormat / 2);
+  const bar = (legs: number) => "🟣".repeat(legs) + "⚫".repeat(winLegs - legs);
+  const content = [
+    `📊 **Live Score Update**`,
+    ``,
+    `**${p1Name}** ${bar(legs1)} **${legs1}** : **${legs2}** ${bar(legs2)} **${p2Name}**`,
+    ``,
+    `Avg: ${avg1 > 0 ? avg1.toFixed(1) : "—"} · ${avg2 > 0 ? avg2.toFixed(1) : "—"}`,
+    `Best of ${legsFormat} · Erster zu ${winLegs} Legs`,
+  ].join("\n");
+
+  const msg = await botRequest(botToken, "POST", `/channels/${threadId}/messages`, { content });
+  return msg?.id ?? null;
+}
+
+export async function updateLiveScoreMessage(
+  threadId: string,
+  messageId: string,
+  p1Name: string,
+  p2Name: string,
+  legs1: number,
+  legs2: number,
+  avg1: number,
+  avg2: number,
+  legsFormat: number,
+): Promise<void> {
+  const { botToken } = await getDiscordSettings();
+  if (!botToken) return;
+
+  const winLegs = Math.ceil(legsFormat / 2);
+  const bar = (legs: number) => "🟣".repeat(legs) + "⚫".repeat(winLegs - legs);
+  const content = [
+    `📊 **Live Score Update**`,
+    ``,
+    `**${p1Name}** ${bar(legs1)} **${legs1}** : **${legs2}** ${bar(legs2)} **${p2Name}**`,
+    ``,
+    `Avg: ${avg1 > 0 ? avg1.toFixed(1) : "—"} · ${avg2 > 0 ? avg2.toFixed(1) : "—"}`,
+    `Best of ${legsFormat} · Erster zu ${winLegs} Legs`,
+  ].join("\n");
+
+  await botRequest(botToken, "PATCH", `/channels/${threadId}/messages/${messageId}`, { content });
+}
+
+export async function postMatchResultToThread(
+  threadId: string,
+  p1Name: string,
+  p2Name: string,
+  scoreP1: number,
+  scoreP2: number,
+  winnerName: string,
+  avg1?: number | null,
+  avg2?: number | null,
+): Promise<void> {
+  const { botToken } = await getDiscordSettings();
+  if (!botToken) return;
+
+  const content = [
+    `🏆 **Match beendet!**`,
+    ``,
+    `**${p1Name}** **${scoreP1}** : **${scoreP2}** **${p2Name}**`,
+    ``,
+    `🥇 Sieger: **${winnerName}**`,
+    avg1 != null || avg2 != null
+      ? `📈 Avg: ${avg1 != null ? avg1.toFixed(1) : "—"} · ${avg2 != null ? avg2.toFixed(1) : "—"}`
+      : "",
+  ].filter(Boolean).join("\n");
+
+  await botRequest(botToken, "POST", `/channels/${threadId}/messages`, { content });
 }
 
 export async function notifyMatchResult(

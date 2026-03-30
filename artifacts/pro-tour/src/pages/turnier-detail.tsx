@@ -4,7 +4,7 @@ import { useParams, Link, useLocation } from "wouter";
 import {
   ArrowLeft, Play, UserPlus, UserMinus, Check, Loader2, Lock, Target,
   Zap, Radio, CheckCircle2, Search, MonitorPlay, ExternalLink, Activity,
-  TrendingUp, X, Trash2,
+  TrendingUp, X, Trash2, Clock, ThumbsUp, ThumbsDown, Bell,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -186,6 +186,14 @@ export default function TurnierDetail() {
     queryFn: () => apiFetch("/tour/players"),
   });
 
+  type PendingEntry = { id: number; player_id: number; name: string; autodarts_username: string };
+  const { data: pendingRegistrations = [] } = useQuery<PendingEntry[]>({
+    queryKey: ["pending-registrations", id],
+    queryFn: () => apiFetch(`/tour/tournaments/${id}/pending-registrations`),
+    enabled: !!currentPlayer?.is_admin,
+    refetchInterval: 30_000,
+  });
+
   // ── Auto-sync: poll Autodarts every 15 s when tournament is live ──
   const isRunning = detail?.tournament.status === "laufend";
   const { data: syncResult } = useQuery<SyncResult>({
@@ -292,11 +300,28 @@ export default function TurnierDetail() {
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tournament", id] });
+      qc.invalidateQueries({ queryKey: ["pending-registrations", id] });
       setSelfRegOpen(false);
       setSelfRegPin("");
-      toast({ title: "Erfolgreich angemeldet!", description: `Du bist für das Turnier angemeldet.` });
+      toast({ title: "Anfrage gesendet!", description: "Deine Anmeldung wartet auf Admin-Freigabe." });
     },
     onError: (e: Error) => toast({ title: "Anmeldung fehlgeschlagen", description: e.message, variant: "destructive" }),
+  });
+
+  const approveRegMut = useMutation({
+    mutationFn: (entryId: number) => apiFetch(`/tour/tournaments/${id}/pending-registrations/${entryId}/approve`, {
+      method: "POST", body: JSON.stringify(adminAuth()),
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["pending-registrations", id] }); qc.invalidateQueries({ queryKey: ["tournament", id] }); toast({ title: "Anmeldung freigegeben ✅" }); },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const rejectRegMut = useMutation({
+    mutationFn: (entryId: number) => apiFetch(`/tour/tournaments/${id}/pending-registrations/${entryId}/reject`, {
+      method: "POST", body: JSON.stringify(adminAuth()),
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["pending-registrations", id] }); toast({ title: "Anmeldung abgelehnt" }); },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
   const resultMut = useMutation({
@@ -326,7 +351,8 @@ export default function TurnierDetail() {
   const entriedIds = players.map((p) => p.player_id);
   const availablePlayers = allPlayers?.filter((p) => !entriedIds.includes(p.id)) ?? [];
   const isCurrentPlayerRegistered = currentPlayer ? entriedIds.includes(currentPlayer.id) : false;
-  const canSelfRegister = currentPlayer && !isCurrentPlayerRegistered && tournament.status === "offen" && players.length < tournament.max_players;
+  const hasCurrentPlayerPending = currentPlayer ? pendingRegistrations.some((p) => p.player_id === currentPlayer.id) : false;
+  const canSelfRegister = currentPlayer && !isCurrentPlayerRegistered && !hasCurrentPlayerPending && tournament.status === "offen" && players.length < tournament.max_players;
 
   const statusBadge = tournament.status === "laufend"
     ? "text-primary bg-primary/10 border-primary/30"
@@ -472,6 +498,60 @@ export default function TurnierDetail() {
         </DialogContent>
       </Dialog>
 
+      {/* Pending registration indicator */}
+      {hasCurrentPlayerPending && !isCurrentPlayerRegistered && (
+        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 flex items-center gap-3">
+          <Clock className="w-4 h-4 text-yellow-400 shrink-0" />
+          <div>
+            <p className="text-sm font-medium text-yellow-400">Anmeldung ausstehend</p>
+            <p className="text-xs text-muted-foreground">Deine Anmeldungsanfrage wartet auf Admin-Freigabe.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Admin: pending registrations panel */}
+      {currentPlayer?.is_admin && pendingRegistrations.length > 0 && (
+        <div className="bg-card border border-yellow-500/30 rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Bell className="w-4 h-4 text-yellow-400" />
+            <span className="text-sm font-semibold">Ausstehende Anmeldungen ({pendingRegistrations.length})</span>
+          </div>
+          {pendingRegistrations.map((pr) => (
+            <div key={pr.id} className="flex items-center justify-between gap-3 bg-muted/40 rounded-lg px-3 py-2">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
+                  {pr.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-sm font-medium">{pr.name}</p>
+                  <p className="text-xs text-muted-foreground">@{pr.autodarts_username}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0 text-green-400 hover:bg-green-400/10"
+                  onClick={() => approveRegMut.mutate(pr.id)}
+                  disabled={approveRegMut.isPending || rejectRegMut.isPending}
+                >
+                  <ThumbsUp className="w-3.5 h-3.5" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 w-7 p-0 text-red-400 hover:bg-red-400/10"
+                  onClick={() => rejectRegMut.mutate(pr.id)}
+                  disabled={approveRegMut.isPending || rejectRegMut.isPending}
+                >
+                  <ThumbsDown className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Self-register banner for open tournaments */}
       {canSelfRegister && (
         <div className="bg-primary/5 border border-primary/30 rounded-xl p-4 flex items-center justify-between gap-4">
@@ -489,7 +569,7 @@ export default function TurnierDetail() {
               </DialogHeader>
               <div className="space-y-4 mt-2">
                 <p className="text-sm text-muted-foreground">
-                  Du meldest dich als <span className="text-foreground font-medium">{currentPlayer?.name}</span> für <span className="text-foreground font-medium">{tournament.name}</span> an.
+                  Du meldest dich als <span className="text-foreground font-medium">{currentPlayer?.name}</span> für <span className="text-foreground font-medium">{tournament.name}</span> an. Der Admin muss die Anmeldung freigeben.
                 </p>
                 <div className="space-y-1.5">
                   <Label>Bestätige mit deinem PIN</Label>
@@ -507,9 +587,9 @@ export default function TurnierDetail() {
                   onClick={() => selfRegisterMut.mutate()}
                 >
                   {selfRegisterMut.isPending ? (
-                    <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Anmelden…</>
+                    <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Sende Anfrage…</>
                   ) : (
-                    <><Check className="w-4 h-4 mr-2" /> Verbindlich anmelden</>
+                    <><UserPlus className="w-4 h-4 mr-2" /> Anmeldung beantragen</>
                   )}
                 </Button>
               </div>

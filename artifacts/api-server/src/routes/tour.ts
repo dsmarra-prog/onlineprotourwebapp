@@ -31,6 +31,9 @@ import {
   notifyOomUpdate,
   getDiscordSettings,
   saveDiscordSettings,
+  postLiveScoreToThread,
+  updateLiveScoreMessage,
+  postMatchResultToThread,
 } from "../discord.js";
 
 const router: IRouter = Router();
@@ -342,11 +345,13 @@ async function generateBracket(tournamentId: number, playerIds: number[], legsFo
       const lobbyUrl = await autoCreateLobby(m.id).catch(() => null);
       const p1Name = playerNames.get(m.player1_id) ?? "Spieler 1";
       const p2Name = playerNames.get(m.player2_id) ?? "Spieler 2";
-      // Discord thread (fire-and-forget, rate-limit safe)
       createMatchThreadForMatch(tournamentName, tournamentId, m.runde, m.match_nr, p1Name, p2Name, lobbyUrl)
+        .then((threadId) => {
+          if (threadId) db.update(tourMatchesTable).set({ discord_thread_id: threadId }).where(eq(tourMatchesTable.id, m.id)).catch(() => {});
+        })
         .catch(() => {});
       notifyMatchReady(m.id, tournamentName, lobbyUrl).catch(() => {});
-      await new Promise((r) => setTimeout(r, 350)); // avoid Discord rate limits
+      await new Promise((r) => setTimeout(r, 350));
     }
   }
 }
@@ -624,12 +629,15 @@ async function advanceWinner(tournamentId: number, currentRunde: string, matchNr
     ]);
 
     // Discord match thread for this round
+    const matchIdForThread = updated[0].id;
     createMatchThreadForMatch(
       tournamentName, tournamentId,
       updated[0].runde, updated[0].match_nr,
       p1[0]?.name ?? "Spieler 1", p2[0]?.name ?? "Spieler 2",
       lobbyUrl,
-    ).catch(() => {});
+    ).then((threadId) => {
+      if (threadId) db.update(tourMatchesTable).set({ discord_thread_id: threadId }).where(eq(tourMatchesTable.id, matchIdForThread)).catch(() => {});
+    }).catch(() => {});
 
     notifyMatchReady(updated[0].id, tournamentName, lobbyUrl).catch(() => {});
   }
@@ -2049,7 +2057,7 @@ router.post("/tour/tournaments/:id/entries", async (req, res) => {
   }
 });
 
-// POST /tour/tournaments/:id/self-register — players register themselves (with their own PIN)
+// POST /tour/tournaments/:id/self-register — players request registration (pending admin approval)
 router.post("/tour/tournaments/:id/self-register", async (req, res) => {
   try {
     const tournamentId = parseInt(req.params.id);
@@ -2066,22 +2074,107 @@ router.post("/tour/tournaments/:id/self-register", async (req, res) => {
 
     const existing = await db.select().from(tourEntriesTable)
       .where(and(eq(tourEntriesTable.tournament_id, tournamentId), eq(tourEntriesTable.player_id, player_id))).limit(1);
-    if (existing[0]) return res.status(409).json({ error: "Du bist bereits für dieses Turnier angemeldet" });
+    if (existing[0]) return res.status(409).json({ error: "Du bist bereits für dieses Turnier angemeldet oder hast eine ausstehende Anfrage" });
 
-    const entries = await db.select().from(tourEntriesTable).where(eq(tourEntriesTable.tournament_id, tournamentId));
-    if (entries.length >= t[0].max_players) return res.status(400).json({ error: "Turnier ist voll" });
+    const approvedEntries = await db.select().from(tourEntriesTable)
+      .where(and(eq(tourEntriesTable.tournament_id, tournamentId), eq(tourEntriesTable.status, "approved")));
+    if (approvedEntries.length >= t[0].max_players) return res.status(400).json({ error: "Turnier ist voll" });
 
-    await db.insert(tourEntriesTable).values({ tournament_id: tournamentId, player_id, seed: entries.length + 1 });
+    // Create pending entry – admin must approve
+    await db.insert(tourEntriesTable).values({ tournament_id: tournamentId, player_id, seed: null, status: "pending" });
 
-    // Fire-and-forget Discord notification
+    // Notify admin via Discord
     notifyRegistration(
       t[0].name,
       tournamentId,
       player[0].name,
       player[0].autodarts_username ?? player[0].name,
-      entries.length + 1,
+      approvedEntries.length + 1,
       t[0].max_players,
     ).catch(() => {});
+
+    // Push to all admins
+    const admins = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.is_admin, true));
+    for (const admin of admins) {
+      sendPushToPlayer(admin.id, "📋 Neue Turnier-Anfrage", `${player[0].name} möchte sich für ${t[0].name} anmelden.`, `/pro-tour/turniere/${tournamentId}`).catch(() => {});
+    }
+
+    res.json({ ok: true, status: "pending" });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /tour/tournaments/:id/pending-registrations — admin sees pending entries
+router.get("/tour/tournaments/:id/pending-registrations", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const pending = await db.select({
+      id: tourEntriesTable.id,
+      player_id: tourEntriesTable.player_id,
+      name: tourPlayersTable.name,
+      autodarts_username: tourPlayersTable.autodarts_username,
+    })
+      .from(tourEntriesTable)
+      .innerJoin(tourPlayersTable, eq(tourEntriesTable.player_id, tourPlayersTable.id))
+      .where(and(eq(tourEntriesTable.tournament_id, tournamentId), eq(tourEntriesTable.status, "pending")));
+    res.json(pending);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/tournaments/:id/pending-registrations/:entryId/approve — admin approves
+router.post("/tour/tournaments/:id/pending-registrations/:entryId/approve", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const entryId = parseInt(req.params.entryId);
+    const { admin_pin } = req.body;
+    if (!admin_pin) return res.status(400).json({ error: "admin_pin erforderlich" });
+
+    const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
+    if (!t[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
+    if (!verifyPin(String(admin_pin), t[0].admin_pin)) return res.status(403).json({ error: "Falscher Admin-PIN" });
+
+    const approved = await db.select().from(tourEntriesTable)
+      .where(and(eq(tourEntriesTable.tournament_id, tournamentId), eq(tourEntriesTable.status, "approved")));
+    const seed = approved.length + 1;
+
+    await db.update(tourEntriesTable)
+      .set({ status: "approved", seed })
+      .where(eq(tourEntriesTable.id, entryId));
+
+    // Notify player
+    const entry = await db.select({ player_id: tourEntriesTable.player_id }).from(tourEntriesTable).where(eq(tourEntriesTable.id, entryId)).limit(1);
+    if (entry[0]) {
+      sendPushToPlayer(entry[0].player_id, "✅ Anmeldung bestätigt!", `Du wurdest für ${t[0].name} freigegeben.`, `/pro-tour/turniere/${tournamentId}`).catch(() => {});
+    }
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/tournaments/:id/pending-registrations/:entryId/reject — admin rejects
+router.post("/tour/tournaments/:id/pending-registrations/:entryId/reject", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const entryId = parseInt(req.params.entryId);
+    const { admin_pin } = req.body;
+    if (!admin_pin) return res.status(400).json({ error: "admin_pin erforderlich" });
+
+    const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
+    if (!t[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
+    if (!verifyPin(String(admin_pin), t[0].admin_pin)) return res.status(403).json({ error: "Falscher Admin-PIN" });
+
+    const entry = await db.select({ player_id: tourEntriesTable.player_id }).from(tourEntriesTable).where(eq(tourEntriesTable.id, entryId)).limit(1);
+
+    await db.delete(tourEntriesTable).where(eq(tourEntriesTable.id, entryId));
+
+    if (entry[0]) {
+      sendPushToPlayer(entry[0].player_id, "❌ Anmeldung abgelehnt", `Deine Anmeldung für ${t[0].name} wurde abgelehnt.`, `/pro-tour/turniere/${tournamentId}`).catch(() => {});
+    }
 
     res.json({ ok: true });
   } catch (e) {
@@ -2998,9 +3091,10 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
     // Resolve player names from DB
     const playerIds = [...new Set(pendingMatches.flatMap((m) => [m.player1_id!, m.player2_id!]))];
     const playerMap: Record<number, string> = {};
+    const displayNameMap: Record<number, string> = {};
     for (const pid of playerIds) {
       const p = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, pid)).limit(1);
-      if (p[0]) playerMap[pid] = p[0].autodarts_username;
+      if (p[0]) { playerMap[pid] = p[0].autodarts_username; displayNameMap[pid] = p[0].name; }
     }
 
     const results: any[] = [];
@@ -3054,9 +3148,29 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
                 await checkAndUnlockAchievements(match.id, tournamentId).catch(() => {});
                 results.push({ match_id: match.id, status: "auto_completed", winner_id: winnerId, legs1: score.legs1, legs2: score.legs2, avg1: a1, avg2: a2, autodarts_id: directMatch.id });
                 synced++;
+                // Discord: post match result to thread
+                if (match.discord_thread_id) {
+                  const p1n = displayNameMap[match.player1_id!] ?? u1;
+                  const p2n = displayNameMap[match.player2_id!] ?? u2;
+                  postMatchResultToThread(match.discord_thread_id, p1n, p2n, score.legs1, score.legs2, winnerId === match.player1_id ? p1n : p2n, a1, a2).catch(() => {});
+                }
                 continue;
               } else {
                 results.push({ match_id: match.id, status: "live", legs1: score.legs1, legs2: score.legs2, avg1: Math.round(score.avg1 * 10) / 10, avg2: Math.round(score.avg2 * 10) / 10, autodarts_id: directMatch.id });
+                // Discord: post/update live score in thread
+                if (match.discord_thread_id && (score.legs1 > 0 || score.legs2 > 0)) {
+                  const p1n = displayNameMap[match.player1_id!] ?? u1;
+                  const p2n = displayNameMap[match.player2_id!] ?? u2;
+                  const a1r = Math.round(score.avg1 * 10) / 10;
+                  const a2r = Math.round(score.avg2 * 10) / 10;
+                  if (match.discord_score_message_id) {
+                    updateLiveScoreMessage(match.discord_thread_id, match.discord_score_message_id, p1n, p2n, score.legs1, score.legs2, a1r, a2r, tournament[0].legs_format).catch(() => {});
+                  } else {
+                    postLiveScoreToThread(match.discord_thread_id, p1n, p2n, score.legs1, score.legs2, a1r, a2r, tournament[0].legs_format).then((msgId) => {
+                      if (msgId) db.update(tourMatchesTable).set({ discord_score_message_id: msgId }).where(eq(tourMatchesTable.id, match.id)).catch(() => {});
+                    }).catch(() => {});
+                  }
+                }
                 continue;
               }
             }
@@ -3136,6 +3250,20 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
         await db.update(tourMatchesTable)
           .set({ autodarts_match_id: scoreSource.id })
           .where(eq(tourMatchesTable.id, match.id));
+        // Discord: post/update live score
+        if (match.discord_thread_id && (score.legs1 > 0 || score.legs2 > 0)) {
+          const p1n = displayNameMap[match.player1_id!] ?? u1;
+          const p2n = displayNameMap[match.player2_id!] ?? u2;
+          const a1r = Math.round(score.avg1 * 10) / 10;
+          const a2r = Math.round(score.avg2 * 10) / 10;
+          if (match.discord_score_message_id) {
+            updateLiveScoreMessage(match.discord_thread_id, match.discord_score_message_id, p1n, p2n, score.legs1, score.legs2, a1r, a2r, tournament[0].legs_format).catch(() => {});
+          } else {
+            postLiveScoreToThread(match.discord_thread_id, p1n, p2n, score.legs1, score.legs2, a1r, a2r, tournament[0].legs_format).then((msgId) => {
+              if (msgId) db.update(tourMatchesTable).set({ discord_score_message_id: msgId }).where(eq(tourMatchesTable.id, match.id)).catch(() => {});
+            }).catch(() => {});
+          }
+        }
         continue;
       }
 
@@ -3178,6 +3306,14 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
         autodarts_id: scoreSource.id,
       });
       synced++;
+      // Discord: post match result to thread
+      if (match.discord_thread_id) {
+        const p1n = displayNameMap[match.player1_id!] ?? u1;
+        const p2n = displayNameMap[match.player2_id!] ?? u2;
+        const a1r = Math.round(score.avg1 * 10) / 10;
+        const a2r = Math.round(score.avg2 * 10) / 10;
+        postMatchResultToThread(match.discord_thread_id, p1n, p2n, score.legs1, score.legs2, winnerId === match.player1_id ? p1n : p2n, a1r, a2r).catch(() => {});
+      }
     }
 
     res.json({ synced, matches: results });

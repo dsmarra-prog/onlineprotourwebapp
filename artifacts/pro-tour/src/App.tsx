@@ -3,7 +3,7 @@ import { Switch, Route, Router as WouterRouter, Link, useLocation } from "wouter
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Trophy, Users, BarChart3, Settings, Home, Target, CalendarDays, LogOut, Swords, Menu, X, Star, TrendingUp } from "lucide-react";
+import { Trophy, Users, BarChart3, Settings, Home, Target, CalendarDays, LogOut, Swords, Menu, X, Star, TrendingUp, GitCompare } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import TourniereListe from "@/pages/turniere";
 import TurnierDetail from "@/pages/turnier-detail";
@@ -18,6 +18,8 @@ import SpielplanPage from "@/pages/spielplan";
 import StatistikenPage from "@/pages/statistiken";
 import Portal from "@/pages/portal";
 import AutodartsCallback from "@/pages/autodarts-callback";
+import SaisonPage from "@/pages/saison";
+import VergleichPage from "@/pages/vergleich";
 import { PlayerProvider, usePlayer } from "@/context/PlayerContext";
 
 const queryClient = new QueryClient({
@@ -33,6 +35,8 @@ const NAV_ITEMS = [
   { href: "/dev-oom", label: "Dev OOM", icon: Swords },
   { href: "/statistiken", label: "Statistiken", icon: TrendingUp },
   { href: "/hall-of-fame", label: "Hall of Fame", icon: Star },
+  { href: "/saison", label: "Saison", icon: Trophy },
+  { href: "/vergleich", label: "Vergleich", icon: GitCompare },
   { href: "/einstellungen", label: "Mein Account", icon: Settings },
 ];
 
@@ -230,6 +234,8 @@ function Router() {
           <Route path="/spieler" component={SpielerPage} />
           <Route path="/spieler/:id" component={SpielerProfil} />
           <Route path="/einstellungen" component={EinstellungenPage} />
+          <Route path="/saison" component={SaisonPage} />
+          <Route path="/vergleich" component={VergleichPage} />
           <Route component={NotFound} />
         </Switch>
       </main>

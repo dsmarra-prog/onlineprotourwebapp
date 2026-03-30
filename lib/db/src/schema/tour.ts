@@ -83,6 +83,8 @@ export const tourMatchesTable = pgTable("tour_matches", {
   status: text("status").notNull().default("ausstehend"),
   is_bye: boolean("is_bye").notNull().default(false),
   autodarts_match_id: text("autodarts_match_id"),
+  discord_thread_id: text("discord_thread_id"),
+  discord_score_message_id: text("discord_score_message_id"),
 });
 
 export const tourPlayerAchievementsTable = pgTable("tour_player_achievements", {
@@ -101,6 +103,7 @@ export const tourEntriesTable = pgTable("tour_entries", {
   player_id: integer("player_id").notNull(),
   seed: integer("seed"),
   confirmed: boolean("confirmed").default(false),
+  status: text("status").notNull().default("approved"),
 });
 
 export const tourBonusPointsTable = pgTable("tour_bonus_points", {
