@@ -4,6 +4,7 @@ import { useParams, Link } from "wouter";
 import { ArrowLeft, Trophy, Star, Loader2, Target, TrendingUp, Swords, ChevronDown, ChevronUp, Medal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { apiFetch, TourPlayerProfile, TourH2H, Achievement, TYP_LABELS, RUNDE_LABELS } from "@/lib/api";
 
 type TourPlayer = { id: number; name: string; autodarts_username: string };
@@ -188,6 +189,11 @@ export default function SpielerProfil() {
         )}
       </div>
 
+      {/* Points chart */}
+      {profile.tournament_results && profile.tournament_results.length > 0 && (
+        <PointsChart results={profile.tournament_results} />
+      )}
+
       {/* Pro Tour results */}
       {proResults.length > 0 && (
         <div className="bg-card border border-border rounded-xl p-4">
@@ -271,6 +277,51 @@ function StatCard({ label, value, highlight }: { label: string; value: string; h
     <div className={`rounded-xl border p-4 text-center ${highlight ? "border-primary/30 bg-primary/5" : "border-border bg-card"}`}>
       <p className={`text-lg font-bold ${highlight ? "text-primary" : "text-foreground"}`}>{value}</p>
       <p className="text-xs text-muted-foreground mt-1">{label}</p>
+    </div>
+  );
+}
+
+function PointsChart({ results }: { results: TourPlayerProfile["tournament_results"] }) {
+  const data = results.map((r) => ({
+    name: r.tournament_name.replace("Players Championship", "PC").replace("Development Cup", "DC"),
+    pro: r.tour_type !== "development" ? r.points : 0,
+    dev: r.tour_type === "development" ? r.dev_points : 0,
+  }));
+
+  const hasProPoints = data.some((d) => d.pro > 0);
+  const hasDevPoints = data.some((d) => d.dev > 0);
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-4">
+      <div className="flex items-center gap-2 mb-4">
+        <TrendingUp className="w-4 h-4 text-primary" />
+        <h2 className="font-semibold text-sm">Punkte-Verlauf</h2>
+        <div className="ml-auto flex items-center gap-3 text-[10px] text-muted-foreground">
+          {hasProPoints && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary inline-block" />Pro</span>}
+          {hasDevPoints && <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />Dev</span>}
+        </div>
+      </div>
+      <ResponsiveContainer width="100%" height={160}>
+        <BarChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+          <XAxis dataKey="name" tick={{ fontSize: 9, fill: "#6b7280" }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 9, fill: "#6b7280" }} tickLine={false} axisLine={false} />
+          <Tooltip
+            contentStyle={{ background: "#1c1c1e", border: "1px solid #333", borderRadius: 8, fontSize: 11 }}
+            labelStyle={{ color: "#e5e7eb", fontWeight: 600 }}
+            itemStyle={{ color: "#9ca3af" }}
+          />
+          {hasProPoints && (
+            <Bar dataKey="pro" name="Pro Punkte" fill="#6366f1" radius={[3, 3, 0, 0]}>
+              {data.map((_, i) => <Cell key={i} fill={data[i].pro > 0 ? "#6366f1" : "transparent"} />)}
+            </Bar>
+          )}
+          {hasDevPoints && (
+            <Bar dataKey="dev" name="Dev Punkte" fill="#60a5fa" radius={[3, 3, 0, 0]}>
+              {data.map((_, i) => <Cell key={i} fill={data[i].dev > 0 ? "#60a5fa" : "transparent"} />)}
+            </Bar>
+          )}
+        </BarChart>
+      </ResponsiveContainer>
     </div>
   );
 }

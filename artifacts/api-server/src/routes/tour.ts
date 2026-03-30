@@ -976,6 +976,71 @@ router.get("/tour/hall-of-fame", async (_req, res) => {
   }
 });
 
+// GET /tour/stats/leaderboard - Bestenlisten: Average, 180s, High Checkout
+router.get("/tour/stats/leaderboard", async (_req, res) => {
+  try {
+    const matches = await db
+      .select({
+        player1_id: tourMatchesTable.player1_id,
+        player2_id: tourMatchesTable.player2_id,
+        avg_p1: tourMatchesTable.avg_p1,
+        avg_p2: tourMatchesTable.avg_p2,
+        count_180s_p1: tourMatchesTable.count_180s_p1,
+        count_180s_p2: tourMatchesTable.count_180s_p2,
+        high_checkout_p1: tourMatchesTable.high_checkout_p1,
+        high_checkout_p2: tourMatchesTable.high_checkout_p2,
+      })
+      .from(tourMatchesTable)
+      .where(eq(tourMatchesTable.status, "fertig"));
+
+    const players = await db.select().from(tourPlayersTable);
+    const playerMap = new Map(players.map((p) => [p.id, p]));
+
+    type PlayerStats = {
+      player_id: number;
+      name: string;
+      autodarts_username: string;
+      avg_sum: number; avg_count: number;
+      total_180s: number;
+      high_checkout: number;
+    };
+    const stats = new Map<number, PlayerStats>();
+
+    const getOrCreate = (id: number): PlayerStats => {
+      if (!stats.has(id)) {
+        const p = playerMap.get(id);
+        stats.set(id, { player_id: id, name: p?.name ?? `#${id}`, autodarts_username: p?.autodarts_username ?? "", avg_sum: 0, avg_count: 0, total_180s: 0, high_checkout: 0 });
+      }
+      return stats.get(id)!;
+    };
+
+    for (const m of matches) {
+      if (m.player1_id) {
+        const s = getOrCreate(m.player1_id);
+        if (m.avg_p1 && m.avg_p1 > 0) { s.avg_sum += m.avg_p1; s.avg_count++; }
+        s.total_180s += m.count_180s_p1 ?? 0;
+        if ((m.high_checkout_p1 ?? 0) > s.high_checkout) s.high_checkout = m.high_checkout_p1!;
+      }
+      if (m.player2_id) {
+        const s = getOrCreate(m.player2_id);
+        if (m.avg_p2 && m.avg_p2 > 0) { s.avg_sum += m.avg_p2; s.avg_count++; }
+        s.total_180s += m.count_180s_p2 ?? 0;
+        if ((m.high_checkout_p2 ?? 0) > s.high_checkout) s.high_checkout = m.high_checkout_p2!;
+      }
+    }
+
+    const list = Array.from(stats.values()).filter((s) => s.avg_count > 0 || s.total_180s > 0 || s.high_checkout > 0);
+
+    const avgBoard = [...list].filter((s) => s.avg_count > 0).sort((a, b) => (b.avg_sum / b.avg_count) - (a.avg_sum / a.avg_count)).slice(0, 10).map((s) => ({ ...s, avg: Math.round((s.avg_sum / s.avg_count) * 10) / 10 }));
+    const s180Board = [...list].filter((s) => s.total_180s > 0).sort((a, b) => b.total_180s - a.total_180s).slice(0, 10);
+    const checkoutBoard = [...list].filter((s) => s.high_checkout > 0).sort((a, b) => b.high_checkout - a.high_checkout).slice(0, 10);
+
+    res.json({ avgBoard, s180Board, checkoutBoard });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // GET /tour/oom - Pro OOM: historische Basis + automatisch neue App-Turniere
 router.get("/tour/oom", async (_req, res) => {
   try {

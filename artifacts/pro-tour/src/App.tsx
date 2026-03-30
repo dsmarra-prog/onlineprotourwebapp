@@ -3,7 +3,7 @@ import { Switch, Route, Router as WouterRouter, Link, useLocation } from "wouter
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Trophy, Users, BarChart3, Settings, Home, Target, CalendarDays, LogOut, Swords, Menu, X, Star } from "lucide-react";
+import { Trophy, Users, BarChart3, Settings, Home, Target, CalendarDays, LogOut, Swords, Menu, X, Star, TrendingUp } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import TourniereListe from "@/pages/turniere";
 import TurnierDetail from "@/pages/turnier-detail";
@@ -15,6 +15,7 @@ import SpielerProfil from "@/pages/spieler-profil";
 import EinstellungenPage from "@/pages/einstellungen";
 import HomeDashboard from "@/pages/home";
 import SpielplanPage from "@/pages/spielplan";
+import StatistikenPage from "@/pages/statistiken";
 import Portal from "@/pages/portal";
 import AutodartsCallback from "@/pages/autodarts-callback";
 import { PlayerProvider, usePlayer } from "@/context/PlayerContext";
@@ -30,8 +31,18 @@ const NAV_ITEMS = [
   { href: "/spieler", label: "Spieler", icon: Users },
   { href: "/oom", label: "Pro OOM", icon: BarChart3 },
   { href: "/dev-oom", label: "Dev OOM", icon: Swords },
+  { href: "/statistiken", label: "Statistiken", icon: TrendingUp },
   { href: "/hall-of-fame", label: "Hall of Fame", icon: Star },
   { href: "/einstellungen", label: "Mein Account", icon: Settings },
+];
+
+// Bottom nav shows only 5 main items on mobile
+const BOTTOM_NAV = [
+  { href: "/", label: "Start", icon: Home },
+  { href: "/turniere", label: "Turniere", icon: Trophy },
+  { href: "/oom", label: "Pro OOM", icon: BarChart3 },
+  { href: "/spieler", label: "Spieler", icon: Users },
+  { href: "/einstellungen", label: "Account", icon: Settings },
 ];
 
 function NavBar() {
@@ -89,7 +100,7 @@ function NavBar() {
           </div>
         )}
 
-        {/* Mobile: active route label + hamburger */}
+        {/* Mobile: hamburger for full menu */}
         <div className="flex md:hidden items-center gap-2 flex-1 justify-end">
           {currentPlayer && (
             <span className="text-xs text-muted-foreground truncate max-w-[120px]">{currentPlayer.name}</span>
@@ -104,7 +115,7 @@ function NavBar() {
         </div>
       </div>
 
-      {/* Mobile menu */}
+      {/* Mobile full menu (hamburger) */}
       {mobileOpen && (
         <div className="md:hidden border-t border-border bg-card/95 backdrop-blur-sm">
           <div className="max-w-6xl mx-auto px-4 py-3 space-y-1">
@@ -138,6 +149,32 @@ function NavBar() {
           </div>
         </div>
       )}
+    </nav>
+  );
+}
+
+function BottomNav() {
+  const [location] = useLocation();
+
+  return (
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-sm border-t border-border">
+      <div className="flex items-stretch h-16">
+        {BOTTOM_NAV.map(({ href, label, icon: Icon }) => {
+          const isActive = href === "/" ? location === "/" : location.startsWith(href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={`flex-1 flex flex-col items-center justify-center gap-1 text-[10px] font-medium transition-colors ${
+                isActive ? "text-primary" : "text-muted-foreground"
+              }`}
+            >
+              <Icon className={`w-5 h-5 ${isActive ? "text-primary" : ""}`} />
+              {label}
+            </Link>
+          );
+        })}
+      </div>
     </nav>
   );
 }
@@ -180,7 +217,7 @@ function Router() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <NavBar />
-      <main className="max-w-6xl mx-auto px-4 py-6">
+      <main className="max-w-6xl mx-auto px-4 py-6 pb-24 md:pb-6">
         <Switch>
           <Route path="/" component={HomeDashboard} />
           <Route path="/spielplan" component={SpielplanPage} />
@@ -188,6 +225,7 @@ function Router() {
           <Route path="/turniere/:id" component={TurnierDetail} />
           <Route path="/oom" component={OomPage} />
           <Route path="/dev-oom" component={DevOomPage} />
+          <Route path="/statistiken" component={StatistikenPage} />
           <Route path="/hall-of-fame" component={HallOfFamePage} />
           <Route path="/spieler" component={SpielerPage} />
           <Route path="/spieler/:id" component={SpielerProfil} />
@@ -195,6 +233,7 @@ function Router() {
           <Route component={NotFound} />
         </Switch>
       </main>
+      <BottomNav />
     </div>
   );
 }
