@@ -126,10 +126,12 @@ export default function SpielplanPage() {
         .map((e) => e[0])
     : [];
 
-  const nextEvent = schedule?.find((e) => {
-    const d = parseDatum(e.datum);
-    return d >= today && e.status === "upcoming";
-  });
+  const nextEvent = schedule
+    ?.filter((e) => {
+      const d = parseDatum(e.datum);
+      return d >= today && e.status === "upcoming";
+    })
+    .sort((a, b) => parseDatum(a.datum).getTime() - parseDatum(b.datum).getTime())[0];
 
   return (
     <div className="space-y-8">
