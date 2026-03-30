@@ -4,7 +4,7 @@ import { useParams, Link, useLocation } from "wouter";
 import {
   ArrowLeft, Play, UserPlus, UserMinus, Check, Loader2, Target,
   Zap, Radio, CheckCircle2, Search, MonitorPlay, ExternalLink, Activity,
-  TrendingUp, X, Trash2, Clock, ThumbsUp, ThumbsDown, Bell,
+  TrendingUp, X, Trash2, Clock, ThumbsUp, ThumbsDown, Bell, MessageCircle, Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -806,7 +806,184 @@ export default function TurnierDetail() {
   );
 }
 
-// ─── Match Card ───────────────────────────────────────────────────────────────
+// ─── Match Chat ───────────────────────────────────────────────────────────────
+
+type MatchMessage = {
+  id: number;
+  match_id: number;
+  player_id: number;
+  player_name: string | null;
+  message: string;
+  created_at: string;
+};
+
+function MatchChatDialog({
+  matchId,
+  player1Name,
+  player2Name,
+  currentPlayerId,
+  sessionPin,
+}: {
+  matchId: number;
+  player1Name: string;
+  player2Name: string;
+  currentPlayerId: number;
+  sessionPin: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const LAST_SEEN_KEY = `chat_seen_${matchId}`;
+
+  const { data: messages = [], refetch } = useQuery<MatchMessage[]>({
+    queryKey: ["match-messages", matchId],
+    queryFn: () => apiFetch(`/tour/matches/${matchId}/messages?player_id=${currentPlayerId}&pin=${encodeURIComponent(sessionPin)}`),
+    enabled: open,
+    refetchInterval: open ? 5000 : false,
+  });
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (open && bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, open]);
+
+  // Mark as seen when dialog opens
+  useEffect(() => {
+    if (open) {
+      localStorage.setItem(LAST_SEEN_KEY, new Date().toISOString());
+    }
+  }, [open, LAST_SEEN_KEY]);
+
+  // Check for unread messages
+  const lastSeen = localStorage.getItem(LAST_SEEN_KEY);
+  const hasUnread = messages.some(
+    (m) => m.player_id !== currentPlayerId && (!lastSeen || new Date(m.created_at) > new Date(lastSeen))
+  );
+
+  const sendMut = useMutation({
+    mutationFn: () =>
+      apiFetch(`/tour/matches/${matchId}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ player_id: currentPlayerId, pin: sessionPin, message: text }),
+      }),
+    onSuccess: () => {
+      setText("");
+      refetch();
+    },
+  });
+
+  const handleSend = (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (text.trim() && !sendMut.isPending) sendMut.mutate();
+  };
+
+  return (
+    <>
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
+        className="relative flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors px-1.5 py-1 rounded-md hover:bg-primary/10"
+        title="Match-Chat öffnen"
+      >
+        <MessageCircle className="w-3.5 h-3.5" />
+        <span>Chat</span>
+        {hasUnread && (
+          <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500" />
+        )}
+      </button>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/70 backdrop-blur-sm"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="w-full sm:max-w-sm bg-card border border-border rounded-t-2xl sm:rounded-xl flex flex-col max-h-[80vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+              <div>
+                <div className="flex items-center gap-2 font-semibold text-sm">
+                  <MessageCircle className="w-4 h-4 text-primary" />
+                  Match-Chat
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {player1Name} vs. {player2Name}
+                </div>
+              </div>
+              <button
+                onClick={() => setOpen(false)}
+                className="text-muted-foreground hover:text-foreground p-1 rounded-md hover:bg-accent"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-[200px]">
+              {messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full gap-2 text-muted-foreground/60 py-8">
+                  <MessageCircle className="w-8 h-8" />
+                  <p className="text-sm">Noch keine Nachrichten</p>
+                  <p className="text-xs">Schreib deinem Gegner eine Nachricht zur Terminabsprache.</p>
+                </div>
+              ) : (
+                messages.map((msg) => {
+                  const isOwn = msg.player_id === currentPlayerId;
+                  return (
+                    <div key={msg.id} className={`flex flex-col ${isOwn ? "items-end" : "items-start"}`}>
+                      <div
+                        className={`max-w-[75%] rounded-xl px-3 py-2 text-sm ${
+                          isOwn
+                            ? "bg-primary text-black rounded-br-sm"
+                            : "bg-accent text-foreground rounded-bl-sm"
+                        }`}
+                      >
+                        {msg.message}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground/60 mt-0.5 px-1">
+                        {msg.player_name} · {new Date(msg.created_at).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={bottomRef} />
+            </div>
+
+            {/* Input */}
+            <form
+              onSubmit={handleSend}
+              className="flex gap-2 px-4 py-3 border-t border-border shrink-0"
+            >
+              <input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="Nachricht…"
+                className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary"
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+              />
+              <button
+                type="submit"
+                disabled={!text.trim() || sendMut.isPending}
+                className="p-2 rounded-lg bg-primary text-black hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                {sendMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── Match Card ────────────────────────────────────────────────────────────────
 
 function MatchCard({
   match,
@@ -821,7 +998,7 @@ function MatchCard({
   onResult: () => void;
   onLiveClick: () => void;
 }) {
-  const { currentPlayer } = usePlayer();
+  const { currentPlayer, sessionPin } = usePlayer();
   const persistedLobbyUrl = match.status !== "abgeschlossen" && match.autodarts_match_id
     ? `https://play.autodarts.io/lobbies/${match.autodarts_match_id}`
     : null;
@@ -932,6 +1109,20 @@ function MatchCard({
           {match.autodarts_match_id && <span className="ml-auto text-[10px]">via Autodarts</span>}
         </div>
       )}
+      {/* Chat button — visible to participants and admins when both players are assigned */}
+      {match.player1_id && match.player2_id && currentPlayer && sessionPin &&
+        (currentPlayer.id === match.player1_id || currentPlayer.id === match.player2_id || currentPlayer.is_admin) && (
+        <div className="mt-2 pt-2 border-t border-border/30 flex justify-end" onClick={(e) => e.stopPropagation()}>
+          <MatchChatDialog
+            matchId={match.id}
+            player1Name={match.player1_name ?? "Spieler 1"}
+            player2Name={match.player2_name ?? "Spieler 2"}
+            currentPlayerId={currentPlayer.id}
+            sessionPin={sessionPin}
+          />
+        </div>
+      )}
+
       {/* Lobby / Game button */}
       {!isComplete && !isPending && (
         <div className="mt-2 pt-2 border-t border-border/30" onClick={(e) => e.stopPropagation()}>

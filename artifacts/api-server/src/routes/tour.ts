@@ -12,6 +12,7 @@ import {
   tourPushSubscriptionsTable,
   tourPlayerAchievementsTable,
   systemSettingsTable,
+  tourMatchMessagesTable,
 } from "@workspace/db";
 import { eq, and, desc, or } from "drizzle-orm";
 import crypto from "crypto";
@@ -3698,6 +3699,86 @@ router.post("/tour/admin/verify", async (req, res) => {
     if (!anyTournament[0]) return res.json({ ok: false });
     const ok = verifyPin(pin, anyTournament[0].admin_pin);
     res.json({ ok });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// ─── Match Chat ───────────────────────────────────────────────────────────────
+
+// GET /tour/matches/:matchId/messages — fetch chat messages (auth: player1, player2, or admin)
+router.get("/tour/matches/:matchId/messages", async (req, res) => {
+  try {
+    const matchId = parseInt(req.params.matchId);
+    const playerId = parseInt(req.query.player_id as string);
+    const pin = req.query.pin as string;
+    if (!matchId || !playerId || !pin) return res.status(400).json({ error: "match_id, player_id und pin erforderlich" });
+
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, playerId)).limit(1);
+    if (!player || !verifyPin(pin, player.pin_hash)) return res.status(403).json({ error: "Ungültiger PIN" });
+
+    const [match] = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.id, matchId)).limit(1);
+    if (!match) return res.status(404).json({ error: "Match nicht gefunden" });
+
+    const isParticipant = match.player1_id === playerId || match.player2_id === playerId;
+    if (!isParticipant && !player.is_admin) return res.status(403).json({ error: "Kein Zugriff" });
+
+    const messages = await db.select({
+      id: tourMatchMessagesTable.id,
+      match_id: tourMatchMessagesTable.match_id,
+      player_id: tourMatchMessagesTable.player_id,
+      player_name: tourPlayersTable.name,
+      message: tourMatchMessagesTable.message,
+      created_at: tourMatchMessagesTable.created_at,
+    })
+      .from(tourMatchMessagesTable)
+      .leftJoin(tourPlayersTable, eq(tourMatchMessagesTable.player_id, tourPlayersTable.id))
+      .where(eq(tourMatchMessagesTable.match_id, matchId))
+      .orderBy(tourMatchMessagesTable.created_at);
+
+    res.json(messages);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/matches/:matchId/messages — send a chat message + push notification to other player
+router.post("/tour/matches/:matchId/messages", async (req, res) => {
+  try {
+    const matchId = parseInt(req.params.matchId);
+    const { player_id, pin, message } = req.body as { player_id: number; pin: string; message: string };
+    if (!matchId || !player_id || !pin || !message?.trim()) return res.status(400).json({ error: "match_id, player_id, pin und message erforderlich" });
+
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, player_id)).limit(1);
+    if (!player || !verifyPin(pin, player.pin_hash)) return res.status(403).json({ error: "Ungültiger PIN" });
+
+    const [match] = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.id, matchId)).limit(1);
+    if (!match) return res.status(404).json({ error: "Match nicht gefunden" });
+
+    const isParticipant = match.player1_id === player_id || match.player2_id === player_id;
+    if (!isParticipant && !player.is_admin) return res.status(403).json({ error: "Kein Zugriff" });
+
+    const [newMsg] = await db.insert(tourMatchMessagesTable).values({
+      match_id: matchId,
+      player_id,
+      message: message.trim(),
+    }).returning();
+
+    // Push notification to the other player
+    const otherPlayerId = match.player1_id === player_id ? match.player2_id : match.player1_id;
+    if (otherPlayerId) {
+      const [tournament] = await db.select({ name: tourTournamentsTable.name })
+        .from(tourTournamentsTable).where(eq(tourTournamentsTable.id, match.tournament_id)).limit(1);
+      const notifUrl = `/pro-tour/turniere/${match.tournament_id}`;
+      sendPushToPlayer(
+        otherPlayerId,
+        `💬 Neue Nachricht von ${player.name}`,
+        message.trim().length > 80 ? message.trim().slice(0, 80) + "…" : message.trim(),
+        notifUrl,
+      ).catch(() => {});
+    }
+
+    res.json(newMsg);
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
