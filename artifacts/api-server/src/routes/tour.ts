@@ -2418,13 +2418,20 @@ router.get("/tour/live-ticker", async (_req, res) => {
 
       const active = matches.filter((m) => !m.is_bye && m.player1_id && m.player2_id && m.status !== "abgeschlossen");
       for (const m of active) {
+        const p1 = playerMap.get(m.player1_id!);
+        const p2 = playerMap.get(m.player2_id!);
         ticker.push({
           tournament_id: t.id,
           tournament_name: t.name,
+          legs_format: t.legs_format,
           match_id: m.id,
           runde: m.runde,
-          player1: playerMap.get(m.player1_id!)?.name ?? "?",
-          player2: playerMap.get(m.player2_id!)?.name ?? "?",
+          player1_id: m.player1_id,
+          player2_id: m.player2_id,
+          player1: p1?.name ?? "?",
+          player2: p2?.name ?? "?",
+          player1_avatar: p1?.avatar_url ?? null,
+          player2_avatar: p2?.avatar_url ?? null,
           score_p1: m.score_p1,
           score_p2: m.score_p2,
           avg_p1: m.avg_p1,

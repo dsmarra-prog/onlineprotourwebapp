@@ -5,6 +5,7 @@ import {
   ArrowLeft, Play, UserPlus, UserMinus, Check, Loader2, Target,
   Zap, Radio, CheckCircle2, Search, MonitorPlay, ExternalLink, Activity,
   TrendingUp, X, Trash2, Clock, ThumbsUp, ThumbsDown, Bell, MessageCircle, Send, AlertTriangle, Shuffle,
+  BarChart2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -24,6 +25,182 @@ type SyncMatchStatus =
   | { match_id: number; status: "auto_completed"; winner_id: number; legs1: number; legs2: number; avg1: number; avg2: number };
 
 type SyncResult = { synced: number; matches: SyncMatchStatus[]; error?: string };
+
+// ─── Match Preview Modal (H2H) ────────────────────────────────────────────────
+
+type H2HResponse = {
+  player: { id: number; name: string; autodarts_username: string };
+  opponent: { id: number; name: string; autodarts_username: string };
+  wins: number;
+  losses: number;
+  leg_wins: number;
+  leg_losses: number;
+  history: {
+    match_id: number;
+    tournament_id: number;
+    tournament_name: string;
+    runde: string;
+    won: boolean;
+    my_score: number;
+    opp_score: number;
+    my_avg: number | null;
+    opp_avg: number | null;
+    datum: string;
+  }[];
+};
+
+function MatchPreviewModal({
+  match,
+  legsFormat,
+  onClose,
+}: {
+  match: TourMatch;
+  legsFormat: number;
+  onClose: () => void;
+}) {
+  const { data: h2h, isLoading } = useQuery<H2HResponse>({
+    queryKey: ["h2h", match.player1_id, match.player2_id],
+    queryFn: () => apiFetch(`/tour/players/${match.player1_id}/h2h/${match.player2_id}`),
+    enabled: !!(match.player1_id && match.player2_id),
+    staleTime: 60_000,
+  });
+
+  const total = (h2h?.wins ?? 0) + (h2h?.losses ?? 0);
+  const p1WinPct = total > 0 ? Math.round(((h2h?.wins ?? 0) / total) * 100) : 50;
+  const p2WinPct = 100 - p1WinPct;
+  const roundLabel = RUNDE_LABELS[match.runde] ?? match.runde;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-accent/20">
+          <div className="flex items-center gap-2">
+            <BarChart2 className="w-4 h-4 text-primary" />
+            <span className="text-sm font-semibold">Match-Vorschau</span>
+            <span className="text-xs text-muted-foreground">· {roundLabel} · Bo{legsFormat}</span>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* Player matchup */}
+          <div className="flex items-center gap-2">
+            <div className="flex-1 flex flex-col items-center gap-1.5 p-3 rounded-xl bg-accent/30 border border-border/50">
+              <PlayerAvatar name={match.player1_name ?? "?"} avatarUrl={match.player1_avatar} size="lg" />
+              <div className="text-sm font-semibold text-center">{match.player1_name}</div>
+              {h2h && (
+                <div className="text-xs text-muted-foreground text-center">
+                  @{h2h.player.autodarts_username}
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col items-center gap-1 px-1">
+              <div className="text-lg font-black text-muted-foreground/40">vs</div>
+              {!isLoading && h2h && total > 0 && (
+                <div className="text-[10px] text-center text-muted-foreground/60">
+                  {total} {total === 1 ? "Duell" : "Duelle"}
+                </div>
+              )}
+            </div>
+            <div className="flex-1 flex flex-col items-center gap-1.5 p-3 rounded-xl bg-accent/30 border border-border/50">
+              <PlayerAvatar name={match.player2_name ?? "?"} avatarUrl={match.player2_avatar} size="lg" />
+              <div className="text-sm font-semibold text-center">{match.player2_name}</div>
+              {h2h && (
+                <div className="text-xs text-muted-foreground text-center">
+                  @{h2h.opponent.autodarts_username}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* H2H stats */}
+          {isLoading && (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="w-5 h-5 animate-spin text-primary" />
+            </div>
+          )}
+
+          {!isLoading && h2h && total === 0 && (
+            <div className="text-center py-3">
+              <Target className="w-8 h-8 mx-auto text-muted-foreground/20 mb-2" />
+              <p className="text-sm text-muted-foreground">Noch kein Aufeinandertreffen</p>
+              <p className="text-xs text-muted-foreground/60 mt-0.5">Das ist ihr erstes Duell!</p>
+            </div>
+          )}
+
+          {!isLoading && h2h && total > 0 && (
+            <div className="space-y-3">
+              {/* Win bar */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs font-semibold">
+                  <span className="text-primary">{h2h.wins}W</span>
+                  <span className="text-muted-foreground/60 text-[10px]">Direktvergleich</span>
+                  <span className="text-muted-foreground">{h2h.losses}W</span>
+                </div>
+                <div className="flex h-2 rounded-full overflow-hidden bg-muted">
+                  <div
+                    className="bg-primary transition-all duration-500"
+                    style={{ width: `${p1WinPct}%` }}
+                  />
+                  <div
+                    className="bg-muted-foreground/30 transition-all duration-500"
+                    style={{ width: `${p2WinPct}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground/60">
+                  <span>{p1WinPct}%</span>
+                  <span>{p2WinPct}%</span>
+                </div>
+              </div>
+
+              {/* Legs */}
+              <div className="flex items-center justify-between text-xs bg-accent/20 rounded-lg px-3 py-2">
+                <span className="font-semibold">{h2h.leg_wins}</span>
+                <span className="text-muted-foreground/60">Legs gesamt</span>
+                <span className="font-semibold">{h2h.leg_losses}</span>
+              </div>
+
+              {/* Match history */}
+              {h2h.history.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
+                    <Clock className="w-3 h-3" />
+                    Letzte Duelle
+                  </div>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {h2h.history.slice().reverse().slice(0, 5).map((m) => (
+                      <div
+                        key={m.match_id}
+                        className={`flex items-center gap-2 px-2 py-1.5 rounded-md text-xs ${m.won ? "bg-primary/5 border border-primary/20" : "bg-muted/30 border border-border/30"}`}
+                      >
+                        <span className={`shrink-0 w-3 h-3 rounded-full ${m.won ? "bg-primary" : "bg-muted-foreground/30"}`} />
+                        <span className="truncate flex-1 text-muted-foreground">{m.tournament_name}</span>
+                        <span className={`font-bold shrink-0 ${m.won ? "text-primary" : "text-muted-foreground"}`}>
+                          {m.my_score}:{m.opp_score}
+                        </span>
+                        {(m.my_avg || m.opp_avg) && (
+                          <span className="text-[10px] text-muted-foreground/50 shrink-0">
+                            ⌀{m.my_avg ?? "–"}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Live Match Detail Modal ───────────────────────────────────────────────────
 
@@ -1271,6 +1448,7 @@ function MatchCard({
   const [localLobbyUrl, setLocalLobbyUrl] = useState<string | null>(null);
   const lobbyUrl = persistedLobbyUrl ?? localLobbyUrl;
   const [creatingLobby, setCreatingLobby] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const createLobby = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1377,6 +1555,29 @@ function MatchCard({
           {match.autodarts_match_id && <span className="ml-auto text-[10px]">via Autodarts</span>}
         </div>
       )}
+
+      {/* H2H Preview button — visible whenever both players are assigned */}
+      {match.player1_id && match.player2_id && (
+        <div className="mt-2 flex justify-end" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => setShowPreview(true)}
+            className="flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-primary transition-colors"
+          >
+            <BarChart2 className="w-2.5 h-2.5" />
+            Vorschau
+          </button>
+        </div>
+      )}
+
+      {/* Match Preview Modal */}
+      {showPreview && (
+        <MatchPreviewModal
+          match={match}
+          legsFormat={legsFormat}
+          onClose={() => setShowPreview(false)}
+        />
+      )}
+
       {/* Chat + Dispute + Fairness — visible to participants/admins when both players are assigned */}
       {match.player1_id && match.player2_id && currentPlayer && sessionPin &&
         (currentPlayer.id === match.player1_id || currentPlayer.id === match.player2_id || currentPlayer.is_admin) && (

@@ -3,7 +3,7 @@ import { Switch, Route, Router as WouterRouter, Link, useLocation } from "wouter
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Trophy, Users, BarChart3, Settings, Home, Target, CalendarDays, LogOut, Swords, Menu, X, Star, TrendingUp, GitCompare, HelpCircle, ChevronRight, CheckCircle } from "lucide-react";
+import { Trophy, Users, BarChart3, Settings, Home, Target, CalendarDays, LogOut, Swords, Menu, X, Star, TrendingUp, GitCompare, HelpCircle, ChevronRight, CheckCircle, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import NotFound from "@/pages/not-found";
 import TourniereListe from "@/pages/turniere";
@@ -22,7 +22,10 @@ import AutodartsCallback from "@/pages/autodarts-callback";
 import SaisonPage from "@/pages/saison";
 import VergleichPage from "@/pages/vergleich";
 import HilfePage from "@/pages/hilfe";
+import LivePage from "@/pages/live";
 import { PlayerProvider, usePlayer } from "@/context/PlayerContext";
+import { useQuery } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 10_000 } },
@@ -32,6 +35,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Start", icon: Home },
   { href: "/spielplan", label: "Spielplan", icon: CalendarDays },
   { href: "/turniere", label: "Turniere", icon: Trophy },
+  { href: "/live", label: "Live", icon: Radio, live: true },
   { href: "/spieler", label: "Spieler", icon: Users },
   { href: "/oom", label: "Pro OOM", icon: BarChart3 },
   { href: "/dev-oom", label: "Dev OOM", icon: Swords },
@@ -46,8 +50,8 @@ const NAV_ITEMS = [
 const BOTTOM_NAV = [
   { href: "/", label: "Start", icon: Home },
   { href: "/turniere", label: "Turniere", icon: Trophy },
+  { href: "/live", label: "Live", icon: Radio, live: true },
   { href: "/oom", label: "Pro OOM", icon: BarChart3 },
-  { href: "/hilfe", label: "Hilfe", icon: HelpCircle },
   { href: "/einstellungen", label: "Account", icon: Settings },
 ];
 
@@ -171,10 +175,23 @@ function TutorialOverlay() {
 
 // ─── NavBar ──────────────────────────────────────────────────────────────────
 
+function useLiveCount() {
+  const { data } = useQuery<{ status: string }[]>({
+    queryKey: ["live-ticker-count"],
+    queryFn: () => apiFetch("/tour/live-ticker"),
+    refetchInterval: 15_000,
+    staleTime: 10_000,
+  });
+  return (data ?? []).filter(
+    (e: any) => (e.score_p1 ?? 0) > 0 || (e.score_p2 ?? 0) > 0 || (e.avg_p1 ?? 0) > 0
+  ).length;
+}
+
 function NavBar() {
   const [location] = useLocation();
   const { currentPlayer, logout } = usePlayer();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const liveCount = useLiveCount();
 
   const handleNavClick = () => setMobileOpen(false);
 
@@ -188,20 +205,28 @@ function NavBar() {
         </Link>
 
         <div className="hidden md:flex items-center gap-1 flex-1">
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+          {NAV_ITEMS.map(({ href, label, icon: Icon, live }) => {
             const isActive = href === "/" ? location === "/" : location.startsWith(href);
+            const isLiveActive = live && liveCount > 0;
             return (
               <Link
                 key={href}
                 href={href}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+                className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
                   isActive
                     ? "bg-primary/15 text-primary border border-primary/30"
+                    : isLiveActive
+                    ? "text-primary border border-primary/20 bg-primary/5"
                     : "text-muted-foreground hover:text-foreground hover:bg-accent"
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <Icon className={`w-3.5 h-3.5 ${isLiveActive && !isActive ? "animate-pulse" : ""}`} />
                 {label}
+                {isLiveActive && (
+                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-primary rounded-full flex items-center justify-center text-[8px] font-black text-black">
+                    {liveCount}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -240,21 +265,29 @@ function NavBar() {
       {mobileOpen && (
         <div className="md:hidden border-t border-border bg-card/95 backdrop-blur-sm">
           <div className="max-w-6xl mx-auto px-4 py-3 space-y-1">
-            {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+            {NAV_ITEMS.map(({ href, label, icon: Icon, live }) => {
               const isActive = href === "/" ? location === "/" : location.startsWith(href);
+              const isLiveActive = live && liveCount > 0;
               return (
                 <Link
                   key={href}
                   href={href}
                   onClick={handleNavClick}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                  className={`relative flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                     isActive
                       ? "bg-primary/15 text-primary border border-primary/30"
+                      : isLiveActive
+                      ? "text-primary bg-primary/5 border border-primary/20"
                       : "text-muted-foreground hover:text-foreground hover:bg-accent"
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className={`w-4 h-4 ${isLiveActive && !isActive ? "animate-pulse" : ""}`} />
                   {label}
+                  {isLiveActive && (
+                    <span className="ml-auto text-[10px] font-bold bg-primary text-black px-1.5 py-0.5 rounded-full">
+                      {liveCount} LIVE
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -276,22 +309,27 @@ function NavBar() {
 
 function BottomNav() {
   const [location] = useLocation();
+  const liveCount = useLiveCount();
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-card/95 backdrop-blur-sm border-t border-border">
       <div className="flex items-stretch h-16">
-        {BOTTOM_NAV.map(({ href, label, icon: Icon }) => {
+        {BOTTOM_NAV.map(({ href, label, icon: Icon, live }) => {
           const isActive = href === "/" ? location === "/" : location.startsWith(href);
+          const isLiveActive = live && liveCount > 0;
           return (
             <Link
               key={href}
               href={href}
-              className={`flex-1 flex flex-col items-center justify-center gap-1 text-[10px] font-medium transition-colors ${
-                isActive ? "text-primary" : "text-muted-foreground"
+              className={`flex-1 relative flex flex-col items-center justify-center gap-1 text-[10px] font-medium transition-colors ${
+                isActive ? "text-primary" : isLiveActive ? "text-primary" : "text-muted-foreground"
               }`}
             >
-              <Icon className={`w-5 h-5 ${isActive ? "text-primary" : ""}`} />
+              <Icon className={`w-5 h-5 ${isActive || isLiveActive ? "text-primary" : ""} ${isLiveActive && !isActive ? "animate-pulse" : ""}`} />
               {label}
+              {isLiveActive && (
+                <span className="absolute top-1.5 right-1/4 w-2 h-2 bg-primary rounded-full" />
+              )}
             </Link>
           );
         })}
@@ -330,6 +368,15 @@ function Router() {
             </main>
           </div>
         </Route>
+        <Route path="/live">
+          <div className="min-h-screen bg-background text-foreground">
+            <NavBar />
+            <main className="max-w-6xl mx-auto px-4 py-6 pb-24 md:pb-6">
+              <LivePage />
+            </main>
+            <BottomNav />
+          </div>
+        </Route>
         <Route component={Portal} />
       </Switch>
     );
@@ -344,6 +391,7 @@ function Router() {
           <Route path="/spielplan" component={SpielplanPage} />
           <Route path="/turniere" component={TourniereListe} />
           <Route path="/turniere/:id" component={TurnierDetail} />
+          <Route path="/live" component={LivePage} />
           <Route path="/oom" component={OomPage} />
           <Route path="/dev-oom" component={DevOomPage} />
           <Route path="/statistiken" component={StatistikenPage} />
