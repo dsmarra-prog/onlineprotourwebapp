@@ -10,6 +10,7 @@ export type CurrentPlayer = {
 
 type PlayerContextType = {
   currentPlayer: CurrentPlayer | null;
+  sessionPin: string;
   login: (autodarts_username: string, pin: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
@@ -21,6 +22,7 @@ const STORAGE_KEY = "opt_player";
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const [currentPlayer, setCurrentPlayer] = useState<CurrentPlayer | null>(null);
+  const [sessionPin, setSessionPin] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -42,15 +44,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(player));
     setCurrentPlayer(player);
+    setSessionPin(pin);
   };
 
   const logout = () => {
     localStorage.removeItem(STORAGE_KEY);
     setCurrentPlayer(null);
+    setSessionPin("");
   };
 
   return (
-    <PlayerContext.Provider value={{ currentPlayer, login, logout, isLoading }}>
+    <PlayerContext.Provider value={{ currentPlayer, sessionPin, login, logout, isLoading }}>
       {children}
     </PlayerContext.Provider>
   );

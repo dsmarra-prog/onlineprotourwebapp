@@ -1439,11 +1439,14 @@ router.get("/tour/admin/discord-settings", async (_req, res) => {
 // POST /tour/admin/discord-settings
 router.post("/tour/admin/discord-settings", async (req, res) => {
   try {
-    const { admin_pin, webhook_url, bot_token, channel_id } = req.body;
+    const { admin_pin, admin_player_id, admin_player_pin, webhook_url, bot_token, channel_id } = req.body;
 
-    const anyT = await db.select().from(tourTournamentsTable).limit(1);
-    if (!anyT[0] || !verifyPin(String(admin_pin), anyT[0].admin_pin)) {
-      return res.status(403).json({ error: "Falscher Admin-PIN" });
+    const byPlayer = admin_player_id && admin_player_pin && await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!byPlayer) {
+      const anyT = await db.select().from(tourTournamentsTable).limit(1);
+      if (!anyT[0] || !verifyPin(String(admin_pin), anyT[0].admin_pin)) {
+        return res.status(403).json({ error: "Falscher Admin-PIN" });
+      }
     }
 
     // Skip masked values (shown as *** in the frontend) — don't overwrite with them
@@ -1462,10 +1465,13 @@ router.post("/tour/admin/discord-settings", async (req, res) => {
 // POST /tour/admin/discord-test - send a test message
 router.post("/tour/admin/discord-test", async (req, res) => {
   try {
-    const { admin_pin } = req.body;
-    const anyT = await db.select().from(tourTournamentsTable).limit(1);
-    if (!anyT[0] || !verifyPin(String(admin_pin), anyT[0].admin_pin)) {
-      return res.status(403).json({ error: "Falscher Admin-PIN" });
+    const { admin_pin, admin_player_id, admin_player_pin } = req.body;
+    const byPlayer = admin_player_id && admin_player_pin && await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!byPlayer) {
+      const anyT = await db.select().from(tourTournamentsTable).limit(1);
+      if (!anyT[0] || !verifyPin(String(admin_pin), anyT[0].admin_pin)) {
+        return res.status(403).json({ error: "Falscher Admin-PIN" });
+      }
     }
     const settings = await getDiscordSettings();
     if (!settings.webhookUrl) return res.status(400).json({ error: "Kein Webhook-URL konfiguriert" });
@@ -1491,9 +1497,21 @@ router.post("/tour/admin/discord-test", async (req, res) => {
 // POST /tour/tournaments/seed-from-schedule - create tournament entries for all upcoming schedule events
 router.post("/tour/tournaments/seed-from-schedule", async (req, res) => {
   try {
-    const { admin_pin } = req.body;
-    if (!admin_pin) {
-      return res.status(400).json({ error: "admin_pin erforderlich" });
+    const { admin_pin, admin_player_id, admin_player_pin } = req.body;
+    let resolvedPinHash: string;
+    if (admin_player_id && admin_player_pin) {
+      const [p] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, parseInt(admin_player_id))).limit(1);
+      if (!p || !p.is_admin || !verifyPin(String(admin_player_pin), p.pin_hash)) {
+        return res.status(403).json({ error: "Keine Admin-Berechtigung" });
+      }
+      resolvedPinHash = p.pin_hash;
+    } else {
+      if (!admin_pin) return res.status(400).json({ error: "admin_pin erforderlich" });
+      const anyT = await db.select().from(tourTournamentsTable).limit(1);
+      if (anyT[0] && !verifyPin(String(admin_pin), anyT[0].admin_pin)) {
+        return res.status(403).json({ error: "Falscher Admin-PIN" });
+      }
+      resolvedPinHash = hashPin(String(admin_pin));
     }
 
     const upcoming = SEASON1_SCHEDULE.filter((s) => s.status === "upcoming");
@@ -1525,7 +1543,7 @@ router.post("/tour/tournaments/seed-from-schedule", async (req, res) => {
         datum: sched.datum,
         legs_format: legsFormat,
         max_players: maxPlayers,
-        admin_pin: hashPin(String(admin_pin)),
+        admin_pin: resolvedPinHash,
         schedule_id: sched.external_id,
         is_test: false,
       });
@@ -1991,9 +2009,23 @@ router.get("/tour/tournaments", async (_req, res) => {
 // POST /tour/tournaments
 router.post("/tour/tournaments", async (req, res) => {
   try {
-    const { name, typ, tour_type, datum, uhrzeit, legs_format, max_players, admin_pin, schedule_id, phase, is_test } = req.body;
-    if (!name || !typ || !datum || !admin_pin) {
+    const { name, typ, tour_type, datum, uhrzeit, legs_format, max_players, admin_pin, admin_player_id, admin_player_pin, schedule_id, phase, is_test } = req.body;
+
+    let resolvedAdminPinHash: string;
+    if (admin_player_id && admin_player_pin) {
+      const [p] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, parseInt(admin_player_id))).limit(1);
+      if (!p || !p.is_admin || !verifyPin(String(admin_player_pin), p.pin_hash)) {
+        return res.status(403).json({ error: "Keine Admin-Berechtigung" });
+      }
+      resolvedAdminPinHash = p.pin_hash;
+    } else if (admin_pin) {
+      resolvedAdminPinHash = hashPin(String(admin_pin));
+    } else {
       return res.status(400).json({ error: "name, typ, datum, admin_pin erforderlich" });
+    }
+
+    if (!name || !typ || !datum) {
+      return res.status(400).json({ error: "name, typ, datum erforderlich" });
     }
 
     const [t] = await db.insert(tourTournamentsTable)
@@ -2006,7 +2038,7 @@ router.post("/tour/tournaments", async (req, res) => {
         uhrzeit: uhrzeit || null,
         legs_format: legs_format ?? 5,
         max_players: max_players ?? 32,
-        admin_pin: hashPin(String(admin_pin)),
+        admin_pin: resolvedAdminPinHash,
         schedule_id: schedule_id || null,
         is_test: is_test === true || is_test === "true" ? true : false,
       })
@@ -2151,12 +2183,13 @@ router.post("/tour/tournaments/:id/pending-registrations/:entryId/approve", asyn
   try {
     const tournamentId = parseInt(req.params.id);
     const entryId = parseInt(req.params.entryId);
-    const { admin_pin } = req.body;
-    if (!admin_pin) return res.status(400).json({ error: "admin_pin erforderlich" });
+    const { admin_pin, admin_player_id, admin_player_pin } = req.body;
 
     const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
     if (!t[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
-    if (!verifyPin(String(admin_pin), t[0].admin_pin)) return res.status(403).json({ error: "Falscher Admin-PIN" });
+
+    const byPlayer = admin_player_id && admin_player_pin && await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!byPlayer && !verifyPin(String(admin_pin), t[0].admin_pin)) return res.status(403).json({ error: "Falscher Admin-PIN" });
 
     const approved = await db.select().from(tourEntriesTable)
       .where(and(eq(tourEntriesTable.tournament_id, tournamentId), eq(tourEntriesTable.status, "approved")));
@@ -2183,12 +2216,13 @@ router.post("/tour/tournaments/:id/pending-registrations/:entryId/reject", async
   try {
     const tournamentId = parseInt(req.params.id);
     const entryId = parseInt(req.params.entryId);
-    const { admin_pin } = req.body;
-    if (!admin_pin) return res.status(400).json({ error: "admin_pin erforderlich" });
+    const { admin_pin, admin_player_id, admin_player_pin } = req.body;
 
     const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
     if (!t[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
-    if (!verifyPin(String(admin_pin), t[0].admin_pin)) return res.status(403).json({ error: "Falscher Admin-PIN" });
+
+    const byPlayer = admin_player_id && admin_player_pin && await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!byPlayer && !verifyPin(String(admin_pin), t[0].admin_pin)) return res.status(403).json({ error: "Falscher Admin-PIN" });
 
     const entry = await db.select({ player_id: tourEntriesTable.player_id }).from(tourEntriesTable).where(eq(tourEntriesTable.id, entryId)).limit(1);
 
@@ -2204,16 +2238,18 @@ router.post("/tour/tournaments/:id/pending-registrations/:entryId/reject", async
   }
 });
 
-// DELETE /tour/tournaments/:id/entries/:playerId — admin only (requires admin_pin in body)
+// DELETE /tour/tournaments/:id/entries/:playerId — admin only (requires admin_pin or admin_player auth)
 router.delete("/tour/tournaments/:id/entries/:playerId", async (req, res) => {
   try {
     const tournamentId = parseInt(req.params.id);
     const playerId = parseInt(req.params.playerId);
-    const { admin_pin } = req.body;
+    const { admin_pin, admin_player_id, admin_player_pin } = req.body;
 
     const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
     if (!t[0]) return res.status(404).json({ error: "Turnier nicht gefunden" });
-    if (!admin_pin || !verifyPin(String(admin_pin), t[0].admin_pin)) {
+
+    const byPlayer = admin_player_id && admin_player_pin && await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!byPlayer && (!admin_pin || !verifyPin(String(admin_pin), t[0].admin_pin))) {
       return res.status(403).json({ error: "Falscher Admin-PIN" });
     }
     if (t[0].status !== "offen") return res.status(400).json({ error: "Turnier ist bereits gestartet" });

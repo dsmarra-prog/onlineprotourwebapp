@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import { Calendar, CheckCircle2, Clock, Trophy, Zap, Star, ChevronRight, PlusCircle, Lock } from "lucide-react";
+import { Calendar, CheckCircle2, Clock, Trophy, Zap, Star, ChevronRight, PlusCircle } from "lucide-react";
 import { useState } from "react";
+import { usePlayer } from "@/context/PlayerContext";
 
 type ScheduleEntry = {
   id: number;
@@ -83,17 +84,17 @@ function parseDatum(datum: string): Date {
 
 export default function SpielplanPage() {
   const qc = useQueryClient();
+  const { currentPlayer, sessionPin } = usePlayer();
   const { data: schedule, isLoading } = useQuery<ScheduleEntry[]>({
     queryKey: ["schedule"],
     queryFn: () => apiFetch("/tour/schedule"),
   });
 
-  const [adminPin, setAdminPin] = useState("");
   const [showSeedPanel, setShowSeedPanel] = useState(false);
 
   const seedTournamentsMutation = useMutation({
-    mutationFn: (pin: string) =>
-      apiFetch("/tour/tournaments/seed-from-schedule", { method: "POST", body: JSON.stringify({ admin_pin: pin }) }),
+    mutationFn: () =>
+      apiFetch("/tour/tournaments/seed-from-schedule", { method: "POST", body: JSON.stringify({ admin_player_id: currentPlayer?.id, admin_player_pin: sessionPin }) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tournaments"] });
     },
@@ -157,28 +158,18 @@ export default function SpielplanPage() {
       {showSeedPanel && (
         <div className="bg-card border border-border rounded-xl p-4">
           <h2 className="font-semibold text-sm mb-3 flex items-center gap-2">
-            <Lock className="w-4 h-4 text-primary" /> Anstehende Turniere aus Kalender anlegen
+            <PlusCircle className="w-4 h-4 text-primary" /> Anstehende Turniere aus Kalender anlegen
           </h2>
           <p className="text-xs text-muted-foreground mb-4">
             Legt alle noch nicht vorhandenen "upcoming" Turniere aus dem Spielplan in der Datenbank an, sodass Spieler sich registrieren können.
           </p>
           <div className="flex gap-2 items-end">
-            <div className="flex-1">
-              <label className="text-xs text-muted-foreground block mb-1">Admin-PIN</label>
-              <input
-                type="password"
-                value={adminPin}
-                onChange={(e) => setAdminPin(e.target.value)}
-                placeholder="Admin-PIN eingeben"
-                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary"
-              />
-            </div>
             <button
-              onClick={() => { if (adminPin) seedTournamentsMutation.mutate(adminPin); }}
-              disabled={!adminPin || seedTournamentsMutation.isPending}
+              onClick={() => seedTournamentsMutation.mutate()}
+              disabled={seedTournamentsMutation.isPending}
               className="px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
-              Anlegen
+              {seedTournamentsMutation.isPending ? "Wird angelegt..." : "Anlegen"}
             </button>
           </div>
           {seedTournamentsMutation.data && (

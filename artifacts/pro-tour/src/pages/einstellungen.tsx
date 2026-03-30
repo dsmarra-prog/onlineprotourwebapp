@@ -18,9 +18,8 @@ type TourPlayer = { id: number; name: string; autodarts_username: string; oom_na
 function AdminOomNamesPanel() {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const { currentPlayer } = usePlayer();
+  const { currentPlayer, sessionPin } = usePlayer();
   const [open, setOpen] = useState(false);
-  const [adminPin, setAdminPin] = useState("");
   const [editing, setEditing] = useState<Record<number, string>>({});
 
   const { data: players, refetch } = useQuery<TourPlayer[]>({
@@ -37,7 +36,7 @@ function AdminOomNamesPanel() {
         body: JSON.stringify({
           oom_name,
           admin_player_id: currentPlayer?.id,
-          admin_player_pin: adminPin,
+          admin_player_pin: sessionPin,
         }),
       }),
     onSuccess: (d, vars) => {
@@ -68,16 +67,6 @@ function AdminOomNamesPanel() {
           <p className="text-xs text-muted-foreground">
             Wenn ein Spieler bei der OOM unter einem anderen Namen (z.B. Discord-Name) geführt wird, trage ihn hier ein. Felder leer lassen = Autodarts-Username wird verwendet.
           </p>
-          <div className="space-y-1">
-            <Label className="text-xs">Dein Admin-PIN</Label>
-            <Input
-              type="password"
-              value={adminPin}
-              onChange={(e) => setAdminPin(e.target.value)}
-              placeholder="••••"
-              className="h-8 text-sm max-w-[140px]"
-            />
-          </div>
           <div className="space-y-2">
             {players?.map((p) => {
               const val = editing[p.id] ?? (p.oom_name ?? "");
@@ -98,7 +87,7 @@ function AdminOomNamesPanel() {
                     size="sm"
                     variant="outline"
                     className={`h-7 text-xs px-2 ${changed ? "border-primary/50 text-primary" : "opacity-40"}`}
-                    disabled={!changed || !adminPin || adminPin.length < 4 || saveMut.isPending}
+                    disabled={!changed || saveMut.isPending}
                     onClick={() => saveMut.mutate({ id: p.id, oom_name: val })}
                   >
                     {saveMut.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
@@ -202,17 +191,16 @@ function AdminPanel() {
 
 export default function EinstellungenPage() {
   const { toast } = useToast();
-  const { currentPlayer, logout } = usePlayer();
+  const { currentPlayer, sessionPin, logout } = usePlayer();
   const queryClient = useQueryClient();
 
   // ── Admin token section ──────────────────────────────────────────────────
-  const [tokenForm, setTokenForm] = useState({ pin: "", refresh_token: "" });
+  const [tokenForm, setTokenForm] = useState({ refresh_token: "" });
   const [tokenSectionOpen, setTokenSectionOpen] = useState(false);
 
   // ── Discord settings ─────────────────────────────────────────────────────
   const [discordOpen, setDiscordOpen] = useState(false);
   const [discordForm, setDiscordForm] = useState({
-    admin_pin: "",
     webhook_url: "",
     bot_token: "",
     channel_id: "",
@@ -234,12 +222,12 @@ export default function EinstellungenPage() {
     mutationFn: () =>
       apiFetch<{ ok: boolean }>("/tour/admin/discord-settings", {
         method: "POST",
-        body: JSON.stringify(discordForm),
+        body: JSON.stringify({ ...discordForm, admin_player_id: currentPlayer?.id, admin_player_pin: sessionPin }),
       }),
     onSuccess: () => {
       toast({ title: "Discord gespeichert", description: "Einstellungen wurden aktualisiert." });
       queryClient.invalidateQueries({ queryKey: ["discord-settings"] });
-      setDiscordForm((f) => ({ ...f, admin_pin: "", bot_token: "" }));
+      setDiscordForm((f) => ({ ...f, bot_token: "" }));
     },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
@@ -248,7 +236,7 @@ export default function EinstellungenPage() {
     mutationFn: () =>
       apiFetch<{ ok: boolean }>("/tour/admin/discord-test", {
         method: "POST",
-        body: JSON.stringify({ admin_pin: discordForm.admin_pin }),
+        body: JSON.stringify({ admin_player_id: currentPlayer?.id, admin_player_pin: sessionPin }),
       }),
     onSuccess: () => toast({ title: "Testnachricht gesendet!", description: "Schau in deinen Discord-Channel." }),
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
@@ -269,17 +257,17 @@ export default function EinstellungenPage() {
     mutationFn: () =>
       apiFetch<{ ok: boolean; message: string }>("/tour/admin/autodarts-token", {
         method: "POST",
-        body: JSON.stringify({ pin: tokenForm.pin, refresh_token: tokenForm.refresh_token.trim() }),
+        body: JSON.stringify({ pin: sessionPin, refresh_token: tokenForm.refresh_token.trim() }),
       }),
     onSuccess: (data) => {
       toast({ title: "Token aktualisiert", description: data.message });
-      setTokenForm({ pin: "", refresh_token: "" });
+      setTokenForm({ refresh_token: "" });
       setTokenSectionOpen(false);
     },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
-  const canUpdateToken = tokenForm.pin.length >= 4 && tokenForm.refresh_token.trim().length > 20;
+  const canUpdateToken = tokenForm.refresh_token.trim().length > 20;
 
   // ── Push Notifications ───────────────────────────────────────────────────
   const [pushPin, setPushPin] = useState("");
@@ -672,18 +660,6 @@ export default function EinstellungenPage() {
             </div>
 
             <div className="space-y-1">
-              <Label className="flex items-center gap-1.5 text-xs">
-                <ShieldCheck className="w-3 h-3" /> Admin-PIN
-              </Label>
-              <Input
-                type="password"
-                placeholder="Admin-PIN"
-                value={discordForm.admin_pin}
-                onChange={(e) => setDiscordForm((f) => ({ ...f, admin_pin: e.target.value }))}
-              />
-            </div>
-
-            <div className="space-y-1">
               <Label className="text-xs">Webhook-URL <span className="text-muted-foreground font-normal">(für Benachrichtigungen)</span></Label>
               <Input
                 type="url"
@@ -727,7 +703,7 @@ export default function EinstellungenPage() {
             <div className="flex gap-2">
               <Button
                 className="flex-1"
-                disabled={discordForm.admin_pin.length < 4 || discordSaveMut.isPending}
+                disabled={discordSaveMut.isPending}
                 onClick={() => discordSaveMut.mutate()}
               >
                 {discordSaveMut.isPending ? (
@@ -739,7 +715,7 @@ export default function EinstellungenPage() {
               </Button>
               <Button
                 variant="outline"
-                disabled={discordForm.admin_pin.length < 4 || !discordStatus?.webhook_url || discordTestMut.isPending}
+                disabled={!discordStatus?.webhook_url || discordTestMut.isPending}
                 onClick={() => discordTestMut.mutate()}
                 title="Testnachricht senden"
               >
@@ -773,18 +749,6 @@ export default function EinstellungenPage() {
               Der globale Token ist der Fallback für alle Spieler ohne eigene Verbindung.
               Nur nötig falls kein Spieler seinen Account verbunden hat.
             </p>
-
-            <div className="space-y-1">
-              <Label className="flex items-center gap-1.5">
-                <ShieldCheck className="w-3 h-3" /> Admin-PIN
-              </Label>
-              <Input
-                type="password"
-                value={tokenForm.pin}
-                onChange={(e) => setTokenForm((f) => ({ ...f, pin: e.target.value }))}
-                placeholder="Admin-PIN eingeben"
-              />
-            </div>
 
             <div className="space-y-1">
               <Label>Autodarts Refresh Token</Label>

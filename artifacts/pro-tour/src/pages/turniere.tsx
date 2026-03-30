@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Plus, Trophy, Calendar, Users, Lock, Loader2, Zap } from "lucide-react";
+import { Plus, Trophy, Calendar, Users, Loader2, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -9,11 +9,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch, TourTournament, TYP_LABELS } from "@/lib/api";
+import { usePlayer } from "@/context/PlayerContext";
 
 export default function TourniereListe() {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const qc = useQueryClient();
+  const { currentPlayer, sessionPin } = usePlayer();
 
   const { data: tournaments, isLoading } = useQuery<TourTournament[]>({
     queryKey: ["tournaments"],
@@ -28,7 +30,6 @@ export default function TourniereListe() {
     uhrzeit: "19:00",
     legs_format: "5",
     max_players: "32",
-    admin_pin: "",
     is_test: false,
   });
 
@@ -49,12 +50,14 @@ export default function TourniereListe() {
           legs_format: parseInt(form.legs_format),
           max_players: parseInt(form.max_players),
           is_test: form.is_test,
+          admin_player_id: currentPlayer?.id,
+          admin_player_pin: sessionPin,
         }),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tournaments"] });
       setOpen(false);
-      setForm({ name: "", typ: "pc", tour_type: "pro", datum: new Date().toISOString().slice(0, 10), uhrzeit: "19:00", legs_format: "5", max_players: "32", admin_pin: "", is_test: false });
+      setForm({ name: "", typ: "pc", tour_type: "pro", datum: new Date().toISOString().slice(0, 10), uhrzeit: "19:00", legs_format: "5", max_players: "32", is_test: false });
       toast({ title: "Turnier erstellt" });
     },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
@@ -156,10 +159,6 @@ export default function TourniereListe() {
                   </Select>
                 </div>
               </div>
-              <div className="space-y-1">
-                <Label className="flex items-center gap-1"><Lock className="w-3 h-3" /> Admin-PIN (für Verwaltung)</Label>
-                <Input type="password" value={form.admin_pin} onChange={(e) => setForm((f) => ({ ...f, admin_pin: e.target.value }))} placeholder="PIN festlegen" />
-              </div>
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -169,7 +168,7 @@ export default function TourniereListe() {
                 />
                 <span className="text-sm text-muted-foreground">Testturnier (keine OOM-Punkte)</span>
               </label>
-              <Button className="w-full" onClick={() => createMut.mutate()} disabled={createMut.isPending || !form.name || !form.admin_pin}>
+              <Button className="w-full" onClick={() => createMut.mutate()} disabled={createMut.isPending || !form.name}>
                 {createMut.isPending ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Erstellen...</> : "Turnier erstellen"}
               </Button>
             </div>

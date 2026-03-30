@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, Link, useLocation } from "wouter";
 import {
-  ArrowLeft, Play, UserPlus, UserMinus, Check, Loader2, Lock, Target,
+  ArrowLeft, Play, UserPlus, UserMinus, Check, Loader2, Target,
   Zap, Radio, CheckCircle2, Search, MonitorPlay, ExternalLink, Activity,
   TrendingUp, X, Trash2, Clock, ThumbsUp, ThumbsDown, Bell,
 } from "lucide-react";
@@ -161,8 +161,7 @@ export default function TurnierDetail() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const qc = useQueryClient();
-  const { currentPlayer } = usePlayer();
-  const [adminPin, setAdminPin] = useState("");
+  const { currentPlayer, sessionPin } = usePlayer();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [resultOpen, setResultOpen] = useState<number | null>(null);
   const [liveModalMatch, setLiveModalMatch] = useState<number | null>(null);
@@ -232,11 +231,8 @@ export default function TurnierDetail() {
     prevSyncedRef.current = syncResult.synced;
   }, [syncResult]);
 
-  // Helper: build auth body based on whether current player is admin
-  const adminAuth = () =>
-    currentPlayer?.is_admin
-      ? { admin_player_id: currentPlayer.id, admin_player_pin: adminPin }
-      : { admin_pin: adminPin };
+  // Helper: build auth body using session credentials
+  const adminAuth = () => ({ admin_player_id: currentPlayer?.id, admin_player_pin: sessionPin });
 
   // Mutations
   const startMut = useMutation({
@@ -436,41 +432,20 @@ export default function TurnierDetail() {
         </div>
       )}
 
-      {/* Admin PIN */}
-      <div className="bg-card border border-border rounded-xl p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <Lock className="w-4 h-4 text-muted-foreground" />
-          <span className="text-sm font-medium">
-            {currentPlayer?.is_admin ? "Dein PIN (Admin-Zugang)" : "Admin-PIN (für manuelle Eingabe)"}
-          </span>
-          {currentPlayer?.is_admin && (
-            <span className="ml-1 text-xs px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30 font-semibold">Admin</span>
-          )}
+      {/* Admin delete button */}
+      {currentPlayer?.is_admin && (
+        <div className="flex justify-end">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-red-400 hover:text-red-300 hover:bg-red-400/10 border border-red-400/30 gap-1.5"
+            onClick={() => setDeleteOpen(true)}
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Turnier löschen
+          </Button>
         </div>
-        <div className="flex items-center gap-3">
-          <Input
-            type="password"
-            value={adminPin}
-            onChange={(e) => setAdminPin(e.target.value)}
-            placeholder={currentPlayer?.is_admin ? "Dein Spieler-PIN" : "Turnier-Admin-PIN"}
-            className="max-w-xs"
-          />
-          {adminPin && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-red-400 hover:text-red-300 hover:bg-red-400/10 border border-red-400/30 gap-1.5"
-              onClick={() => setDeleteOpen(true)}
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              Turnier löschen
-            </Button>
-          )}
-        </div>
-        {currentPlayer?.is_admin && (
-          <p className="text-xs text-muted-foreground mt-2">Als Admin kannst du alle Turniere verwalten — gib einfach deinen eigenen PIN ein.</p>
-        )}
-      </div>
+      )}
 
       {/* Delete confirmation dialog */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
@@ -662,7 +637,7 @@ export default function TurnierDetail() {
             <h2 className="font-semibold text-sm">Gemeldete Spieler ({players.length}/{tournament.max_players})</h2>
             <div className="flex gap-2">
               {/* Admin: add player */}
-              {adminPin && (
+              {currentPlayer?.is_admin && (
                 <Dialog open={addPlayerOpen} onOpenChange={setAddPlayerOpen}>
                   <DialogTrigger asChild>
                     <Button size="sm" variant="outline" className="gap-1.5">
@@ -691,7 +666,7 @@ export default function TurnierDetail() {
               <Button
                 size="sm"
                 onClick={() => startMut.mutate()}
-                disabled={startMut.isPending || players.length < 2 || !adminPin}
+                disabled={startMut.isPending || players.length < 2}
               >
                 {startMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Play className="w-3.5 h-3.5 mr-1" />Turnier starten</>}
               </Button>
@@ -713,8 +688,8 @@ export default function TurnierDetail() {
                     <span className="text-[10px] text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-1.5 py-0.5 rounded-full font-medium">Ausstehend</span>
                   )}
                 </div>
-                {/* Admin-only remove button — only visible when admin PIN is entered */}
-                {adminPin && (
+                {/* Admin-only remove button */}
+                {currentPlayer?.is_admin && (
                   <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-300"
                     onClick={() => removePlayerMut.mutate(p.player_id)}
                     disabled={removePlayerMut.isPending}
@@ -726,9 +701,6 @@ export default function TurnierDetail() {
             ))}
             {players.length === 0 && <p className="text-muted-foreground text-sm text-center py-2">Noch keine Spieler gemeldet</p>}
           </div>
-          {!adminPin && players.length > 0 && (
-            <p className="text-xs text-muted-foreground mt-3 text-center">Admin-PIN eingeben um Spieler zu entfernen oder das Turnier zu starten.</p>
-          )}
         </div>
       )}
 
