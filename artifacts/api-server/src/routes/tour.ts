@@ -636,50 +636,150 @@ const OOM_SEED_DATA = [
   { season: 1, rank: 119, autodarts_username: "zorax0681", total_points: 25, bonus_points: 0, tournaments_played: 1, tournament_breakdown: "{\"PC4\":25}", last_updated: "26.03.2026" },
 ];
 
-// GET /tour/oom - imported OOM standings
+// GET /tour/oom - Pro OOM: historische Basis + automatisch neue App-Turniere
 router.get("/tour/oom", async (_req, res) => {
   try {
-    const standings = await db
+    // 1. Historische Basis aus tour_oom_standings (PC1–PC8, Spring Open etc.)
+    const historicalStandings = await db
       .select()
       .from(tourOomStandingsTable)
       .orderBy(tourOomStandingsTable.rank);
 
-    if (standings.length === 0) {
-      return res.json([]);
+    type ProPlayerEntry = {
+      player_id: number;
+      player_name: string;
+      total_points: number;
+      bonus_total: number;
+      breakdown: Record<string, number>;
+      results: { tournament_id: number; tournament_name: string; typ: string; points: number; bonus: number; round: string }[];
+    };
+    const playerMap = new Map<string, ProPlayerEntry>();
+    const historicalTournamentNames = new Set<string>();
+
+    for (const s of historicalStandings) {
+      // Breakdown kann als Objekt {name: pts} oder Array [{t,p}] gespeichert sein
+      const raw = JSON.parse(s.tournament_breakdown || "{}");
+      const breakdownEntries: [string, number][] = Array.isArray(raw)
+        ? raw.map((x: { t: string; p: number }) => [x.t, x.p] as [string, number])
+        : Object.entries(raw as Record<string, number>);
+
+      const breakdown: Record<string, number> = Object.fromEntries(breakdownEntries);
+      for (const name of Object.keys(breakdown)) historicalTournamentNames.add(name);
+
+      const results = breakdownEntries
+        .filter(([, pts]) => pts > 0)
+        .map(([name, pts]) => ({
+          tournament_id: 0,
+          tournament_name: name,
+          typ: "pc",
+          points: pts,
+          bonus: 0,
+          round: ptsToBestRound(pts, "pc"),
+        }));
+
+      playerMap.set(s.autodarts_username, {
+        player_id: 0,
+        player_name: s.autodarts_username,
+        total_points: s.total_points ?? 0,
+        bonus_total: s.bonus_points ?? 0,
+        breakdown,
+        results,
+      });
     }
 
-    // Format for OOM page
-    const result = standings.map((s) => {
-      const breakdown = JSON.parse(s.tournament_breakdown || "{}");
-      const results = Object.entries(breakdown).map(([name, points]) => ({
-        tournament_name: name,
-        points: points as number,
-      }));
+    // 2. Neue abgeschlossene Pro-Turniere aus der App-DB (nicht Testläufe)
+    const appProTournaments = await db
+      .select()
+      .from(tourTournamentsTable)
+      .where(and(
+        eq(tourTournamentsTable.status, "abgeschlossen"),
+        eq(tourTournamentsTable.tour_type, "pro"),
+        eq(tourTournamentsTable.is_test, false),
+      ));
 
-      // Determine best result from breakdown
-      const maxPts = Math.max(0, ...results.map((r) => r.points));
-      const bestResult = ptsToBestRound(maxPts);
+    const newTournaments = appProTournaments.filter((t) => !historicalTournamentNames.has(t.name));
 
-      return {
-        rank: s.rank,
-        player_id: s.id,
-        player_name: s.autodarts_username,
-        autodarts_username: s.autodarts_username,
-        total_points: s.total_points,
-        bonus_total: s.bonus_points,
-        tournaments_played: s.tournaments_played,
-        best_result: bestResult,
-        last_updated: s.last_updated,
-        results: results.map((r) => ({
-          tournament_id: 0,
-          tournament_name: r.tournament_name,
-          typ: "pc",
-          points: r.points,
-          bonus: 0,
-          round: ptsToBestRound(r.points),
-        })),
-      };
-    });
+    if (newTournaments.length > 0) {
+      const allMatches = await db.select().from(tourMatchesTable);
+      const allPlayers = await db.select().from(tourPlayersTable);
+      const allBonus = await db.select().from(tourBonusPointsTable);
+      const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
+
+      for (const t of newTournaments) {
+        const tMatches = allMatches.filter((m) => m.tournament_id === t.id);
+
+        const participantIds = new Set<number>();
+        for (const m of tMatches) {
+          if (m.player1_id) participantIds.add(m.player1_id);
+          if (m.player2_id) participantIds.add(m.player2_id);
+        }
+
+        for (const playerId of participantIds) {
+          const player = allPlayers.find((p) => p.id === playerId);
+          if (!player) continue;
+
+          const playerMatches = tMatches.filter(
+            (m) => (m.player1_id === playerId || m.player2_id === playerId)
+              && m.status === "abgeschlossen" && !m.is_bye
+          );
+
+          let roundKey: string;
+          if (playerMatches.length === 0) {
+            roundKey = "Teilnahme";
+          } else {
+            const deepest = playerMatches.sort(
+              (a, b) => roundOrder.indexOf(b.runde) - roundOrder.indexOf(a.runde)
+            )[0];
+            const isWinner = deepest.runde === "F" && deepest.winner_id === playerId;
+            roundKey = isWinner ? "Sieger" : roundToOomKey(deepest.runde);
+          }
+
+          const points = OOM_POINTS[t.typ]?.[roundKey] ?? 0;
+          const bonus = allBonus
+            .filter((b) => b.player_id === playerId && b.tournament_id === t.id)
+            .reduce((s, b) => s + b.points, 0);
+
+          const username = player.autodarts_username;
+          const existing = playerMap.get(username) ?? {
+            player_id: player.id,
+            player_name: player.name,
+            total_points: 0, bonus_total: 0, breakdown: {}, results: [],
+          };
+          existing.total_points += points + bonus;
+          existing.bonus_total += bonus;
+          existing.breakdown[t.name] = points;
+          existing.results.push({
+            tournament_id: t.id,
+            tournament_name: t.name,
+            typ: t.typ,
+            points,
+            bonus,
+            round: roundKey,
+          });
+          playerMap.set(username, existing);
+        }
+      }
+    }
+
+    // 3. Sortieren, ranken, zurückgeben
+    const result = Array.from(playerMap.entries())
+      .filter(([, d]) => d.total_points > 0)
+      .sort((a, b) => b[1].total_points - a[1].total_points)
+      .map(([username, data], i) => {
+        const maxPts = Math.max(0, ...data.results.map((r) => r.points));
+        return {
+          rank: i + 1,
+          player_id: data.player_id,
+          player_name: data.player_name || username,
+          autodarts_username: username,
+          total_points: data.total_points,
+          bonus_total: data.bonus_total,
+          tournaments_played: data.results.filter((r) => r.points > 0).length,
+          best_result: ptsToBestRound(maxPts, "pc"),
+          last_updated: "",
+          results: data.results,
+        };
+      });
 
     res.json(result);
   } catch (e) {
@@ -687,22 +787,12 @@ router.get("/tour/oom", async (_req, res) => {
   }
 });
 
-function ptsToBestRound(pts: number): string {
-  if (pts >= 1500) return "Sieger";
-  if (pts >= 900) return "Finale";
-  if (pts >= 600) return "Sieger";
-  if (pts >= 400) return "Sieger";
-  if (pts >= 375) return "Halbfinale";
-  if (pts >= 300) return "Finale";
-  if (pts >= 250) return "Viertelfinale";
-  if (pts >= 225) return "Halbfinale";
-  if (pts >= 200) return "Halbfinale";
-  if (pts >= 150) return "Achtelfinale";
-  if (pts >= 125) return "Letzte 32";
-  if (pts >= 100) return "Teilnahme";
-  if (pts >= 75) return "Letzte 32";
-  if (pts >= 50) return "Teilnahme";
-  if (pts >= 25) return "Teilnahme";
+function ptsToBestRound(pts: number, typ = "pc"): string {
+  const table = OOM_POINTS[typ] ?? OOM_POINTS.pc;
+  const rounds = ["Sieger", "Finale", "Halbfinale", "Viertelfinale", "Achtelfinale", "Letzte 32", "Teilnahme"];
+  for (const round of rounds) {
+    if (pts >= (table[round] ?? 0)) return round;
+  }
   return "Teilnahme";
 }
 
@@ -2513,77 +2603,6 @@ router.get("/tour/bonus/:tournamentId", async (req, res) => {
   }
 });
 
-// ─── OOM Route ────────────────────────────────────────────────────────────────
-
-// GET /tour/oom
-router.get("/tour/oom", async (_req, res) => {
-  try {
-    const players = await db.select().from(tourPlayersTable);
-    const tournaments = await db.select().from(tourTournamentsTable)
-      .where(and(eq(tourTournamentsTable.status, "abgeschlossen"), eq(tourTournamentsTable.is_test, false)))
-      .orderBy(tourTournamentsTable.datum);
-    const allMatches = await db.select().from(tourMatchesTable);
-    const allBonus = await db.select().from(tourBonusPointsTable);
-
-    const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
-
-    const oomData = players.map((player) => {
-      const results: any[] = [];
-
-      for (const t of tournaments) {
-        const tMatches = allMatches.filter((m) => m.tournament_id === t.id);
-        const playerMatches = tMatches.filter(
-          (m) => (m.player1_id === player.id || m.player2_id === player.id) && m.status === "abgeschlossen" && !m.is_bye
-        );
-        if (playerMatches.length === 0) continue;
-
-        const deepest = playerMatches.sort(
-          (a, b) => roundOrder.indexOf(b.runde) - roundOrder.indexOf(a.runde)
-        )[0];
-
-        const isWinner = deepest.runde === "F" && deepest.winner_id === player.id;
-        const roundKey = isWinner ? "Sieger" : roundToOomKey(deepest.runde);
-        const points = OOM_POINTS[t.typ]?.[roundKey] ?? 0;
-
-        // Bonus points for this tournament
-        const bonusForTournament = allBonus
-          .filter((b) => b.player_id === player.id && b.tournament_id === t.id)
-          .reduce((s, b) => s + b.points, 0);
-
-        results.push({
-          tournament_id: t.id,
-          tournament_name: t.name,
-          typ: t.typ,
-          points,
-          bonus: bonusForTournament,
-          round: roundKey,
-        });
-      }
-
-      const totalPoints = results.reduce((s, r) => s + r.points + r.bonus, 0);
-
-      return {
-        player_id: player.id,
-        player_name: player.name,
-        autodarts_username: player.autodarts_username,
-        total_points: totalPoints,
-        bonus_total: results.reduce((s, r) => s + r.bonus, 0),
-        tournaments_played: results.length,
-        best_result: results.length > 0
-          ? results.sort((a, b) => b.points - a.points)[0].round
-          : "-",
-        results,
-      };
-    }).filter((p) => p.tournaments_played > 0);
-
-    oomData.sort((a, b) => b.total_points - a.total_points);
-    const ranked = oomData.map((p, i) => ({ rank: i + 1, ...p }));
-
-    res.json(ranked);
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
 
 // POST /tour/admin/verify
 router.post("/tour/admin/verify", async (req, res) => {
