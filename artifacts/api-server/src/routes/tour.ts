@@ -63,23 +63,35 @@ const OOM_POINTS: Record<string, Record<string, number>> = {
     "Letzte 32": 150,
     Teilnahme: 100,
   },
+  // Development Cup (DC1–DC6 und weitere): gleiche Struktur wie PC
   dev_cup: {
-    Sieger: 500,
-    Finale: 300,
-    Halbfinale: 200,
-    Viertelfinale: 125,
-    Achtelfinale: 75,
-    "Letzte 32": 40,
-    Teilnahme: 15,
-  },
-  dev_major: {
-    Sieger: 750,
-    Finale: 450,
-    Halbfinale: 300,
-    Viertelfinale: 188,
-    Achtelfinale: 113,
-    "Letzte 32": 60,
+    Sieger: 1000,
+    Finale: 600,
+    Halbfinale: 400,
+    Viertelfinale: 250,
+    Achtelfinale: 150,
+    "Letzte 32": 75,
     Teilnahme: 25,
+  },
+  // Dev Pre-Finals (April Major, May Major): gleiche Struktur wie M1
+  dev_major: {
+    Sieger: 1500,
+    Finale: 900,
+    Halbfinale: 600,
+    Viertelfinale: 375,
+    Achtelfinale: 225,
+    "Letzte 32": 125,
+    Teilnahme: 50,
+  },
+  // Dev Grand Final: gleiche Struktur wie M2
+  dev_final: {
+    Sieger: 2000,
+    Finale: 1200,
+    Halbfinale: 800,
+    Viertelfinale: 500,
+    Achtelfinale: 300,
+    "Letzte 32": 150,
+    Teilnahme: 100,
   },
 };
 
@@ -141,7 +153,7 @@ const SEASON1_SCHEDULE = [
   // Major 3 – Home Matchplay
   { phase: "Major 3 – Home Matchplay", phase_order: 10, tour_type: "pro", kategorie: "m2", event_name: "Home Matchplay", datum: "10.05.2026", tag: "SO", uhrzeit: "17:00", mode: "Sets", qualification: "Top 32 OoM", status: "upcoming", external_id: 25 },
   // Dev Tour Finals
-  { phase: "Development Tour – Grand Final", phase_order: 11, tour_type: "development", kategorie: "dev_major", event_name: "Grand Final", datum: "24.05.2026", tag: "SO", uhrzeit: "18:00", mode: "Bo7", qualification: "Top 16 OoM", status: "upcoming", external_id: 24 },
+  { phase: "Development Tour – Grand Final", phase_order: 11, tour_type: "development", kategorie: "dev_final", event_name: "Grand Final", datum: "24.05.2026", tag: "SO", uhrzeit: "18:00", mode: "Bo7", qualification: "Top 16 OoM", status: "upcoming", external_id: 24 },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -712,92 +724,147 @@ router.post("/tour/oom/seed", async (_req, res) => {
 // GET /tour/dev-oom - Development Tour OOM standings (imported)
 router.get("/tour/dev-oom", async (_req, res) => {
   try {
-    const standings = await db
+    // 1. Historische Basis aus tour_dev_oom_standings (DC1–DC6 manuell importiert)
+    const historicalStandings = await db
       .select()
       .from(tourDevOomStandingsTable)
       .orderBy(tourDevOomStandingsTable.rank);
 
-    if (standings.length > 0) {
-      const result = standings.map((s) => {
-        const breakdown = JSON.parse(s.tournament_breakdown || "{}");
-        const results = Object.entries(breakdown).map(([name, points]) => ({
+    // Spieler-Map aufbauen: autodarts_username -> { points, bonus, breakdown, results }
+    type PlayerEntry = {
+      total_points: number;
+      bonus_points: number;
+      breakdown: Record<string, number>;   // tournamentName -> points
+      results: { tournament_id: number; tournament_name: string; typ: string; points: number; bonus: number; round: string }[];
+    };
+    const playerMap = new Map<string, PlayerEntry>();
+    const historicalTournamentNames = new Set<string>();
+
+    for (const s of historicalStandings) {
+      // Breakdown kann als Array [{t, p}] oder als Objekt {name: pts} gespeichert sein
+      const raw = JSON.parse(s.tournament_breakdown || "[]");
+      const breakdownEntries: [string, number][] = Array.isArray(raw)
+        ? raw.map((x: { t: string; p: number }) => [x.t, x.p] as [string, number])
+        : Object.entries(raw as Record<string, number>);
+
+      const breakdown: Record<string, number> = Object.fromEntries(breakdownEntries);
+      for (const name of Object.keys(breakdown)) historicalTournamentNames.add(name);
+
+      const results = breakdownEntries
+        .filter(([, pts]) => pts > 0)
+        .map(([name, pts]) => ({
+          tournament_id: 0,
           tournament_name: name,
-          points: points as number,
+          typ: "dev_cup",
+          points: pts,
+          bonus: 0,
+          round: devPtsToBestRound(pts, "dev_cup"),
         }));
-        return {
-          rank: s.rank,
-          player_id: s.id,
-          player_name: s.autodarts_username,
-          autodarts_username: s.autodarts_username,
-          total_points: s.total_points,
-          bonus_total: s.bonus_points,
-          tournaments_played: s.tournaments_played,
-          last_updated: s.last_updated,
-          results: results.map((r) => ({
-            tournament_id: 0,
-            tournament_name: r.tournament_name,
-            typ: "dev_cup",
-            points: r.points,
-            bonus: 0,
-            round: devPtsToBestRound(r.points),
-          })),
-        };
+      playerMap.set(s.autodarts_username, {
+        total_points: s.total_points ?? 0,
+        bonus_points: s.bonus_points ?? 0,
+        breakdown,
+        results,
       });
-      return res.json(result);
     }
 
-    // Fallback: calculate live from DB tournaments (tour_type = "development")
-    const players = await db.select().from(tourPlayersTable);
-    const devTournaments = await db.select().from(tourTournamentsTable)
-      .where(and(eq(tourTournamentsTable.status, "abgeschlossen"), eq(tourTournamentsTable.is_test, false)));
-    const devTs = devTournaments.filter((t) => t.tour_type === "development");
+    // 2. Neue abgeschlossene Dev-Turniere aus der App-DB finden
+    const appDevTournaments = await db
+      .select()
+      .from(tourTournamentsTable)
+      .where(and(
+        eq(tourTournamentsTable.status, "abgeschlossen"),
+        eq(tourTournamentsTable.tour_type, "development"),
+        eq(tourTournamentsTable.is_test, false),
+      ));
 
-    if (devTs.length === 0) {
-      return res.json([]);
-    }
+    // Nur Turniere die noch NICHT in den historischen Daten sind
+    const newTournaments = appDevTournaments.filter((t) => !historicalTournamentNames.has(t.name));
 
-    const allMatches = await db.select().from(tourMatchesTable);
-    const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
+    if (newTournaments.length > 0) {
+      const allMatches = await db.select().from(tourMatchesTable);
+      const allPlayers = await db.select().from(tourPlayersTable);
+      const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
 
-    const oomData = players.map((player) => {
-      const results: any[] = [];
-      for (const t of devTs) {
+      for (const t of newTournaments) {
         const tMatches = allMatches.filter((m) => m.tournament_id === t.id);
-        const playerMatches = tMatches.filter(
-          (m) => (m.player1_id === player.id || m.player2_id === player.id) && m.status === "abgeschlossen" && !m.is_bye
-        );
-        if (playerMatches.length === 0) continue;
-        const deepest = playerMatches.sort(
-          (a, b) => roundOrder.indexOf(b.runde) - roundOrder.indexOf(a.runde)
-        )[0];
-        const isWinner = deepest.runde === "F" && deepest.winner_id === player.id;
-        const roundKey = isWinner ? "Sieger" : roundToOomKey(deepest.runde);
-        const points = OOM_POINTS[t.typ]?.[roundKey] ?? 0;
-        results.push({ tournament_id: t.id, tournament_name: t.name, typ: t.typ, points, bonus: 0, round: roundKey });
-      }
-      const totalPoints = results.reduce((s, r) => s + r.points, 0);
-      return { player_id: player.id, player_name: player.name, autodarts_username: player.autodarts_username, total_points: totalPoints, bonus_total: 0, tournaments_played: results.length, best_result: "-", results };
-    }).filter((p) => p.tournaments_played > 0);
 
-    oomData.sort((a, b) => b.total_points - a.total_points);
-    res.json(oomData.map((p, i) => ({ rank: i + 1, ...p })));
+        // Alle Teilnehmer des Turniers ermitteln
+        const participantIds = new Set<number>();
+        for (const m of tMatches) {
+          if (m.player1_id) participantIds.add(m.player1_id);
+          if (m.player2_id) participantIds.add(m.player2_id);
+        }
+
+        for (const playerId of participantIds) {
+          const player = allPlayers.find((p) => p.id === playerId);
+          if (!player) continue;
+
+          const playerMatches = tMatches.filter(
+            (m) => (m.player1_id === playerId || m.player2_id === playerId)
+              && m.status === "abgeschlossen" && !m.is_bye
+          );
+
+          let roundKey: string;
+          if (playerMatches.length === 0) {
+            roundKey = "Teilnahme";
+          } else {
+            const deepest = playerMatches.sort(
+              (a, b) => roundOrder.indexOf(b.runde) - roundOrder.indexOf(a.runde)
+            )[0];
+            const isWinner = deepest.runde === "F" && deepest.winner_id === playerId;
+            roundKey = isWinner ? "Sieger" : roundToOomKey(deepest.runde);
+          }
+
+          const points = OOM_POINTS[t.typ]?.[roundKey] ?? 0;
+          const username = player.autodarts_username;
+
+          const existing = playerMap.get(username) ?? {
+            total_points: 0, bonus_points: 0, breakdown: {}, results: [],
+          };
+          existing.total_points += points;
+          existing.breakdown[t.name] = points;
+          existing.results.push({
+            tournament_id: t.id,
+            tournament_name: t.name,
+            typ: t.typ,
+            points,
+            bonus: 0,
+            round: roundKey,
+          });
+          playerMap.set(username, existing);
+        }
+      }
+    }
+
+    // 3. Ergebnis sortieren und ranken
+    const result = Array.from(playerMap.entries())
+      .filter(([, d]) => d.total_points > 0)
+      .sort((a, b) => b[1].total_points - a[1].total_points)
+      .map(([username, data], i) => ({
+        rank: i + 1,
+        player_id: 0,
+        player_name: username,
+        autodarts_username: username,
+        total_points: data.total_points,
+        bonus_total: data.bonus_points,
+        tournaments_played: data.results.filter((r) => r.points > 0).length,
+        last_updated: "",
+        results: data.results,
+      }));
+
+    res.json(result);
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
 });
 
-function devPtsToBestRound(pts: number): string {
-  if (pts >= 750) return "Sieger";
-  if (pts >= 500) return "Sieger";
-  if (pts >= 450) return "Finale";
-  if (pts >= 300) return "Finale";
-  if (pts >= 188) return "Viertelfinale";
-  if (pts >= 200) return "Halbfinale";
-  if (pts >= 125) return "Viertelfinale";
-  if (pts >= 113) return "Achtelfinale";
-  if (pts >= 75) return "Achtelfinale";
-  if (pts >= 60) return "Letzte 32";
-  if (pts >= 40) return "Letzte 32";
+function devPtsToBestRound(pts: number, typ = "dev_cup"): string {
+  const table = OOM_POINTS[typ] ?? OOM_POINTS.dev_cup;
+  const rounds = ["Sieger", "Finale", "Halbfinale", "Viertelfinale", "Achtelfinale", "Letzte 32", "Teilnahme"];
+  for (const round of rounds) {
+    if (pts >= (table[round] ?? 0)) return round;
+  }
   return "Teilnahme";
 }
 

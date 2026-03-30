@@ -182,7 +182,8 @@ export const TYP_LABELS: Record<string, string> = {
   m1: "Major",
   m2: "Grand Final",
   dev_cup: "Development Cup",
-  dev_major: "Dev Major",
+  dev_major: "Dev Pre-Finals",
+  dev_final: "Dev Grand Final",
 };
 
 export const RUNDE_LABELS: Record<string, string> = {
