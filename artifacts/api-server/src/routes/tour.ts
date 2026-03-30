@@ -26,6 +26,7 @@ import {
   notifyRegistration,
   notifyTournamentStart,
   notifyMatchResult,
+  createMatchThreadForMatch,
   notifyTournamentComplete,
   notifyOomUpdate,
   getDiscordSettings,
@@ -270,10 +271,27 @@ async function generateBracket(tournamentId: number, playerIds: number[], legsFo
     .where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
   const tournamentName = tournament?.name ?? "Turnier";
 
+  const playerNames = new Map<number, string>();
+  for (const m of createdMatches) {
+    for (const pid of [m.player1_id, m.player2_id]) {
+      if (pid && !playerNames.has(pid)) {
+        const p = await db.select({ name: tourPlayersTable.name }).from(tourPlayersTable)
+          .where(eq(tourPlayersTable.id, pid)).limit(1);
+        if (p[0]) playerNames.set(pid, p[0].name);
+      }
+    }
+  }
+
   for (const m of createdMatches) {
     if (m.player1_id && m.player2_id) {
       const lobbyUrl = await autoCreateLobby(m.id).catch(() => null);
+      const p1Name = playerNames.get(m.player1_id) ?? "Spieler 1";
+      const p2Name = playerNames.get(m.player2_id) ?? "Spieler 2";
+      // Discord thread (fire-and-forget, rate-limit safe)
+      createMatchThreadForMatch(tournamentName, tournamentId, m.runde, m.match_nr, p1Name, p2Name, lobbyUrl)
+        .catch(() => {});
       notifyMatchReady(m.id, tournamentName, lobbyUrl).catch(() => {});
+      await new Promise((r) => setTimeout(r, 350)); // avoid Discord rate limits
     }
   }
 }
@@ -537,9 +555,28 @@ async function advanceWinner(tournamentId: number, currentRunde: string, matchNr
   const updated = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.id, nextMatches[0].id)).limit(1);
   if (updated[0]?.player1_id && updated[0]?.player2_id && !updated[0]?.is_bye) {
     const t = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
-    // Auto-create Autodarts lobby, then notify with the join URL
+    const tournamentName = t[0]?.name ?? "Turnier";
+
+    // Auto-create Autodarts lobby
     const lobbyUrl = await autoCreateLobby(updated[0].id).catch(() => null);
-    notifyMatchReady(updated[0].id, t[0]?.name ?? "Turnier", lobbyUrl).catch(() => {});
+
+    // Load player names for Discord thread
+    const [p1, p2] = await Promise.all([
+      db.select({ name: tourPlayersTable.name }).from(tourPlayersTable)
+        .where(eq(tourPlayersTable.id, updated[0].player1_id!)).limit(1),
+      db.select({ name: tourPlayersTable.name }).from(tourPlayersTable)
+        .where(eq(tourPlayersTable.id, updated[0].player2_id!)).limit(1),
+    ]);
+
+    // Discord match thread for this round
+    createMatchThreadForMatch(
+      tournamentName, tournamentId,
+      updated[0].runde, updated[0].match_nr,
+      p1[0]?.name ?? "Spieler 1", p2[0]?.name ?? "Spieler 2",
+      lobbyUrl,
+    ).catch(() => {});
+
+    notifyMatchReady(updated[0].id, tournamentName, lobbyUrl).catch(() => {});
   }
 }
 
@@ -2092,7 +2129,7 @@ router.post("/tour/tournaments/:id/start", async (req, res) => {
     const playerIds = entries.sort((a, b) => (a.seed ?? 0) - (b.seed ?? 0)).map((e) => e.player_id);
     await generateBracket(tournamentId, playerIds, t[0].legs_format);
 
-    // Fire-and-forget Discord notification + match threads
+    // Fire-and-forget Discord webhook announcement (lobby + threads handled inside generateBracket)
     (async () => {
       try {
         const allMatches = await db.select().from(tourMatchesTable)
@@ -2121,14 +2158,8 @@ router.post("/tour/tournaments/:id/start", async (req, res) => {
           player2_name: m.player2_id ? (playerMap.get(m.player2_id) ?? null) : null,
         }));
 
+        // Webhook overview only — individual threads are created inside generateBracket()
         await notifyTournamentStart(t[0], matchData);
-
-        // Push notifications to all first-round players
-        for (const m of r1Matches) {
-          if (!m.is_bye && m.player1_id && m.player2_id) {
-            notifyMatchReady(m.id, t[0].name).catch(() => {});
-          }
-        }
       } catch { /* non-critical */ }
     })();
 

@@ -205,6 +205,47 @@ async function createMatchThread(
   });
 }
 
+// ─── Standalone match thread creator (used by advanceWinner for all rounds) ───
+
+export async function createMatchThreadForMatch(
+  tournamentName: string,
+  tournamentId: number,
+  runde: string,
+  matchNr: number,
+  p1Name: string,
+  p2Name: string,
+  lobbyUrl?: string | null,
+) {
+  const { botToken, channelId } = await getDiscordSettings();
+  if (!botToken || !channelId) return;
+
+  const shortName = tournamentName
+    .replace("Players Championship", "PC")
+    .replace("Development Cup", "DC")
+    .replace("Spring Open", "SO")
+    .replace("Grand Prix", "GP")
+    .replace("Home Matchplay", "HM")
+    .replace("Grand Final", "GF");
+
+  const roundLabel: Record<string, string> = {
+    F: "Finale", SF: "Halbfinale", QF: "Viertelfinale",
+    R16: "Achtelfinale", R32: "Letzte 32", R64: "Runde 1",
+  };
+  const roundText = roundLabel[runde] ?? runde;
+
+  const threadName = `${shortName} · ${roundText}: ${p1Name} vs ${p2Name}`.substring(0, 100);
+  const lobbyLine = lobbyUrl ? `\n🔗 **Lobby:** ${lobbyUrl}` : "";
+  const content = `🎯 **${p1Name}** vs **${p2Name}** — ${roundText} in **${tournamentName}**\n\nNutzt diesen Thread um euch abzusprechen wann ihr das Match spielen wollt.${lobbyLine}`;
+
+  const msg = await botRequest(botToken, "POST", `/channels/${channelId}/messages`, { content });
+  if (!msg?.id) return;
+
+  await botRequest(botToken, "POST", `/channels/${channelId}/messages/${msg.id}/threads`, {
+    name: threadName,
+    auto_archive_duration: 1440,
+  });
+}
+
 export async function notifyMatchResult(
   tournamentName: string,
   runde: string,
