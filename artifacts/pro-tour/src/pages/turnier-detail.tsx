@@ -361,7 +361,9 @@ export default function TurnierDetail() {
     queryFn: () => apiFetch(`/tour/tournaments/${id}`),
     refetchInterval: (query) => {
       const status = (query.state.data as TourTournamentDetail | undefined)?.tournament?.status;
-      return status === "laufend" ? 15_000 : false;
+      if (status === "laufend") return 15_000;
+      if (status === "offen") return 20_000;
+      return false;
     },
   });
 
@@ -1139,6 +1141,8 @@ function MatchChatDialog({
     (m) => m.player_id !== currentPlayerId && (!lastSeen || new Date(m.created_at) > new Date(lastSeen))
   );
 
+  const { toast } = useToast();
+
   const sendMut = useMutation({
     mutationFn: () =>
       apiFetch(`/tour/matches/${matchId}/messages`, {
@@ -1148,6 +1152,16 @@ function MatchChatDialog({
     onSuccess: () => {
       setText("");
       refetch();
+    },
+    onError: (e: Error) => {
+      const msg = e.message;
+      if (msg.includes("PIN") || msg.includes("Ungültig")) {
+        toast({ title: "Senden fehlgeschlagen", description: "PIN ungültig — bitte Seite neu laden und erneut anmelden.", variant: "destructive" });
+      } else if (msg.includes("Zugriff") || msg.includes("Teilnehmer")) {
+        toast({ title: "Kein Zugriff", description: "Du bist kein Teilnehmer dieses Matches.", variant: "destructive" });
+      } else {
+        toast({ title: "Nachricht konnte nicht gesendet werden", description: msg, variant: "destructive" });
+      }
     },
   });
 
