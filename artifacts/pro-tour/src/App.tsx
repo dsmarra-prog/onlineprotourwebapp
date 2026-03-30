@@ -45,11 +45,11 @@ function NavBar() {
     <nav className="border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 flex items-center h-14 gap-1">
         {/* Logo */}
-        <div className="flex items-center gap-2 mr-4 flex-shrink-0">
+        <Link href="/" className="flex items-center gap-2 mr-4 flex-shrink-0 hover:opacity-80 transition-opacity">
           <img src="/pro-tour/opt-logo.png" alt="OPT" className="w-8 h-8 object-contain" />
           <span className="font-bold text-sm text-primary tracking-wide uppercase hidden sm:block">Online Pro Tour</span>
           <span className="font-bold text-xs text-primary tracking-wide uppercase sm:hidden">OPT</span>
-        </div>
+        </Link>
 
         {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-1 flex-1">

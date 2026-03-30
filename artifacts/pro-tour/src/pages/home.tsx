@@ -35,9 +35,9 @@ export default function HomeDashboard() {
 
       {/* Stats row */}
       <div className="grid grid-cols-3 gap-2 sm:gap-4">
-        <StatCard icon={Trophy} label="Turniere gesamt" value={tournaments?.length ?? 0} />
-        <StatCard icon={Users} label="Spieler" value={oom?.length ?? 0} />
-        <StatCard icon={Zap} label="Aktive Turniere" value={laufend.length} accent />
+        <StatCard icon={Trophy} label="Turniere gesamt" value={tournaments?.length ?? 0} href="/turniere" />
+        <StatCard icon={Users} label="Spieler" value={oom?.length ?? 0} href="/spieler" />
+        <StatCard icon={Zap} label="Aktive Turniere" value={laufend.length} accent href="/turniere" />
       </div>
 
       {/* Live Ticker — only when matches are active */}
@@ -65,6 +65,7 @@ export default function HomeDashboard() {
           <div className="flex items-center gap-2 mb-4">
             <Zap className="w-4 h-4 text-primary" />
             <h2 className="font-semibold text-sm">Laufende Turniere</h2>
+            <Link href="/turniere" className="ml-auto text-xs text-primary hover:underline">Alle →</Link>
           </div>
           {laufend.length === 0 ? (
             <p className="text-muted-foreground text-sm py-4 text-center">Keine aktiven Turniere</p>
@@ -119,6 +120,7 @@ export default function HomeDashboard() {
           <div className="flex items-center gap-2 mb-4">
             <Calendar className="w-4 h-4 text-primary" />
             <h2 className="font-semibold text-sm">Anstehende Turniere</h2>
+            <Link href="/turniere" className="ml-auto text-xs text-primary hover:underline">Alle →</Link>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {offen.slice(0, 4).map((t) => (
@@ -172,16 +174,21 @@ function TickerRow({ match, live }: { match: LiveTickerMatch; live: boolean }) {
   );
 }
 
-function StatCard({ icon: Icon, label, value, accent }: {
-  icon: any; label: string; value: number; accent?: boolean;
+function StatCard({ icon: Icon, label, value, accent, href }: {
+  icon: any; label: string; value: number; accent?: boolean; href?: string;
 }) {
-  return (
-    <div className={`rounded-xl border p-3 sm:p-4 ${accent ? "border-primary/30 bg-primary/5" : "border-border bg-card"}`}>
+  const content = (
+    <>
       <div className="flex items-center gap-1.5 mb-1.5">
         <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${accent ? "text-primary" : "text-muted-foreground"}`} />
         <span className="text-[10px] sm:text-xs text-muted-foreground leading-tight">{label}</span>
       </div>
       <p className={`text-xl sm:text-2xl font-bold ${accent ? "text-primary" : "text-foreground"}`}>{value}</p>
-    </div>
+    </>
   );
+  const cls = `rounded-xl border p-3 sm:p-4 transition-colors ${accent ? "border-primary/30 bg-primary/5 hover:bg-primary/10" : "border-border bg-card hover:bg-accent/50"} ${href ? "cursor-pointer" : ""}`;
+  if (href) {
+    return <Link href={href} className={cls}>{content}</Link>;
+  }
+  return <div className={cls}>{content}</div>;
 }
