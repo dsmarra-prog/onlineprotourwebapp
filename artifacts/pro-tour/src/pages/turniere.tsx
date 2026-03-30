@@ -25,6 +25,7 @@ export default function TourniereListe() {
     typ: "pc",
     tour_type: "pro",
     datum: new Date().toISOString().slice(0, 10),
+    uhrzeit: "19:00",
     legs_format: "5",
     max_players: "32",
     admin_pin: "",
@@ -53,7 +54,7 @@ export default function TourniereListe() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tournaments"] });
       setOpen(false);
-      setForm({ name: "", typ: "pc", tour_type: "pro", datum: new Date().toISOString().slice(0, 10), legs_format: "5", max_players: "32", admin_pin: "", is_test: false });
+      setForm({ name: "", typ: "pc", tour_type: "pro", datum: new Date().toISOString().slice(0, 10), uhrzeit: "19:00", legs_format: "5", max_players: "32", admin_pin: "", is_test: false });
       toast({ title: "Turnier erstellt" });
     },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
@@ -123,6 +124,10 @@ export default function TourniereListe() {
                   <Label>Datum</Label>
                   <Input type="date" value={form.datum} onChange={(e) => setForm((f) => ({ ...f, datum: e.target.value }))} />
                 </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="flex items-center gap-1">🕐 Uhrzeit (für Discord-Erinnerung)</Label>
+                <Input type="time" value={form.uhrzeit} onChange={(e) => setForm((f) => ({ ...f, uhrzeit: e.target.value }))} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
@@ -201,7 +206,7 @@ export default function TourniereListe() {
                     </div>
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1"><Trophy className="w-3 h-3" />{TYP_LABELS[t.typ]}</span>
-                      <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{t.datum}</span>
+                      <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{t.datum}{t.uhrzeit ? ` · ${t.uhrzeit} Uhr` : ""}</span>
                       <span className="flex items-center gap-1"><Users className="w-3 h-3" />{t.player_count}/{t.max_players}</span>
                     </div>
                   </div>

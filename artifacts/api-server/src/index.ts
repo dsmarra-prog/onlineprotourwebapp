@@ -4,8 +4,13 @@ import { db } from "@workspace/db";
 import {
   tourScheduleTable,
   tourPushSubscriptionsTable,
+  tourTournamentsTable,
+  tourEntriesTable,
+  tourPlayersTable,
 } from "@workspace/db";
+import { eq, inArray } from "drizzle-orm";
 import webpush from "web-push";
+import { sendTournamentCheckInReminder } from "./discord";
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY ?? "";
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY ?? "";
@@ -81,10 +86,72 @@ async function sendTournamentReminders() {
   }
 }
 
+// ─── Discord Check-In Cron (every 5 minutes) ─────────────────────────────────
+const sentDiscordReminders = new Set<string>();
+
+async function sendDiscordCheckInReminders() {
+  try {
+    const now = new Date();
+    const tournaments = await db
+      .select()
+      .from(tourTournamentsTable)
+      .where(eq(tourTournamentsTable.status, "offen"));
+
+    for (const t of tournaments) {
+      if (!t.datum || !t.uhrzeit) continue;
+
+      // Parse datum: DD.MM.YYYY or YYYY-MM-DD
+      let dateStr = t.datum;
+      if (/^\d{2}\.\d{2}\.\d{4}$/.test(dateStr)) {
+        const [d, m, y] = dateStr.split(".");
+        dateStr = `${y}-${m}-${d}`;
+      }
+      const eventDate = new Date(`${dateStr}T${t.uhrzeit}:00`);
+      const diffMin = (eventDate.getTime() - now.getTime()) / 60000;
+
+      // Send 25–35 minutes before (window covers one 5-min check interval)
+      if (diffMin < 25 || diffMin > 35) continue;
+
+      const reminderKey = `discord-${t.id}-${dateStr}`;
+      if (sentDiscordReminders.has(reminderKey)) continue;
+      sentDiscordReminders.add(reminderKey);
+
+      // Get all approved entries for this tournament
+      const entries = await db
+        .select({ player_id: tourEntriesTable.player_id })
+        .from(tourEntriesTable)
+        .where(eq(tourEntriesTable.tournament_id, t.id));
+
+      const playerIds = entries.map((e) => e.player_id).filter(Boolean) as number[];
+      let discordIds: string[] = [];
+
+      if (playerIds.length > 0) {
+        const players = await db
+          .select({ discord_id: tourPlayersTable.discord_id })
+          .from(tourPlayersTable)
+          .where(inArray(tourPlayersTable.id, playerIds));
+        discordIds = players.map((p) => p.discord_id).filter(Boolean) as string[];
+      }
+
+      await sendTournamentCheckInReminder({
+        tournamentName: t.name,
+        uhrzeit: t.uhrzeit,
+        discordIds,
+      });
+
+      logger.info({ tournament: t.name, mentions: discordIds.length, diffMin: Math.round(diffMin) }, "Sent Discord check-in reminder");
+    }
+  } catch (e) {
+    logger.warn({ err: e }, "Discord check-in cron error");
+  }
+}
+
 // Run every 5 minutes
 setInterval(sendTournamentReminders, 5 * 60 * 1000);
+setInterval(sendDiscordCheckInReminders, 5 * 60 * 1000);
 // Run once at startup (after 30s so server is ready)
 setTimeout(sendTournamentReminders, 30_000);
+setTimeout(sendDiscordCheckInReminders, 35_000);
 
 app.listen(port, (err) => {
   if (err) {

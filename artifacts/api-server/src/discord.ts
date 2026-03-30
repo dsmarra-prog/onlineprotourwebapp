@@ -399,6 +399,53 @@ export async function notifyTournamentComplete(
   await sendWebhook(webhookUrl, { embeds: [embed] });
 }
 
+// ─── Tournament Check-In Reminder (30 min before) ─────────────────────────────
+export async function sendTournamentCheckInReminder(opts: {
+  tournamentName: string;
+  uhrzeit: string;
+  discordIds: string[];
+}) {
+  const { webhookUrl, botToken, channelId } = await getDiscordSettings();
+
+  const mentions = opts.discordIds.length > 0
+    ? opts.discordIds.map((id) => `<@${id}>`).join(" ")
+    : "";
+
+  const content = mentions
+    ? `${mentions}\n⏰ **Erinnerung:** Das Turnier **${opts.tournamentName}** startet in **30 Minuten** um **${opts.uhrzeit} Uhr**! Bitte bestätigt eure Teilnahme in der App.`
+    : `⏰ **Erinnerung:** Das Turnier **${opts.tournamentName}** startet in **30 Minuten** um **${opts.uhrzeit} Uhr**!`;
+
+  const embed = {
+    color: OPT_COLOR,
+    author: { name: "Online Pro Tour", icon_url: OPT_ICON },
+    title: `⏰ ${opts.tournamentName} – Start in 30 Minuten!`,
+    description: `Das Turnier startet um **${opts.uhrzeit} Uhr**.\nBitte bestätigt eure Teilnahme in der App!`,
+    timestamp: new Date().toISOString(),
+  };
+
+  // Prefer bot token + channel for mentions (webhook doesn't support @user mentions)
+  if (botToken && channelId) {
+    const body: Record<string, unknown> = { content, embeds: [embed] };
+    try {
+      await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bot ${botToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+      return;
+    } catch {
+      // fall through to webhook
+    }
+  }
+
+  if (webhookUrl) {
+    await sendWebhook(webhookUrl, { content, embeds: [embed] });
+  }
+}
+
 export async function notifyOomUpdate(tourType: "pro" | "dev") {
   const { webhookUrl } = await getDiscordSettings();
   if (!webhookUrl) return;

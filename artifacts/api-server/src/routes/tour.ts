@@ -1765,6 +1765,26 @@ router.patch("/tour/players/:id/oom-name", async (req, res) => {
   }
 });
 
+// PATCH /tour/players/:id/discord-id — player sets their own Discord user ID (for @mentions)
+router.patch("/tour/players/:id/discord-id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { discord_id, player_pin } = req.body;
+    if (!player_pin) return res.status(400).json({ error: "player_pin erforderlich" });
+
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, id)).limit(1);
+    if (!player) return res.status(404).json({ error: "Spieler nicht gefunden" });
+    if (!verifyPin(String(player_pin), player.pin_hash)) return res.status(403).json({ error: "Falscher PIN" });
+
+    const newId = typeof discord_id === "string" && discord_id.trim() ? discord_id.trim() : null;
+    await db.update(tourPlayersTable).set({ discord_id: newId }).where(eq(tourPlayersTable.id, id));
+
+    res.json({ ok: true, message: newId ? `Discord-ID gesetzt` : `Discord-ID entfernt` });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // GET /tour/players/:id
 router.get("/tour/players/:id", async (req, res) => {
   try {
@@ -1970,7 +1990,7 @@ router.get("/tour/tournaments", async (_req, res) => {
 // POST /tour/tournaments
 router.post("/tour/tournaments", async (req, res) => {
   try {
-    const { name, typ, tour_type, datum, legs_format, max_players, admin_pin, schedule_id, phase, is_test } = req.body;
+    const { name, typ, tour_type, datum, uhrzeit, legs_format, max_players, admin_pin, schedule_id, phase, is_test } = req.body;
     if (!name || !typ || !datum || !admin_pin) {
       return res.status(400).json({ error: "name, typ, datum, admin_pin erforderlich" });
     }
@@ -1982,6 +2002,7 @@ router.post("/tour/tournaments", async (req, res) => {
         tour_type: tour_type || "pro",
         phase: phase || null,
         datum,
+        uhrzeit: uhrzeit || null,
         legs_format: legs_format ?? 5,
         max_players: max_players ?? 32,
         admin_pin: hashPin(String(admin_pin)),

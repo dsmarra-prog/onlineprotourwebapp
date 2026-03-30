@@ -47,6 +47,7 @@ export type TourTournament = {
   tour_type: "pro" | "development";
   phase: string | null;
   datum: string;
+  uhrzeit: string | null;
   status: "offen" | "laufend" | "abgeschlossen";
   legs_format: number;
   max_players: number;
