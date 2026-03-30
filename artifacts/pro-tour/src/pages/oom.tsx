@@ -2,6 +2,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { BarChart3, Crown, Loader2, Trophy, Star, RefreshCw } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { useState } from "react";
+import { PlayerAvatar } from "@/components/PlayerAvatar";
 
 type OomResult = {
   tournament_name: string;
@@ -20,6 +21,7 @@ type OomEntry = {
   tournaments_played: number;
   best_result: string;
   last_updated?: string;
+  avatar_url?: string | null;
   results: OomResult[];
 };
 
@@ -189,7 +191,10 @@ export default function OomPage() {
                       <RankBadge rank={entry.rank} small />
                     </td>
                     <td className="p-2 sticky left-8 bg-card/90 backdrop-blur z-10">
-                      <div className="font-semibold">{entry.autodarts_username}</div>
+                      <div className="flex items-center gap-1.5">
+                        <PlayerAvatar name={entry.autodarts_username} avatarUrl={entry.avatar_url} size="xs" />
+                        <div className="font-semibold">{entry.autodarts_username}</div>
+                      </div>
                     </td>
                     <td className="p-2 text-right font-bold text-primary">
                       {entry.total_points.toLocaleString("de-DE")}
@@ -251,7 +256,10 @@ export default function OomPage() {
                       <RankBadge rank={entry.rank} />
                     </td>
                     <td className="p-2 sm:p-3">
-                      <div className="font-semibold text-sm">{entry.autodarts_username}</div>
+                      <div className="flex items-center gap-2">
+                        <PlayerAvatar name={entry.autodarts_username} avatarUrl={entry.avatar_url} size="sm" />
+                        <div className="font-semibold text-sm">{entry.autodarts_username}</div>
+                      </div>
                     </td>
                     <td className="p-2 sm:p-3 text-center text-sm text-muted-foreground hidden sm:table-cell">{entry.tournaments_played}</td>
                     <td className="p-2 sm:p-3 text-center hidden sm:table-cell">

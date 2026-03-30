@@ -477,6 +477,7 @@ async function buildTournamentDetail(tournamentId: number) {
       confirmed: e.confirmed ?? false,
       name: playerMap[e.player_id]?.name ?? "?",
       autodarts_username: playerMap[e.player_id]?.autodarts_username ?? "",
+      avatar_url: playerMap[e.player_id]?.avatar_url ?? null,
     })),
     matches: matches.map((m) => ({
       id: m.id,
@@ -487,6 +488,8 @@ async function buildTournamentDetail(tournamentId: number) {
       player2_id: m.player2_id,
       player1_name: m.player1_id ? playerMap[m.player1_id]?.name ?? null : null,
       player2_name: m.player2_id ? playerMap[m.player2_id]?.name ?? null : null,
+      player1_avatar: m.player1_id ? playerMap[m.player1_id]?.avatar_url ?? null : null,
+      player2_avatar: m.player2_id ? playerMap[m.player2_id]?.avatar_url ?? null : null,
       winner_id: m.winner_id,
       score_p1: m.score_p1,
       score_p2: m.score_p2,
@@ -1214,7 +1217,15 @@ router.get("/tour/oom", async (_req, res) => {
         };
       });
 
-    res.json(result);
+    // Add avatar_url from registered players
+    const allPlayers = await db.select({ username: tourPlayersTable.autodarts_username, avatar: tourPlayersTable.avatar_url }).from(tourPlayersTable);
+    const avatarMap = new Map(allPlayers.map((p) => [p.username.toLowerCase(), p.avatar]));
+    const resultWithAvatars = result.map((e) => ({
+      ...e,
+      avatar_url: avatarMap.get(e.autodarts_username.toLowerCase()) ?? null,
+    }));
+
+    res.json(resultWithAvatars);
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
@@ -1688,6 +1699,7 @@ router.get("/tour/players", async (_req, res) => {
         oom_points: oomPoints,
         oom_rank: 0,
         oom_tour_type: oomTourType,
+        avatar_url: p.avatar_url ?? null,
       };
     });
 
@@ -1740,7 +1752,36 @@ router.post("/tour/players/login", async (req, res) => {
       return res.status(403).json({ error: "Falscher PIN" });
     }
     const p = players[0];
-    res.json({ id: p.id, name: p.name, autodarts_username: p.autodarts_username, is_admin: p.is_admin });
+    // Fire-and-forget avatar sync if no avatar yet
+    if (!p.avatar_url) {
+      syncPlayerAvatar(p.id, p.autodarts_username, p.autodarts_refresh_token).catch(() => {});
+    }
+    res.json({ id: p.id, name: p.name, autodarts_username: p.autodarts_username, is_admin: p.is_admin, avatar_url: p.avatar_url });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/admin/sync-avatars — fetch Autodarts avatars for all players missing one
+router.post("/tour/admin/sync-avatars", async (req, res) => {
+  try {
+    const players = await db.select().from(tourPlayersTable);
+    const missing = players.filter((p) => !p.avatar_url);
+    const adminToken = await getAutodartAccessToken();
+    let updated = 0;
+    for (const p of missing) {
+      let url: string | null = null;
+      if (p.autodarts_refresh_token) {
+        const tok = await getPlayerAccessToken(p.id);
+        if (tok) url = await fetchAdAvatar(tok);
+      }
+      if (!url && adminToken) url = await fetchAdAvatarByUsername(p.autodarts_username, adminToken);
+      if (url) {
+        await db.update(tourPlayersTable).set({ avatar_url: url }).where(eq(tourPlayersTable.id, p.id));
+        updated++;
+      }
+    }
+    res.json({ ok: true, checked: missing.length, updated });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
@@ -2767,6 +2808,53 @@ async function getPlayerAccessToken(playerId: number): Promise<string | null> {
   return p;
 }
 
+// ─── Autodarts avatar helpers ────────────────────────────────────────────────
+async function fetchAdAvatar(accessToken: string): Promise<string | null> {
+  try {
+    const r = await fetch("https://api.autodarts.io/us/v0/users/me", {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+    });
+    if (!r.ok) return null;
+    const u = await r.json();
+    return u?.avatarUrl ?? u?.imageUrl ?? u?.avatar ?? u?.picture ?? u?.image ?? null;
+  } catch { return null; }
+}
+
+async function fetchAdAvatarByUsername(username: string, accessToken: string): Promise<string | null> {
+  try {
+    const r = await fetch(
+      `https://api.autodarts.io/us/v0/users?name=${encodeURIComponent(username)}`,
+      { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" } }
+    );
+    if (!r.ok) return null;
+    const data = await r.json();
+    const users: any[] = Array.isArray(data) ? data : (data?.data ?? data?.users ?? data?.items ?? []);
+    const match = users.find((u: any) =>
+      (u.name ?? u.username ?? "").toLowerCase() === username.toLowerCase()
+    );
+    if (!match) return null;
+    return match.avatarUrl ?? match.imageUrl ?? match.avatar ?? match.picture ?? null;
+  } catch { return null; }
+}
+
+// Fetch and persist avatar for a single player (non-blocking — call fire-and-forget)
+async function syncPlayerAvatar(playerId: number, username: string, ownRefreshToken?: string | null): Promise<void> {
+  try {
+    let url: string | null = null;
+    if (ownRefreshToken) {
+      const token = await getPlayerAccessToken(playerId);
+      if (token) url = await fetchAdAvatar(token);
+    }
+    if (!url) {
+      const adminToken = await getAutodartAccessToken();
+      if (adminToken) url = await fetchAdAvatarByUsername(username, adminToken);
+    }
+    if (url) {
+      await db.update(tourPlayersTable).set({ avatar_url: url }).where(eq(tourPlayersTable.id, playerId));
+    }
+  } catch { /* non-critical */ }
+}
+
 // ─── Autodarts endpoints ──────────────────────────────────────────────────────
 // 1. as/v0/matches/filter — recently COMPLETED matches for the authed user
 // 2. gs/v0/lobbies        — currently ACTIVE lobbies/games (all visible lobbies)
@@ -3613,6 +3701,9 @@ router.post("/tour/players/:id/autodarts-connect", async (req, res) => {
 
     // Invalidate any cached access token for this player
     playerTokenCache.delete(playerId);
+
+    // Fire-and-forget: fetch avatar now that we have a fresh token
+    syncPlayerAvatar(playerId, player[0].autodarts_username, latestRefreshToken).catch(() => {});
 
     res.json({ ok: true, message: "Autodarts-Account erfolgreich verbunden" });
   } catch (e) {

@@ -21,6 +21,7 @@ export type TourPlayer = {
   oom_points: number;
   oom_rank: number;
   oom_tour_type: "pro" | "development" | null;
+  avatar_url?: string | null;
 };
 
 export type TourScheduleEntry = {
@@ -66,6 +67,8 @@ export type TourMatch = {
   player2_id: number | null;
   player1_name: string | null;
   player2_name: string | null;
+  player1_avatar: string | null;
+  player2_avatar: string | null;
   winner_id: number | null;
   score_p1: number | null;
   score_p2: number | null;
@@ -94,6 +97,7 @@ export type TourTournamentDetail = {
     confirmed: boolean;
     name: string;
     autodarts_username: string;
+    avatar_url: string | null;
   }>;
   matches: TourMatch[];
   rounds: string[];
@@ -108,6 +112,7 @@ export type TourOomEntry = {
   bonus_total: number;
   tournaments_played: number;
   best_result: string;
+  avatar_url?: string | null;
   results: Array<{
     tournament_id: number;
     tournament_name: string;

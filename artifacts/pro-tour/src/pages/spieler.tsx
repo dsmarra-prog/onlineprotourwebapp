@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Users, Loader2, User, Search, X } from "lucide-react";
+import { Users, Loader2, Search, X } from "lucide-react";
 import { apiFetch, TourPlayer } from "@/lib/api";
+import { PlayerAvatar } from "@/components/PlayerAvatar";
 
 export default function SpielerPage() {
   const [search, setSearch] = useState("");
@@ -76,9 +77,7 @@ export default function SpielerPage() {
               href={`/spieler/${p.id}`}
               className="flex items-center gap-3 p-4 bg-card border border-border rounded-xl hover:border-primary/40 hover:bg-card/80 transition-all"
             >
-              <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
-                <User className="w-5 h-5 text-primary" />
-              </div>
+              <PlayerAvatar name={p.name} avatarUrl={p.avatar_url} size="md" />
 
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-sm">{p.name}</p>

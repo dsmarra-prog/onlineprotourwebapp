@@ -8,6 +8,7 @@ export const tourPlayersTable = pgTable("tour_players", {
   discord_id: text("discord_id"),
   pin_hash: text("pin_hash").notNull(),
   autodarts_refresh_token: text("autodarts_refresh_token"),
+  avatar_url: text("avatar_url"),
   is_admin: boolean("is_admin").notNull().default(false),
   created_at: timestamp("created_at").defaultNow().notNull(),
 });

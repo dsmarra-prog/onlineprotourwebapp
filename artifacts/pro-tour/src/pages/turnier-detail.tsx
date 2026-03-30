@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch, TourTournamentDetail, TourPlayer, TourMatch, TYP_LABELS, RUNDE_LABELS, DrawPairing } from "@/lib/api";
 import { usePlayer } from "@/context/PlayerContext";
+import { PlayerAvatar } from "@/components/PlayerAvatar";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -1350,6 +1351,7 @@ function MatchCard({
       <div className="space-y-1.5">
         <PlayerRow
           name={match.player1_name ?? "TBD"}
+          avatarUrl={match.player1_avatar}
           score={isLive ? live.legs1 : match.score_p1}
           avg={isLive && live.avg1 > 0 ? live.avg1 : isComplete && match.avg_p1 ? match.avg_p1 : null}
           isWinner={match.winner_id === match.player1_id}
@@ -1358,6 +1360,7 @@ function MatchCard({
         />
         <PlayerRow
           name={match.player2_name ?? "TBD"}
+          avatarUrl={match.player2_avatar}
           score={isLive ? live.legs2 : match.score_p2}
           avg={isLive && live.avg2 > 0 ? live.avg2 : isComplete && match.avg_p2 ? match.avg_p2 : null}
           isWinner={match.winner_id === match.player2_id}
@@ -1454,9 +1457,10 @@ function MatchCard({
 }
 
 function PlayerRow({
-  name, score, avg, isWinner, isComplete, isLive,
+  name, avatarUrl, score, avg, isWinner, isComplete, isLive,
 }: {
   name: string;
+  avatarUrl?: string | null;
   score: number | null;
   avg: number | null;
   isWinner: boolean;
@@ -1464,11 +1468,14 @@ function PlayerRow({
   isLive: boolean;
 }) {
   return (
-    <div className={`flex items-center justify-between ${isWinner ? "text-foreground" : isComplete ? "text-muted-foreground" : ""}`}>
-      <span className={`text-sm ${isWinner ? "font-semibold" : "font-normal"} truncate max-w-[120px]`}>
-        {isWinner && <span className="text-primary mr-1">●</span>}
-        {name}
-      </span>
+    <div className={`flex items-center justify-between gap-1 ${isWinner ? "text-foreground" : isComplete ? "text-muted-foreground" : ""}`}>
+      <div className="flex items-center gap-1.5 min-w-0">
+        <PlayerAvatar name={name} avatarUrl={avatarUrl} size="xs" className={isComplete && !isWinner ? "opacity-50" : ""} />
+        <span className={`text-sm ${isWinner ? "font-semibold" : "font-normal"} truncate max-w-[100px]`}>
+          {isWinner && <span className="text-primary mr-1">●</span>}
+          {name}
+        </span>
+      </div>
       <div className="flex items-center gap-2">
         {avg !== null && (
           <span className="text-[10px] text-muted-foreground tabular-nums">⌀{avg}</span>

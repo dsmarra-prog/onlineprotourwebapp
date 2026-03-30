@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch } from "@/lib/api";
 import { usePlayer } from "@/context/PlayerContext";
+import { PlayerAvatar } from "@/components/PlayerAvatar";
 
 type TourPlayer = { id: number; name: string; autodarts_username: string; oom_name: string | null; is_admin: boolean };
 
@@ -418,6 +419,28 @@ function AdminFairnessPanel() {
   );
 }
 
+function AvatarSyncButton() {
+  const { toast } = useToast();
+  const syncMut = useMutation({
+    mutationFn: () => apiFetch<{ ok: boolean; checked: number; updated: number }>("/tour/admin/sync-avatars", { method: "POST" }),
+    onSuccess: (data) => toast({ title: "Avatare synchronisiert", description: `${data.updated} von ${data.checked} Spielern aktualisiert.` }),
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-3">
+      <div>
+        <p className="text-sm font-semibold">Autodarts-Avatare synchronisieren</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Profilbilder aller Spieler von Autodarts abrufen</p>
+      </div>
+      <Button size="sm" variant="outline" disabled={syncMut.isPending} onClick={() => syncMut.mutate()} className="shrink-0">
+        {syncMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+        {syncMut.isPending ? "Läuft…" : "Sync"}
+      </Button>
+    </div>
+  );
+}
+
 export default function EinstellungenPage() {
   const { toast } = useToast();
   const { currentPlayer, sessionPin, logout } = usePlayer();
@@ -668,9 +691,7 @@ export default function EinstellungenPage() {
       {/* Player profile card */}
       <div className="bg-card border border-border rounded-xl p-6 space-y-4">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
-            <User className="w-6 h-6 text-primary" />
-          </div>
+          <PlayerAvatar name={currentPlayer?.name ?? ""} avatarUrl={currentPlayer?.avatar_url} size="lg" />
           <div>
             <div className="font-bold text-lg">{currentPlayer?.name}</div>
             <div className="text-sm text-muted-foreground flex items-center gap-1">
@@ -992,6 +1013,9 @@ export default function EinstellungenPage() {
           </div>
         )}
       </div>}
+
+      {/* Admin: Avatar Sync */}
+      {currentPlayer?.is_admin && <AvatarSyncButton />}
 
       {/* Admin: Autodarts Global Token Update */}
       {currentPlayer?.is_admin && <div className="bg-card border border-border rounded-xl overflow-hidden">
