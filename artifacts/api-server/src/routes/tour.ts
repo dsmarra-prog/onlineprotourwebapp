@@ -256,6 +256,26 @@ async function generateBracket(tournamentId: number, playerIds: number[], legsFo
 
   await db.insert(tourMatchesTable).values(matches as any);
   await propagateByes(tournamentId);
+
+  // Auto-create lobbies for all first-round matches where both players are known
+  const createdMatches = await db.select()
+    .from(tourMatchesTable)
+    .where(and(
+      eq(tourMatchesTable.tournament_id, tournamentId),
+      eq(tourMatchesTable.status, "ausstehend"),
+      eq(tourMatchesTable.is_bye, false),
+    ));
+
+  const [tournament] = await db.select().from(tourTournamentsTable)
+    .where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
+  const tournamentName = tournament?.name ?? "Turnier";
+
+  for (const m of createdMatches) {
+    if (m.player1_id && m.player2_id) {
+      const lobbyUrl = await autoCreateLobby(m.id).catch(() => null);
+      notifyMatchReady(m.id, tournamentName, lobbyUrl).catch(() => {});
+    }
+  }
 }
 
 async function propagateByes(tournamentId: number) {
