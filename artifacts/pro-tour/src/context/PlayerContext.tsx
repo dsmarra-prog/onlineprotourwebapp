@@ -22,6 +22,7 @@ type PlayerContextType = {
 const PlayerContext = createContext<PlayerContextType | null>(null);
 
 const STORAGE_KEY = "opt_player";
+const PIN_KEY = "opt_pin";
 const tutorialKey = (id: number) => `opt_tutorial_seen_${id}`;
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
@@ -36,8 +37,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       if (stored) {
         setCurrentPlayer(JSON.parse(stored));
       }
+      const storedPin = localStorage.getItem(PIN_KEY);
+      if (storedPin) {
+        setSessionPin(storedPin);
+      }
     } catch {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(PIN_KEY);
     }
     setIsLoading(false);
   }, []);
@@ -48,6 +54,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify({ autodarts_username, pin }),
     });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(player));
+    localStorage.setItem(PIN_KEY, pin);
     setCurrentPlayer(player);
     setSessionPin(pin);
     if (!localStorage.getItem(tutorialKey(player.id))) {
@@ -64,6 +71,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(PIN_KEY);
     setCurrentPlayer(null);
     setSessionPin("");
     setShowTutorial(false);
