@@ -3569,14 +3569,15 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
               const idx2 = liveMatch.players.findIndex((p: any) => p.name?.toLowerCase() === u2.toLowerCase());
               const legs1 = idx1 >= 0 ? (liveMatch.scores?.[idx1]?.legs ?? 0) : 0;
               const legs2 = idx2 >= 0 ? (liveMatch.scores?.[idx2]?.legs ?? 0) : 0;
-              const p1obj = idx1 >= 0 ? liveMatch.players[idx1] : null;
-              const p2obj = idx2 >= 0 ? liveMatch.players[idx2] : null;
-              const avg1 = Math.round((p1obj?.user?.average ?? p1obj?.average ?? 0) * 10) / 10;
-              const avg2 = Math.round((p2obj?.user?.average ?? p2obj?.average ?? 0) * 10) / 10;
+              // gs/v0/matches only has account averages (user.average), not match averages.
+              // Match averages are only available after completion via as/v0/matches.
+              // We intentionally set avg to 0 here to avoid showing misleading account stats.
+              const avg1 = 0;
+              const avg2 = 0;
               // Write live scores to DB so the live ticker picks them up
-              if (legs1 > 0 || legs2 > 0 || avg1 > 0 || avg2 > 0) {
+              if (legs1 > 0 || legs2 > 0) {
                 await db.update(tourMatchesTable)
-                  .set({ score_p1: legs1, score_p2: legs2, avg_p1: avg1, avg_p2: avg2 })
+                  .set({ score_p1: legs1, score_p2: legs2, avg_p1: null, avg_p2: null })
                   .where(eq(tourMatchesTable.id, match.id));
               }
               results.push({ match_id: match.id, status: "live", legs1, legs2, avg1, avg2, autodarts_id: liveMatch.id });
