@@ -19,6 +19,8 @@ import HomeDashboard from "@/pages/home";
 import SpielplanPage from "@/pages/spielplan";
 import StatistikenPage from "@/pages/statistiken";
 import Portal from "@/pages/portal";
+import OverlayPage from "@/pages/overlay";
+import TurnierPublicPage from "@/pages/turnier-public";
 import SaisonPage from "@/pages/saison";
 import VergleichPage from "@/pages/vergleich";
 import HilfePage from "@/pages/hilfe";
@@ -419,6 +421,22 @@ function BottomNav() {
 function Router() {
   const [location] = useLocation();
   const { currentPlayer, isLoading } = usePlayer();
+
+  // Public routes — accessible without login, no nav chrome
+  if (location.startsWith("/overlay/")) {
+    return (
+      <Switch>
+        <Route path="/overlay/:matchId" component={OverlayPage} />
+      </Switch>
+    );
+  }
+  if (location.startsWith("/turnier/") && location.endsWith("/public")) {
+    return (
+      <Switch>
+        <Route path="/turnier/:id/public" component={TurnierPublicPage} />
+      </Switch>
+    );
+  }
 
   if (isLoading) {
     return (

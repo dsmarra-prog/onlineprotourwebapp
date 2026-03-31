@@ -76,6 +76,16 @@ export type TourMatch = {
   score_p2: number | null;
   avg_p1: number | null;
   avg_p2: number | null;
+  first9_p1: number | null;
+  first9_p2: number | null;
+  doubles_hit_p1: number | null;
+  doubles_att_p1: number | null;
+  doubles_hit_p2: number | null;
+  doubles_att_p2: number | null;
+  count_180s_p1: number | null;
+  count_180s_p2: number | null;
+  high_checkout_p1: number | null;
+  high_checkout_p2: number | null;
   status: string;
   is_bye: boolean;
   autodarts_match_id: string | null;

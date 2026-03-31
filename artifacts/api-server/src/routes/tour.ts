@@ -496,6 +496,16 @@ async function buildTournamentDetail(tournamentId: number) {
       score_p2: m.score_p2,
       avg_p1: m.avg_p1 ?? null,
       avg_p2: m.avg_p2 ?? null,
+      first9_p1: m.first9_p1 ?? null,
+      first9_p2: m.first9_p2 ?? null,
+      doubles_hit_p1: m.doubles_hit_p1 ?? null,
+      doubles_att_p1: m.doubles_att_p1 ?? null,
+      doubles_hit_p2: m.doubles_hit_p2 ?? null,
+      doubles_att_p2: m.doubles_att_p2 ?? null,
+      count_180s_p1: m.count_180s_p1 ?? null,
+      count_180s_p2: m.count_180s_p2 ?? null,
+      high_checkout_p1: m.high_checkout_p1 ?? null,
+      high_checkout_p2: m.high_checkout_p2 ?? null,
       status: m.status,
       is_bye: m.is_bye,
       autodarts_match_id: m.autodarts_match_id ?? null,
@@ -4332,6 +4342,107 @@ router.post("/tour/matches/:matchId/messages", async (req, res) => {
 });
 
 // ─── Match Disputes ───────────────────────────────────────────────────────────
+
+// GET /tour/matches/:matchId/overlay — public endpoint for OBS overlay (no auth required)
+router.get("/tour/matches/:matchId/overlay", async (req, res) => {
+  try {
+    const matchId = parseInt(req.params.matchId);
+    if (isNaN(matchId)) return res.status(400).json({ error: "Ungültige Match-ID" });
+
+    const [match] = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.id, matchId)).limit(1);
+    if (!match) return res.status(404).json({ error: "Match nicht gefunden" });
+
+    const [tournament] = await db.select().from(tourTournamentsTable)
+      .where(eq(tourTournamentsTable.id, match.tournament_id)).limit(1);
+
+    const [p1] = match.player1_id
+      ? await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, match.player1_id)).limit(1)
+      : [null];
+    const [p2] = match.player2_id
+      ? await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, match.player2_id)).limit(1)
+      : [null];
+
+    res.json({
+      id: match.id,
+      tournament_name: tournament?.name ?? "",
+      runde: match.runde,
+      legs_format: tournament?.legs_format ?? "Best of 5",
+      player1_name: p1?.name ?? "TBD",
+      player2_name: p2?.name ?? "TBD",
+      player1_avatar: p1?.avatar_url ?? null,
+      player2_avatar: p2?.avatar_url ?? null,
+      score_p1: match.score_p1 ?? 0,
+      score_p2: match.score_p2 ?? 0,
+      avg_p1: match.avg_p1 ?? null,
+      avg_p2: match.avg_p2 ?? null,
+      count_180s_p1: match.count_180s_p1 ?? null,
+      count_180s_p2: match.count_180s_p2 ?? null,
+      high_checkout_p1: match.high_checkout_p1 ?? null,
+      high_checkout_p2: match.high_checkout_p2 ?? null,
+      status: match.status,
+      winner_id: match.winner_id ?? null,
+    });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/matches/:matchId/fetch-autodarts-stats — admin: manually import stats from Autodarts
+router.post("/tour/matches/:matchId/fetch-autodarts-stats", async (req, res) => {
+  try {
+    const matchId = parseInt(req.params.matchId);
+    const { admin_player_id, admin_player_pin } = req.body;
+    if (!admin_player_id || !admin_player_pin) return res.status(400).json({ error: "Auth erforderlich" });
+
+    const isAdmin = await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!isAdmin) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
+    const [match] = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.id, matchId)).limit(1);
+    if (!match) return res.status(404).json({ error: "Match nicht gefunden" });
+    if (!match.autodarts_match_id) return res.status(400).json({ error: "Kein Autodarts Match verknüpft" });
+
+    const p1 = match.player1_id
+      ? (await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, match.player1_id)).limit(1))[0]
+      : null;
+    const p2 = match.player2_id
+      ? (await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, match.player2_id)).limit(1))[0]
+      : null;
+
+    const u1 = p1?.autodarts_username ?? "";
+    const u2 = p2?.autodarts_username ?? "";
+
+    const token = await getAutodartAccessToken();
+    if (!token) return res.status(503).json({ error: "Kein Autodarts Token konfiguriert" });
+
+    const adRes = await fetch(`https://api.autodarts.io/as/v0/matches/${match.autodarts_match_id}`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+    if (!adRes.ok) return res.status(502).json({ error: `Autodarts API Fehler: ${adRes.status}` });
+
+    const adMatch = await adRes.json();
+    const score = getMatchScore(adMatch, u1, u2);
+    const a1 = Math.round(score.avg1 * 10) / 10;
+    const a2 = Math.round(score.avg2 * 10) / 10;
+
+    await db.update(tourMatchesTable).set({
+      avg_p1: a1, avg_p2: a2,
+      first9_p1: score.first9_p1, first9_p2: score.first9_p2,
+      doubles_hit_p1: score.doubles_hit_p1, doubles_att_p1: score.doubles_att_p1,
+      doubles_hit_p2: score.doubles_hit_p2, doubles_att_p2: score.doubles_att_p2,
+      count_180s_p1: score.count_180s_p1, count_180s_p2: score.count_180s_p2,
+      high_checkout_p1: score.high_checkout_p1, high_checkout_p2: score.high_checkout_p2,
+    }).where(eq(tourMatchesTable.id, matchId));
+
+    res.json({
+      ok: true,
+      avg_p1: a1, avg_p2: a2,
+      count_180s_p1: score.count_180s_p1, count_180s_p2: score.count_180s_p2,
+      high_checkout_p1: score.high_checkout_p1, high_checkout_p2: score.high_checkout_p2,
+    });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
 
 // POST /tour/matches/:matchId/dispute — player files a dispute
 router.post("/tour/matches/:matchId/dispute", async (req, res) => {

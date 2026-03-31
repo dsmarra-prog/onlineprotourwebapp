@@ -1564,6 +1564,21 @@ function MatchCard({
         />
       </div>
 
+      {/* Extended stats row (Autodarts) */}
+      {isComplete && (match.avg_p1 !== null || match.count_180s_p1 !== null || match.high_checkout_p1 !== null) && (
+        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground border-t border-border/30 pt-2">
+          {match.avg_p1 !== null && (
+            <span>Avg: <span className="text-cyan-400 font-semibold">{match.avg_p1.toFixed(1)}</span> / <span className="text-cyan-400 font-semibold">{(match.avg_p2 ?? 0).toFixed(1)}</span></span>
+          )}
+          {(match.count_180s_p1 !== null && match.count_180s_p1 > 0) && (
+            <span>180s: <span className="text-pink-400 font-semibold">{match.count_180s_p1}</span> / <span className="text-pink-400 font-semibold">{match.count_180s_p2 ?? 0}</span></span>
+          )}
+          {(match.high_checkout_p1 !== null && match.high_checkout_p1 > 0) && (
+            <span>HiCo: <span className="text-green-400 font-semibold">{match.high_checkout_p1}</span> / <span className="text-green-400 font-semibold">{match.high_checkout_p2 ?? 0}</span></span>
+          )}
+        </div>
+      )}
+
       {/* Footer hint */}
       {isComplete && (
         <div className="mt-2 flex items-center gap-1 text-xs text-muted-foreground/60">
