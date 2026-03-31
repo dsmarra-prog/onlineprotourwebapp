@@ -4016,16 +4016,17 @@ router.get("/tour/players/:id/autodarts-status", async (req, res) => {
 });
 
 // POST /tour/matches/:matchId/create-lobby — create an Autodarts lobby for a tournament match.
-// Requires admin auth. If a lobby already exists for this match, returns the existing URL.
+// Only the two match participants or an admin can create a lobby. If one already exists, returns it.
 router.post("/tour/matches/:matchId/create-lobby", async (req, res) => {
   try {
-    // Admin auth required
-    const adminPlayerId = req.headers["x-admin-player-id"] ? parseInt(req.headers["x-admin-player-id"] as string) : req.body?.admin_player_id ? parseInt(req.body.admin_player_id) : null;
-    const adminPin = req.headers["x-admin-pin"] as string | undefined ?? req.body?.admin_pin;
-    if (!adminPlayerId || !adminPin) return res.status(401).json({ error: "Admin-Authentifizierung erforderlich" });
-    const adminPlayer = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, adminPlayerId)).limit(1);
-    if (!adminPlayer[0] || !adminPlayer[0].is_admin || adminPlayer[0].pin !== adminPin) {
-      return res.status(403).json({ error: "Keine Admin-Berechtigung" });
+    // Auth: player_id + pin in body (or admin headers)
+    const requestingPlayerId: number | null = req.body?.player_id ? parseInt(req.body.player_id) : null;
+    const requestingPin: string | null = req.body?.pin ?? null;
+    const adminPlayerId = req.headers["x-admin-player-id"] ? parseInt(req.headers["x-admin-player-id"] as string) : null;
+    const adminPin = req.headers["x-admin-pin"] as string | undefined ?? null;
+
+    if (!requestingPlayerId && !adminPlayerId) {
+      return res.status(401).json({ error: "Authentifizierung erforderlich" });
     }
 
     const matchId = parseInt(req.params.matchId);
@@ -4033,7 +4034,23 @@ router.post("/tour/matches/:matchId/create-lobby", async (req, res) => {
     if (!match[0]) return res.status(404).json({ error: "Match nicht gefunden" });
     if (match[0].status === "abgeschlossen") return res.status(400).json({ error: "Match bereits abgeschlossen" });
 
-    // If lobby already exists, return the existing URL instead of creating a new one
+    // Validate the requesting player and check they are a match participant or admin
+    if (requestingPlayerId && requestingPin) {
+      const player = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, requestingPlayerId)).limit(1);
+      if (!player[0] || player[0].pin !== requestingPin) return res.status(403).json({ error: "Ungültige Anmeldedaten" });
+      const isParticipant = match[0].player1_id === requestingPlayerId || match[0].player2_id === requestingPlayerId;
+      const isAdmin = player[0].is_admin;
+      if (!isParticipant && !isAdmin) return res.status(403).json({ error: "Du bist nicht an diesem Match beteiligt" });
+    } else if (adminPlayerId && adminPin) {
+      const adminPlayer = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, adminPlayerId)).limit(1);
+      if (!adminPlayer[0] || !adminPlayer[0].is_admin || adminPlayer[0].pin !== adminPin) {
+        return res.status(403).json({ error: "Keine Admin-Berechtigung" });
+      }
+    } else {
+      return res.status(401).json({ error: "Authentifizierung erforderlich" });
+    }
+
+    // If lobby already exists, return it — never overwrite with a new one
     if (match[0].autodarts_match_id) {
       const existingUrl = `https://play.autodarts.io/lobbies/${match[0].autodarts_match_id}`;
       return res.json({ lobbyId: match[0].autodarts_match_id, joinUrl: existingUrl, existing: true });
@@ -4045,8 +4062,9 @@ router.post("/tour/matches/:matchId/create-lobby", async (req, res) => {
 
     const winLegs = Math.ceil(tournament[0].legs_format / 2);
 
-    // Token priority: player1 → player2 → global admin
+    // Token priority: requesting player (so they're the host) → other participant → global admin
     const candidateIds = [
+      requestingPlayerId ?? undefined,
       match[0].player1_id ?? undefined,
       match[0].player2_id ?? undefined,
     ].filter((id): id is number => typeof id === "number");

@@ -1467,18 +1467,19 @@ function MatchCard({
   const [creatingLobby, setCreatingLobby] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
+  const isParticipant = currentPlayer && (
+    currentPlayer.id === match.player1_id || currentPlayer.id === match.player2_id
+  );
+  const canCreateLobby = isParticipant || currentPlayer?.is_admin;
+
   const createLobby = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!currentPlayer?.is_admin || !sessionPin) return;
+    if (!currentPlayer || !sessionPin || !canCreateLobby) return;
     setCreatingLobby(true);
     try {
       const data = await apiFetch(`/tour/matches/${match.id}/create-lobby`, {
         method: "POST",
-        headers: {
-          "x-admin-player-id": String(currentPlayer.id),
-          "x-admin-pin": sessionPin,
-        },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ player_id: currentPlayer.id, pin: sessionPin }),
       });
       if (data.joinUrl) setLocalLobbyUrl(data.joinUrl);
     } catch {
@@ -1673,8 +1674,8 @@ function MatchCard({
               <ExternalLink className="w-3 h-3" />
               Lobby beitreten
             </a>
-          ) : currentPlayer?.is_admin ? (
-            // No lobby yet → admin can create one
+          ) : canCreateLobby ? (
+            // No lobby yet → participant or admin can create one
             <button
               onClick={createLobby}
               disabled={creatingLobby}
@@ -1688,11 +1689,8 @@ function MatchCard({
               {creatingLobby ? "Erstelle Lobby…" : "Autodarts Lobby erstellen"}
             </button>
           ) : (
-            // No lobby yet, player is not admin → waiting message
-            <div className="flex items-center justify-center gap-1.5 w-full text-xs text-muted-foreground/60 rounded-md py-1.5 px-2 border border-border/20">
-              <MonitorPlay className="w-3 h-3" />
-              Lobby wird vom Admin erstellt
-            </div>
+            // Not a participant and no lobby exists → just show nothing
+            null
           )}
         </div>
       )}
