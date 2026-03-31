@@ -9,6 +9,16 @@ import { toPng } from "html-to-image";
 import { apiFetch, TourPlayerProfile, TourH2H, Achievement, TYP_LABELS, RUNDE_LABELS } from "@/lib/api";
 
 type TourPlayer = { id: number; name: string; autodarts_username: string };
+type PlayerFormEntry = {
+  match_id: number;
+  tournament_id: number;
+  tournament_name: string;
+  runde: string;
+  won: boolean;
+  score_for: number | null;
+  score_against: number | null;
+  opponent_name: string;
+};
 
 export default function SpielerProfil() {
   const { id } = useParams<{ id: string }>();
@@ -40,6 +50,13 @@ export default function SpielerProfil() {
     queryKey: ["achievements", id],
     queryFn: () => apiFetch(`/tour/players/${id}/achievements`),
     enabled: !!id,
+  });
+
+  const { data: form } = useQuery<PlayerFormEntry[]>({
+    queryKey: ["player-form", id],
+    queryFn: () => apiFetch(`/tour/players/${id}/form`),
+    enabled: !!id,
+    staleTime: 60_000,
   });
 
   if (isLoading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>;
@@ -123,6 +140,54 @@ export default function SpielerProfil() {
           <p className="text-xs text-muted-foreground mt-1">Turniertitel</p>
         </div>
       </div>
+
+      {/* Form — last 5 results */}
+      {form && form.length > 0 && (
+        <div className="bg-card border border-border rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Letzte Form</p>
+            <div className="flex items-center gap-1.5">
+              {form.map((f) => (
+                <div
+                  key={f.match_id}
+                  title={`${f.won ? "Sieg" : "Niederlage"} vs ${f.opponent_name} (${f.score_for ?? "?"}:${f.score_against ?? "?"}) — ${f.tournament_name}`}
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black border ${
+                    f.won
+                      ? "bg-green-500/15 text-green-400 border-green-500/30"
+                      : "bg-red-500/15 text-red-400 border-red-500/30"
+                  }`}
+                >
+                  {f.won ? "W" : "L"}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            {form.map((f) => (
+              <Link
+                key={f.match_id}
+                href={`/turniere/${f.tournament_id}`}
+                className="flex items-center gap-2 text-xs px-2 py-1.5 rounded-lg hover:bg-accent/50 transition-colors"
+              >
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black shrink-0 ${
+                  f.won ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
+                }`}>
+                  {f.won ? "W" : "L"}
+                </span>
+                <span className="text-muted-foreground truncate flex-1">
+                  {f.won ? "Sieg" : "Niederlage"} vs <span className="text-foreground font-medium">{f.opponent_name}</span>
+                </span>
+                <span className="tabular-nums font-medium shrink-0">
+                  {f.score_for ?? "?"}:{f.score_against ?? "?"}
+                </span>
+                <span className="text-muted-foreground/50 shrink-0">
+                  {RUNDE_LABELS[f.runde] ?? f.runde}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Extended autodarts stats */}
       {(profile.stats?.first9_avg != null || profile.stats?.double_rate != null) && (

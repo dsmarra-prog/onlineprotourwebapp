@@ -139,6 +139,7 @@ export type TourPlayerProfile = {
   id: number;
   name: string;
   autodarts_username: string;
+  discord_id?: string | null;
   avatar_url?: string | null;
   created_at: string;
   oom_points: number;

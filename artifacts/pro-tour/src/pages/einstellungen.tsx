@@ -588,6 +588,32 @@ export default function EinstellungenPage() {
     }));
   }, [discordStatus]);
 
+  // ── Discord ID ────────────────────────────────────────────────────────────
+  const [discordIdInput, setDiscordIdInput] = useState("");
+  const [discordIdPin, setDiscordIdPin] = useState("");
+
+  const { data: playerProfile, refetch: refetchProfile } = useQuery({
+    queryKey: ["player-profile-self", currentPlayer?.id],
+    queryFn: () => apiFetch<{ discord_id: string | null }>(`/tour/players/${currentPlayer!.id}`),
+    enabled: !!currentPlayer,
+    staleTime: 60_000,
+    select: (d) => ({ discord_id: d.discord_id }),
+  });
+
+  const saveDiscordId = useMutation({
+    mutationFn: () =>
+      apiFetch<{ ok: boolean; message: string }>(`/tour/players/${currentPlayer!.id}/discord-id`, {
+        method: "PATCH",
+        body: JSON.stringify({ discord_id: discordIdInput.trim() || null, player_pin: discordIdPin }),
+      }),
+    onSuccess: (d) => {
+      toast({ title: d.message });
+      setDiscordIdPin("");
+      refetchProfile();
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
   // ── Push Notifications ───────────────────────────────────────────────────
   const [pushPin, setPushPin] = useState("");
   const [pushLoading, setPushLoading] = useState(false);
@@ -784,6 +810,67 @@ export default function EinstellungenPage() {
               </Button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Discord ID */}
+      {currentPlayer && (
+        <div className="bg-card border border-border rounded-xl p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-[#5865F2]" />
+              <span className="font-semibold text-sm">Discord-ID</span>
+            </div>
+            {playerProfile?.discord_id && (
+              <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-[#5865F2]/10 text-[#5865F2] border border-[#5865F2]/20">Verknüpft</span>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Trage deine Discord-Nutzer-ID ein damit du bei Matches direkt in Discord erwähnt wirst. Die ID findest du in Discord unter Einstellungen → Erweitert → Entwicklermodus, dann Rechtsklick auf deinen Namen → ID kopieren.
+          </p>
+          {playerProfile?.discord_id && (
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-[#5865F2]/5 border border-[#5865F2]/20">
+              <MessageSquare className="w-3.5 h-3.5 text-[#5865F2]" />
+              <span className="text-xs font-mono text-[#5865F2]">{playerProfile.discord_id}</span>
+            </div>
+          )}
+          <div className="space-y-2">
+            <div className="space-y-1">
+              <Label className="text-xs">Discord-Nutzer-ID</Label>
+              <Input
+                value={discordIdInput || (playerProfile?.discord_id ?? "")}
+                onChange={(e) => setDiscordIdInput(e.target.value)}
+                placeholder="z.B. 123456789012345678"
+                className="h-8 text-sm font-mono"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">PIN zur Bestätigung</Label>
+              <Input type="password" value={discordIdPin} onChange={(e) => setDiscordIdPin(e.target.value)} placeholder="••••" className="h-8 text-sm" />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                className="flex-1 gap-2"
+                disabled={discordIdPin.length < 4 || saveDiscordId.isPending}
+                onClick={() => saveDiscordId.mutate()}
+              >
+                {saveDiscordId.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
+                Speichern
+              </Button>
+              {playerProfile?.discord_id && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-muted-foreground"
+                  disabled={discordIdPin.length < 4 || saveDiscordId.isPending}
+                  onClick={() => { setDiscordIdInput(""); saveDiscordId.mutate(); }}
+                >
+                  Entfernen
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

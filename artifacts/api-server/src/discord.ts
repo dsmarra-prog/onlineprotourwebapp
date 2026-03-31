@@ -446,6 +446,33 @@ export async function sendTournamentCheckInReminder(opts: {
   }
 }
 
+// ─── Match @mention in Discord thread ────────────────────────────────────────
+export async function postMatchMentionsToThread(opts: {
+  threadId: string;
+  p1Name: string;
+  p2Name: string;
+  p1DiscordId: string | null;
+  p2DiscordId: string | null;
+  runde: string;
+  lobbyUrl?: string | null;
+}) {
+  const { botToken } = await getDiscordSettings();
+  if (!botToken) return;
+
+  const m1 = opts.p1DiscordId ? `<@${opts.p1DiscordId}>` : `**${opts.p1Name}**`;
+  const m2 = opts.p2DiscordId ? `<@${opts.p2DiscordId}>` : `**${opts.p2Name}**`;
+
+  const roundLabel: Record<string, string> = {
+    F: "Finale", SF: "Halbfinale", QF: "Viertelfinale",
+    R16: "Achtelfinale", R32: "Letzte 32", R64: "Runde 1",
+  };
+  const roundText = roundLabel[opts.runde] ?? opts.runde;
+  const lobbyLine = opts.lobbyUrl ? `\n🔗 Lobby: ${opts.lobbyUrl}` : "";
+  const content = `${m1} ${m2} — Ihr seid dran! Verabredet euch hier für euer ${roundText}-Match. 🎯${lobbyLine}`;
+
+  await botRequest(botToken, "POST", `/channels/${opts.threadId}/messages`, { content });
+}
+
 export async function notifyOomUpdate(tourType: "pro" | "dev") {
   const { webhookUrl } = await getDiscordSettings();
   if (!webhookUrl) return;

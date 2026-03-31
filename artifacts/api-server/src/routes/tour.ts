@@ -39,6 +39,7 @@ import {
   postLiveScoreToThread,
   updateLiveScoreMessage,
   postMatchResultToThread,
+  postMatchMentionsToThread,
 } from "../discord.js";
 
 const router: IRouter = Router();
@@ -607,6 +608,18 @@ async function notifyMatchReady(matchId: number, tournamentName: string, lobbyUr
     if (match[0].player2_id) {
       sendPushToPlayer(match[0].player2_id, `🎯 Dein Match ist bereit!`, bodyText, notifUrl).catch(() => {});
     }
+
+    // Discord @mentions — send into the match thread if it exists (may have just been created)
+    if (match[0].discord_thread_id) {
+      postMatchMentionsToThread({
+        threadId: match[0].discord_thread_id,
+        p1Name, p2Name,
+        p1DiscordId: p1[0]?.discord_id ?? null,
+        p2DiscordId: p2[0]?.discord_id ?? null,
+        runde: match[0].runde,
+        lobbyUrl,
+      }).catch(() => {});
+    }
   } catch (e) {
     console.warn("notifyMatchReady error:", String(e));
   }
@@ -654,23 +667,35 @@ async function advanceWinner(tournamentId: number, currentRunde: string, matchNr
     // Auto-create Autodarts lobby
     const lobbyUrl = await autoCreateLobby(updated[0].id).catch(() => null);
 
-    // Load player names for Discord thread
+    // Load player names + discord IDs for notifications
     const [p1, p2] = await Promise.all([
-      db.select({ name: tourPlayersTable.name }).from(tourPlayersTable)
-        .where(eq(tourPlayersTable.id, updated[0].player1_id!)).limit(1),
-      db.select({ name: tourPlayersTable.name }).from(tourPlayersTable)
-        .where(eq(tourPlayersTable.id, updated[0].player2_id!)).limit(1),
+      db.select({ name: tourPlayersTable.name, discord_id: tourPlayersTable.discord_id })
+        .from(tourPlayersTable).where(eq(tourPlayersTable.id, updated[0].player1_id!)).limit(1),
+      db.select({ name: tourPlayersTable.name, discord_id: tourPlayersTable.discord_id })
+        .from(tourPlayersTable).where(eq(tourPlayersTable.id, updated[0].player2_id!)).limit(1),
     ]);
 
-    // Discord match thread for this round
+    // Discord match thread for this round + @mentions + push — all coordinated
     const matchIdForThread = updated[0].id;
     createMatchThreadForMatch(
       tournamentName, tournamentId,
       updated[0].runde, updated[0].match_nr,
       p1[0]?.name ?? "Spieler 1", p2[0]?.name ?? "Spieler 2",
       lobbyUrl,
-    ).then((threadId) => {
-      if (threadId) db.update(tourMatchesTable).set({ discord_thread_id: threadId }).where(eq(tourMatchesTable.id, matchIdForThread)).catch(() => {});
+    ).then(async (threadId) => {
+      if (threadId) {
+        db.update(tourMatchesTable).set({ discord_thread_id: threadId }).where(eq(tourMatchesTable.id, matchIdForThread)).catch(() => {});
+        // Post @mentions into the thread immediately after creation
+        postMatchMentionsToThread({
+          threadId,
+          p1Name: p1[0]?.name ?? "Spieler 1",
+          p2Name: p2[0]?.name ?? "Spieler 2",
+          p1DiscordId: p1[0]?.discord_id ?? null,
+          p2DiscordId: p2[0]?.discord_id ?? null,
+          runde: updated[0].runde,
+          lobbyUrl,
+        }).catch(() => {});
+      }
     }).catch(() => {});
 
     notifyMatchReady(updated[0].id, tournamentName, lobbyUrl).catch(() => {});
@@ -2062,6 +2087,53 @@ router.patch("/tour/players/:id/discord-id", async (req, res) => {
   }
 });
 
+// GET /tour/players/:id/form — last 5 match results
+router.get("/tour/players/:id/form", async (req, res) => {
+  try {
+    const playerId = parseInt(req.params.id);
+    if (isNaN(playerId)) return res.status(400).json({ error: "Ungültige ID" });
+
+    const completed = await db.select().from(tourMatchesTable)
+      .where(and(
+        eq(tourMatchesTable.status, "abgeschlossen"),
+        or(eq(tourMatchesTable.player1_id, playerId), eq(tourMatchesTable.player2_id, playerId))
+      ))
+      .orderBy(desc(tourMatchesTable.id))
+      .limit(5);
+
+    if (completed.length === 0) return res.json([]);
+
+    const playerIds = [...new Set(completed.flatMap((m) => [m.player1_id, m.player2_id].filter(Boolean) as number[]))];
+    const playerRows = await db.select({ id: tourPlayersTable.id, name: tourPlayersTable.name })
+      .from(tourPlayersTable).where(or(...playerIds.map((pid) => eq(tourPlayersTable.id, pid))));
+    const playerMap = new Map(playerRows.map((p) => [p.id, p.name]));
+
+    const tournamentIds = [...new Set(completed.map((m) => m.tournament_id))];
+    const tournamentRows = await db.select({ id: tourTournamentsTable.id, name: tourTournamentsTable.name })
+      .from(tourTournamentsTable).where(or(...tournamentIds.map((tid) => eq(tourTournamentsTable.id, tid))));
+    const tournamentMap = new Map(tournamentRows.map((t) => [t.id, t.name]));
+
+    const form = completed.map((m) => {
+      const isP1 = m.player1_id === playerId;
+      const opponentId = isP1 ? m.player2_id : m.player1_id;
+      return {
+        match_id: m.id,
+        tournament_id: m.tournament_id,
+        tournament_name: tournamentMap.get(m.tournament_id) ?? "?",
+        runde: m.runde,
+        won: m.winner_id === playerId,
+        score_for: isP1 ? m.score_p1 : m.score_p2,
+        score_against: isP1 ? m.score_p2 : m.score_p1,
+        opponent_name: opponentId ? (playerMap.get(opponentId) ?? "?") : "?",
+      };
+    });
+
+    res.json(form);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // GET /tour/players/:id
 router.get("/tour/players/:id", async (req, res) => {
   try {
@@ -2143,6 +2215,7 @@ router.get("/tour/players/:id", async (req, res) => {
       id: player[0].id,
       name: player[0].name,
       autodarts_username: player[0].autodarts_username,
+      discord_id: player[0].discord_id ?? null,
       avatar_url: player[0].avatar_url ?? null,
       created_at: player[0].created_at,
       oom_points: totalPoints,

@@ -285,7 +285,9 @@ function NavBar() {
             <NavLink key={href} href={href} label={label} icon={icon} live={live} liveCount={liveCount} />
           ))}
 
-          <NavDropdown label="OOM" icon={BarChart3} items={NAV_OOM} activeCheck={oomActive} />
+          {NAV_OOM.map(({ href, label, icon }) => (
+            <NavLink key={href} href={href} label={label} icon={icon} />
+          ))}
 
           <NavDropdown label="Mehr" icon={ChevronDown} items={NAV_MEHR} activeCheck={mehrActive} />
 
