@@ -4081,27 +4081,21 @@ router.get("/tour/autodarts-global-status", async (_req, res) => {
 // POST /tour/admin/autodarts-token — admin: update Autodarts refresh token (survives restarts via DB)
 router.post("/tour/admin/autodarts-token", async (req, res) => {
   try {
-    const { pin, refresh_token } = req.body;
-    if (!pin || !refresh_token) return res.status(400).json({ error: "pin und refresh_token erforderlich" });
-    // Accept any registered player's PIN (all are trusted admins in this closed system)
-    const pinHash = crypto.createHash("sha256").update(String(pin)).digest("hex");
-    const players = await db.select().from(tourPlayersTable).limit(20);
-    const isAdmin = players.some((p) => p.pin_hash === pinHash);
-    // Also accept the env-level admin override
-    const adminOverride = process.env.ADMIN_PIN
-      ? crypto.createHash("sha256").update(process.env.ADMIN_PIN).digest("hex") === pinHash
-      : false;
-    if (!isAdmin && !adminOverride) return res.status(403).json({ error: "Ungültige PIN" });
-    // Reset in-memory state and persist to DB
+    const { admin_player_id, admin_player_pin, refresh_token } = req.body;
+    if (!admin_player_id || !admin_player_pin || !refresh_token) {
+      return res.status(400).json({ error: "Authentifizierung und refresh_token erforderlich" });
+    }
+    const ok = await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!ok) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
     activeRefreshToken = refresh_token;
     cachedToken = null;
     await persistRefreshToken(refresh_token);
-    // Verify it works
     const token = await getAutodartAccessToken();
     if (!token) return res.status(502).json({ error: "Token gespeichert, aber Autodarts-Login fehlgeschlagen" });
     res.json({ ok: true, message: "Token aktualisiert und verifiziert" });
   } catch (e) {
-    res.status(500).json({ error: String(e) });
+    res.status(500).json({ error: "Interner Fehler" });
   }
 });
 
@@ -4634,30 +4628,59 @@ router.post("/tour/admin/chat", async (req, res) => {
   }
 });
 
-// POST /tour/admin/use-my-autodarts-token — admin uses their own Autodarts token as global
-router.post("/tour/admin/use-my-autodarts-token", async (req, res) => {
+// POST /tour/admin/autodarts-connect-global — admin connects Autodarts globally (one token for all)
+router.post("/tour/admin/autodarts-connect-global", async (req, res) => {
   try {
-    const { admin_player_id, admin_player_pin } = req.body;
-    if (!admin_player_id || !admin_player_pin) {
-      return res.status(400).json({ error: "admin_player_id und admin_player_pin erforderlich" });
+    const { admin_player_id, admin_player_pin, token } = req.body;
+    if (!admin_player_id || !admin_player_pin || !token) {
+      return res.status(400).json({ error: "Authentifizierung und Token erforderlich" });
     }
     const ok = await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
     if (!ok) return res.status(403).json({ error: "Kein Admin-Zugriff" });
 
-    const [player] = await db.select().from(tourPlayersTable)
-      .where(eq(tourPlayersTable.id, parseInt(admin_player_id))).limit(1);
-    if (!player) return res.status(404).json({ error: "Spieler nicht gefunden" });
+    const verifyRes = await fetch(
+      "https://login.autodarts.io/realms/autodarts/protocol/openid-connect/token",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          client_id: "autodarts-play",
+          refresh_token: token,
+        }),
+      }
+    );
+    if (!verifyRes.ok) return res.status(400).json({ error: "Autodarts-Token ungültig oder abgelaufen" });
+    const tokenData: any = await verifyRes.json();
+    const latestRefreshToken = tokenData.refresh_token ?? token;
 
-    if (!player.autodarts_refresh_token) {
-      return res.status(400).json({ error: "Du hast noch keinen Autodarts-Account verknüpft. Verbinde zuerst deinen Account unter Einstellungen." });
-    }
+    activeRefreshToken = latestRefreshToken;
+    cachedToken = null;
+    await persistRefreshToken(latestRefreshToken);
 
-    await persistRefreshToken(player.autodarts_refresh_token);
-    activeRefreshToken = player.autodarts_refresh_token;
-
-    res.json({ ok: true, message: `Autodarts-Token von ${player.name} wird jetzt für die automatische Score-Synchronisation verwendet.` });
+    res.json({ ok: true, message: "Autodarts global verbunden! Score-Synchronisation ist jetzt aktiv für alle Spieler." });
   } catch (e) {
-    res.status(500).json({ error: String(e) });
+    res.status(500).json({ error: "Interner Fehler" });
+  }
+});
+
+// POST /tour/admin/autodarts-disconnect-global — admin disconnects the global token
+router.post("/tour/admin/autodarts-disconnect-global", async (req, res) => {
+  try {
+    const { admin_player_id, admin_player_pin } = req.body;
+    if (!admin_player_id || !admin_player_pin) {
+      return res.status(400).json({ error: "Authentifizierung erforderlich" });
+    }
+    const ok = await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!ok) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
+    activeRefreshToken = null;
+    cachedToken = null;
+    await db.delete(systemSettingsTable).where(eq(systemSettingsTable.key, "autodarts_refresh_token"));
+
+    res.json({ ok: true, message: "Globale Autodarts-Verbindung getrennt." });
+  } catch (e) {
+    res.status(500).json({ error: "Interner Fehler" });
   }
 });
 

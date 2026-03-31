@@ -11,7 +11,6 @@ export default function AutodartsCallback() {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("t");
 
-    // Clear token from URL immediately so it doesn't linger in browser history
     if (token) {
       window.history.replaceState({}, "", window.location.pathname);
     }
@@ -29,29 +28,56 @@ export default function AutodartsCallback() {
       return;
     }
 
-    const { player_id, pin } = JSON.parse(stored);
+    const parsed = JSON.parse(stored);
     localStorage.removeItem("autodarts_connect");
 
-    apiFetch<{ ok: boolean; message?: string; error?: string }>(
-      `/tour/players/${player_id}/autodarts-connect`,
-      {
-        method: "POST",
-        body: JSON.stringify({ token, pin }),
-      }
-    )
-      .then((data) => {
-        if (data.ok) {
-          setStatus("success");
-          setMessage(data.message ?? "Erfolgreich verbunden!");
-        } else {
-          setStatus("error");
-          setMessage(data.error ?? "Unbekannter Fehler");
+    if (parsed.mode === "global") {
+      apiFetch<{ ok: boolean; message?: string; error?: string }>(
+        "/tour/admin/autodarts-connect-global",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            admin_player_id: parsed.player_id,
+            admin_player_pin: parsed.pin,
+            token,
+          }),
         }
-      })
-      .catch((e: Error) => {
-        setStatus("error");
-        setMessage(e.message);
-      });
+      )
+        .then((data) => {
+          if (data.ok) {
+            setStatus("success");
+            setMessage(data.message ?? "Autodarts global verbunden!");
+          } else {
+            setStatus("error");
+            setMessage(data.error ?? "Unbekannter Fehler");
+          }
+        })
+        .catch((e: Error) => {
+          setStatus("error");
+          setMessage(e.message);
+        });
+    } else {
+      apiFetch<{ ok: boolean; message?: string; error?: string }>(
+        `/tour/players/${parsed.player_id}/autodarts-connect`,
+        {
+          method: "POST",
+          body: JSON.stringify({ token, pin: parsed.pin }),
+        }
+      )
+        .then((data) => {
+          if (data.ok) {
+            setStatus("success");
+            setMessage(data.message ?? "Erfolgreich verbunden!");
+          } else {
+            setStatus("error");
+            setMessage(data.error ?? "Unbekannter Fehler");
+          }
+        })
+        .catch((e: Error) => {
+          setStatus("error");
+          setMessage(e.message);
+        });
+    }
   }, []);
 
   return (
@@ -74,7 +100,7 @@ export default function AutodartsCallback() {
             <CheckCircle className="w-10 h-10 text-green-400 mx-auto" />
             <p className="text-sm text-green-400 font-semibold">{message}</p>
             <p className="text-xs text-muted-foreground">
-              Dein Autodarts-Account ist jetzt verknüpft. Du kannst diesen Tab schließen.
+              Autodarts ist jetzt verknüpft. Du kannst diesen Tab schließen.
             </p>
             <Button className="w-full" onClick={() => window.close()}>
               Tab schließen

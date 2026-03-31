@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Settings, CheckCircle, Loader2, Target, KeyRound, RefreshCw, ShieldCheck, LogOut,
-  User, Link2, Link2Off, ChevronDown, Wifi, WifiOff, Copy, Check, ExternalLink,
+  Settings, CheckCircle, Loader2, Target, RefreshCw, ShieldCheck, LogOut, Check,
+  User, ChevronDown, Wifi, WifiOff,
   MessageSquare, Bell, GitBranch, Send,
   AlertTriangle, ThumbsUp, ThumbsDown, Flag,
 } from "lucide-react";
@@ -533,10 +533,6 @@ export default function EinstellungenPage() {
   const { currentPlayer, sessionPin, logout } = usePlayer();
   const queryClient = useQueryClient();
 
-  // ── Admin token section ──────────────────────────────────────────────────
-  const [tokenForm, setTokenForm] = useState({ refresh_token: "" });
-  const [tokenSectionOpen, setTokenSectionOpen] = useState(false);
-
   // ── Discord settings ─────────────────────────────────────────────────────
   const [discordOpen, setDiscordOpen] = useState(false);
   const [discordForm, setDiscordForm] = useState({
@@ -591,22 +587,6 @@ export default function EinstellungenPage() {
       // bot_token left empty intentionally — never returned from server
     }));
   }, [discordStatus]);
-
-  const tokenMut = useMutation({
-    mutationFn: () =>
-      apiFetch<{ ok: boolean; message: string }>("/tour/admin/autodarts-token", {
-        method: "POST",
-        body: JSON.stringify({ pin: sessionPin, refresh_token: tokenForm.refresh_token.trim() }),
-      }),
-    onSuccess: (data) => {
-      toast({ title: "Token aktualisiert", description: data.message });
-      setTokenForm({ refresh_token: "" });
-      setTokenSectionOpen(false);
-    },
-    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
-  });
-
-  const canUpdateToken = tokenForm.refresh_token.trim().length > 20;
 
   // ── Push Notifications ───────────────────────────────────────────────────
   const [pushPin, setPushPin] = useState("");
@@ -680,91 +660,12 @@ export default function EinstellungenPage() {
     }
   };
 
-  // ── Player Autodarts connection ──────────────────────────────────────────
-  const [disconnectPin, setDisconnectPin] = useState("");
-  const [connectPin, setConnectPin] = useState("");
-  const [connectStep, setConnectStep] = useState<"form" | "script">("form");
-  const [manualToken, setManualToken] = useState("");
-  const [copied, setCopied] = useState(false);
-
-  const manualConnectMut = useMutation({
-    mutationFn: () =>
-      apiFetch<{ ok: boolean; message?: string; error?: string }>(
-        `/tour/players/${currentPlayer!.id}/autodarts-connect`,
-        { method: "POST", body: JSON.stringify({ token: manualToken.trim(), pin: connectPin }) }
-      ),
-    onSuccess: (data) => {
-      if (data.ok) {
-        toast({ title: "Verbunden!", description: data.message ?? "Autodarts erfolgreich verbunden." });
-        setConnectStep("form");
-        setManualToken("");
-        queryClient.invalidateQueries({ queryKey: ["autodarts-status", currentPlayer?.id] });
-      } else {
-        toast({ title: "Fehler", description: data.error, variant: "destructive" });
-      }
-    },
-    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
-  });
-
-  const { data: adStatus, isLoading: statusLoading } = useQuery({
-    queryKey: ["autodarts-status", currentPlayer?.id],
-    queryFn: () => apiFetch<{ connected: boolean }>(`/tour/players/${currentPlayer!.id}/autodarts-status`),
-    enabled: !!currentPlayer,
-    staleTime: 30_000,
-  });
-
   const { data: globalAdStatus } = useQuery({
     queryKey: ["autodarts-global-status"],
     queryFn: () => apiFetch<{ configured: boolean }>("/tour/autodarts-global-status"),
     staleTime: 60_000,
   });
 
-  const [showOwnConnect, setShowOwnConnect] = useState(false);
-
-  const disconnectMut = useMutation({
-    mutationFn: () =>
-      apiFetch<{ ok: boolean }>(`/tour/players/${currentPlayer!.id}/autodarts-disconnect`, {
-        method: "POST",
-        body: JSON.stringify({ pin: disconnectPin }),
-      }),
-    onSuccess: () => {
-      toast({ title: "Getrennt", description: "Autodarts-Verbindung wurde entfernt." });
-      setDisconnectPin("");
-      queryClient.invalidateQueries({ queryKey: ["autodarts-status", currentPlayer?.id] });
-    },
-    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
-  });
-
-  const base = import.meta.env.BASE_URL.endsWith("/")
-    ? import.meta.env.BASE_URL
-    : import.meta.env.BASE_URL + "/";
-  const callbackUrl = `${window.location.origin}${base}autodarts-callback`;
-
-  // Relay script: first tries to read the refreshToken directly from the React fiber tree
-  // (no network request needed), then falls back to network interception.
-  const connectScript = currentPlayer && connectPin.length >= 4
-    ? `(()=>{const CB='${callbackUrl}';let ok=false;function relay(t){if(ok)return;ok=true;window.location.href=CB+'?t='+encodeURIComponent(t);}function findKC(){for(const k of Object.keys(window)){try{const w=window[k];if(w&&typeof w.updateToken==='function'&&w.refreshToken)return w;}catch{}}const root=document.getElementById('root')||document.body;const fk=Object.keys(root).find(k=>k.startsWith('__reactFiber')||k.startsWith('__reactInternalInstance'));if(!fk)return null;const q=[root[fk]];for(let i=0;i<8000&&q.length;i++){const f=q.shift();if(!f)continue;if(f.type&&f.type._context){const v=f.type._context._currentValue||{};for(const c of[v,v.keycloak,v.authClient]){if(c&&typeof c.updateToken==='function'&&c.refreshToken)return c;}}if(f.memoizedProps){for(const c of[f.memoizedProps.keycloak,f.memoizedProps.authClient]){if(c&&typeof c.updateToken==='function'&&c.refreshToken)return c;}}let h=f.memoizedState;while(h){const s=h.memoizedState||{};for(const c of[s,s.keycloak,s.authClient]){if(c&&typeof c.updateToken==='function'&&c.refreshToken)return c;}h=h.next;}if(f.child)q.push(f.child);if(f.sibling)q.push(f.sibling);}return null;}const kc=findKC();if(kc&&kc.refreshToken){console.log('Token gefunden, Weiterleitung...');relay(kc.refreshToken);}else{const oF=window.fetch;window.fetch=async function(u,v){const r=await oF.apply(this,arguments);if(typeof u==='string'&&u.includes('openid-connect/token')){try{const d=await r.clone().json();if(d.refresh_token)relay(d.refresh_token);}catch{}}return r;};const oO=XMLHttpRequest.prototype.open,oS=XMLHttpRequest.prototype.send;XMLHttpRequest.prototype.open=function(m,u){this._u=String(u||'');return oO.apply(this,arguments);};XMLHttpRequest.prototype.send=function(){this.addEventListener('load',()=>{if(this._u.includes('openid-connect/token')){try{const d=JSON.parse(this.responseText);if(d.refresh_token)relay(d.refresh_token);}catch{}}});return oS.apply(this,arguments);};for(const k of Object.keys(window)){try{const w=window[k];if(w&&typeof w.updateToken==='function'){w.updateToken(99999);break;}}catch{}}console.log('Token nicht direkt lesbar – klicke auf eine Lobby auf dieser Seite...');}})();`
-    : "";
-
-  const handleStartConnect = () => {
-    if (!currentPlayer || connectPin.length < 4) return;
-    localStorage.setItem("autodarts_connect", JSON.stringify({
-      player_id: currentPlayer.id,
-      pin: connectPin,
-    }));
-    window.open("https://play.autodarts.io", "_blank");
-    setConnectStep("script");
-  };
-
-  const handleCopyScript = () => {
-    if (!connectScript) return;
-    navigator.clipboard.writeText(connectScript).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
-
-  const isConnected = adStatus?.connected ?? false;
 
   return (
     <div className="space-y-6 max-w-md">
@@ -837,124 +738,46 @@ export default function EinstellungenPage() {
         </div>
       )}
 
-      {/* Autodarts Account verbinden */}
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <div className="p-4 flex items-center justify-between">
+      {/* Autodarts Status */}
+      <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {statusLoading ? (
-              <Loader2 className="w-4 h-4 text-primary animate-spin" />
-            ) : isConnected ? (
+            {globalAdStatus?.configured ? (
               <Wifi className="w-4 h-4 text-green-400" />
-            ) : globalAdStatus?.configured ? (
-              <Wifi className="w-4 h-4 text-blue-400" />
             ) : (
               <WifiOff className="w-4 h-4 text-muted-foreground" />
             )}
             <span className="font-semibold text-sm">Autodarts</span>
           </div>
-          {!statusLoading && (
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-              isConnected
-                ? "bg-green-500/10 text-green-400 border border-green-500/20"
-                : globalAdStatus?.configured
-                ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
-                : "bg-muted text-muted-foreground border border-border"
-            }`}>
-              {isConnected ? "Eigenes Konto" : globalAdStatus?.configured ? "Automatisch aktiv" : "Nicht verbunden"}
-            </span>
-          )}
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+            globalAdStatus?.configured
+              ? "bg-green-500/10 text-green-400 border border-green-500/20"
+              : "bg-muted text-muted-foreground border border-border"
+          }`}>
+            {globalAdStatus?.configured ? "Aktiv" : "Nicht verbunden"}
+          </span>
         </div>
 
-        <div className="border-t border-border px-4 pb-4 pt-4 space-y-4">
-          {isConnected ? (
-            <>
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/5 border border-green-500/20">
-                <Link2 className="w-4 h-4 text-green-400 shrink-0" />
-                <p className="text-xs text-muted-foreground">
-                  Dein Autodarts-Account ist verbunden. Lobbys werden über deinen eigenen Account erstellt.
-                </p>
-              </div>
+        {globalAdStatus?.configured ? (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/5 border border-green-500/20">
+            <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
+            <p className="text-xs text-muted-foreground">
+              Autodarts ist zentral verbunden. Match-Ergebnisse werden automatisch synchronisiert und Lobbys erstellt — du musst nichts einrichten.
+            </p>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-500/5 border border-yellow-500/20">
+            <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0" />
+            <p className="text-xs text-muted-foreground">
+              Autodarts ist noch nicht verbunden. Ein Admin muss die Verbindung im Admin-Bereich einrichten.
+            </p>
+          </div>
+        )}
 
-              <p className="text-xs text-muted-foreground">
-                Um die Verbindung zu trennen, gib deinen PIN ein:
-              </p>
-              <div className="flex gap-2">
-                <Input
-                  type="password"
-                  placeholder="PIN"
-                  value={disconnectPin}
-                  onChange={(e) => setDisconnectPin(e.target.value)}
-                  className="max-w-[120px]"
-                />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive border-destructive/30 hover:bg-destructive/10"
-                  disabled={disconnectPin.length < 4 || disconnectMut.isPending}
-                  onClick={() => disconnectMut.mutate()}
-                >
-                  {disconnectMut.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <><Link2Off className="w-4 h-4 mr-1.5" /> Trennen</>
-                  )}
-                </Button>
-              </div>
-
-              <div className="border-t border-border pt-3 space-y-2">
-                <p className="text-xs text-muted-foreground">Token abgelaufen? Hier neu verbinden:</p>
-                <ConnectFlow
-                  pin={connectPin} onPinChange={setConnectPin}
-                  step={connectStep} onStart={handleStartConnect}
-                  onBack={() => { setConnectStep("form"); setManualToken(""); }}
-                  script={connectScript} copied={copied} onCopy={handleCopyScript}
-                  manualToken={manualToken} onManualTokenChange={setManualToken}
-                  onManualSubmit={() => manualConnectMut.mutate()}
-                  manualPending={manualConnectMut.isPending}
-                />
-              </div>
-            </>
-          ) : globalAdStatus?.configured ? (
-            <>
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
-                <CheckCircle className="w-4 h-4 text-blue-400 shrink-0" />
-                <p className="text-xs text-muted-foreground">
-                  Lobbys werden automatisch über den Admin-Account erstellt — du musst nichts einrichten.
-                </p>
-              </div>
-              <button
-                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-                onClick={() => setShowOwnConnect(v => !v)}
-              >
-                <ChevronDown className={`w-3 h-3 transition-transform ${showOwnConnect ? "rotate-180" : ""}`} />
-                Optional: Lobbys über eigenes Autodarts-Konto erstellen
-              </button>
-              {showOwnConnect && (
-                <ConnectFlow
-                  pin={connectPin} onPinChange={setConnectPin}
-                  step={connectStep} onStart={handleStartConnect}
-                  onBack={() => { setConnectStep("form"); setManualToken(""); }}
-                  script={connectScript} copied={copied} onCopy={handleCopyScript}
-                  manualToken={manualToken} onManualTokenChange={setManualToken}
-                  onManualSubmit={() => manualConnectMut.mutate()}
-                  manualPending={manualConnectMut.isPending}
-                />
-              )}
-            </>
-          ) : (
-            <>
-              <ConnectFlow
-                pin={connectPin} onPinChange={setConnectPin}
-                step={connectStep} onStart={handleStartConnect}
-                onBack={() => { setConnectStep("form"); setManualToken(""); }}
-                script={connectScript} copied={copied} onCopy={handleCopyScript}
-                manualToken={manualToken} onManualTokenChange={setManualToken}
-                onManualSubmit={() => manualConnectMut.mutate()}
-                manualPending={manualConnectMut.isPending}
-              />
-            </>
-          )}
-        </div>
+        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+          <Target className="w-3 h-3 text-primary shrink-0" />
+          Dein Autodarts-Name: <span className="font-semibold text-foreground">@{currentPlayer?.autodarts_username}</span>
+        </p>
       </div>
 
       {/* How it works */}
@@ -1105,227 +928,7 @@ export default function EinstellungenPage() {
       {/* Admin: Avatar Sync */}
       {currentPlayer?.is_admin && <AvatarSyncButton />}
 
-      {/* Admin: Autodarts Global Token Update */}
-      {currentPlayer?.is_admin && <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <button
-          className="w-full flex items-center justify-between p-4 text-left hover:bg-accent/30 transition-colors"
-          onClick={() => setTokenSectionOpen((o) => !o)}
-        >
-          <div className="flex items-center gap-2">
-            <KeyRound className="w-4 h-4 text-primary" />
-            <span className="font-semibold text-sm">Admin: Globaler Autodarts Token</span>
-          </div>
-          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${tokenSectionOpen ? "rotate-180" : ""}`} />
-        </button>
-
-        {tokenSectionOpen && (
-          <div className="px-4 pb-4 space-y-4 border-t border-border pt-4">
-            <p className="text-xs text-muted-foreground">
-              Der globale Token ist der Fallback für alle Spieler ohne eigene Verbindung.
-              Nur nötig falls kein Spieler seinen Account verbunden hat.
-            </p>
-
-            <div className="space-y-1">
-              <Label>Autodarts Refresh Token</Label>
-              <Textarea
-                value={tokenForm.refresh_token}
-                onChange={(e) => setTokenForm((f) => ({ ...f, refresh_token: e.target.value }))}
-                placeholder="eyJhbGciOi..."
-                className="font-mono text-xs h-24 resize-none"
-              />
-            </div>
-
-            <Button
-              className="w-full"
-              disabled={!canUpdateToken || tokenMut.isPending}
-              onClick={() => tokenMut.mutate()}
-            >
-              {tokenMut.isPending ? (
-                <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Wird gespeichert...</>
-              ) : (
-                <><RefreshCw className="w-4 h-4 mr-2" /> Token aktualisieren</>
-              )}
-            </Button>
-          </div>
-        )}
-      </div>}
     </div>
   );
 }
 
-function ConnectFlow({
-  pin, onPinChange, step, onStart, onBack, script, copied, onCopy,
-  manualToken, onManualTokenChange, onManualSubmit, manualPending,
-}: {
-  pin: string;
-  onPinChange: (v: string) => void;
-  step: "form" | "script";
-  onStart: () => void;
-  onBack: () => void;
-  script: string;
-  copied: boolean;
-  onCopy: () => void;
-  manualToken: string;
-  onManualTokenChange: (v: string) => void;
-  onManualSubmit: () => void;
-  manualPending: boolean;
-}) {
-  const [fallbackOpen, setFallbackOpen] = useState(false);
-
-  if (step === "form") {
-    return (
-      <div className="space-y-3">
-        <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20 text-xs text-muted-foreground">
-          <span className="text-blue-400 font-semibold">Optional:</span> Wenn du verbunden bist, kannst du Lobbys selbst erstellen — auch wenn der Admin gerade nicht online ist.
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs">Dein Pro Tour PIN</Label>
-          <Input
-            type="password"
-            placeholder="PIN eingeben"
-            value={pin}
-            onChange={(e) => onPinChange(e.target.value)}
-            className="max-w-[160px]"
-          />
-        </div>
-        <Button
-          className="w-full gap-2"
-          disabled={pin.length < 4}
-          onClick={onStart}
-        >
-          <ExternalLink className="w-4 h-4" /> Mit Autodarts verbinden
-        </Button>
-        <p className="text-xs text-muted-foreground/60 italic">
-          Dein Passwort wird nie an die Pro Tour übertragen.
-        </p>
-      </div>
-    );
-  }
-
-  const bookmarkletHref = script ? `javascript:${script}` : "#";
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/5 border border-green-500/20">
-        <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
-        <p className="text-xs text-muted-foreground">
-          <span className="text-green-400 font-semibold">play.autodarts.io wurde geöffnet.</span> Logge dich ein und folge den 3 Schritten:
-        </p>
-      </div>
-
-      {/* Step 1 – Drag bookmarklet */}
-      <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
-        <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-          <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-black flex items-center justify-center shrink-0">1</span>
-          Lesezeichen einmalig speichern
-        </p>
-        <p className="text-xs text-muted-foreground">
-          Zeige die Lesezeichen-Leiste an <span className="font-mono bg-muted px-1 rounded text-foreground">Strg+Shift+B</span>, dann ziehe diesen Knopf dorthin:
-        </p>
-        <div className="flex justify-center">
-          <a
-            href={bookmarkletHref}
-            onClick={(e) => e.preventDefault()}
-            draggable
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground rounded-xl font-bold text-sm cursor-grab active:cursor-grabbing select-none shadow-lg hover:bg-primary/90 transition-colors"
-            title="Auf die Lesezeichen-Leiste ziehen"
-          >
-            🎯 Autodarts Connector
-          </a>
-        </div>
-        <p className="text-[10px] text-muted-foreground text-center opacity-60">
-          Schon gespeichert? Weiter mit Schritt 2.
-        </p>
-      </div>
-
-      {/* Steps 2 & 3 */}
-      <div className="space-y-2">
-        <div className="flex items-start gap-3 p-3 rounded-lg bg-card border border-border">
-          <span className="w-5 h-5 rounded-full bg-muted text-foreground text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">2</span>
-          <div className="text-xs text-muted-foreground">
-            Einloggen auf <span className="font-mono text-foreground">play.autodarts.io</span> (falls noch nicht geschehen)
-          </div>
-        </div>
-        <div className="flex items-start gap-3 p-3 rounded-lg bg-card border border-border">
-          <span className="w-5 h-5 rounded-full bg-muted text-foreground text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">3</span>
-          <div className="text-xs text-muted-foreground">
-            Lesezeichen <span className="font-semibold text-foreground">🎯 Autodarts Connector</span> anklicken → du wirst automatisch zurückgeleitet
-          </div>
-        </div>
-      </div>
-
-      {/* Fallback toggle */}
-      <button
-        onClick={() => setFallbackOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${fallbackOpen ? "rotate-180" : ""}`} />
-        Kein Lesezeichen möglich? Alternative Methoden
-      </button>
-
-      {fallbackOpen && (
-        <div className="space-y-3 border-t border-border pt-3">
-          {/* Console method */}
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-muted-foreground">Option A — Browser-Konsole</p>
-            <ol className="text-xs text-muted-foreground space-y-1.5 pl-1">
-              <li className="flex gap-2">
-                <span className="text-primary font-bold shrink-0">1.</span>
-                <span>Auf <span className="font-mono text-foreground">play.autodarts.io</span> einloggen</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="text-primary font-bold shrink-0">2.</span>
-                <span><span className="font-mono bg-muted px-1 rounded">F12</span> → Reiter <span className="font-mono bg-muted px-1 rounded">Console</span></span>
-              </li>
-              <li className="flex gap-2">
-                <span className="text-primary font-bold shrink-0">3.</span>
-                <span>Folgenden Code einfügen und <span className="font-mono bg-muted px-1 rounded">Enter</span> drücken:</span>
-              </li>
-            </ol>
-            <button
-              onClick={onCopy}
-              className="w-full flex items-center justify-between gap-2 p-3 rounded-lg bg-muted/50 hover:bg-muted border border-border hover:border-primary/30 transition-colors"
-            >
-              <span className="font-mono text-xs text-muted-foreground truncate text-left">
-                {script.slice(0, 50)}…
-              </span>
-              <span className="shrink-0 flex items-center gap-1.5 text-xs font-semibold text-primary">
-                {copied ? <><Check className="w-3.5 h-3.5" /> Kopiert!</> : <><Copy className="w-3.5 h-3.5" /> Kopieren</>}
-              </span>
-            </button>
-          </div>
-
-          {/* Manual method */}
-          <div className="space-y-2 pt-2 border-t border-border">
-            <p className="text-xs font-semibold text-muted-foreground">Option B — Token manuell einfügen</p>
-            <p className="text-xs text-muted-foreground">
-              Öffne <span className="font-mono text-foreground">play.autodarts.io</span>, drücke <span className="font-mono bg-muted px-1 rounded">F12</span> → <span className="font-mono bg-muted px-1 rounded">Network</span>, lade neu und suche nach <span className="font-mono bg-muted px-1 rounded">token</span>. Im POST-Request zu <span className="font-mono text-foreground">login.autodarts.io</span> → Response → <span className="font-mono bg-muted px-1 rounded">refresh_token</span> kopieren:
-            </p>
-            <Textarea
-              value={manualToken}
-              onChange={(e) => onManualTokenChange(e.target.value)}
-              placeholder="eyJhbGciO..."
-              className="font-mono text-xs h-16 resize-none"
-            />
-            <Button
-              size="sm"
-              className="w-full"
-              disabled={manualToken.trim().length < 20 || manualPending}
-              onClick={onManualSubmit}
-            >
-              {manualPending ? (
-                <><Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> Wird verbunden...</>
-              ) : (
-                <><Link2 className="w-3.5 h-3.5 mr-2" /> Manuell verbinden</>
-              )}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      <button onClick={onBack} className="text-xs text-muted-foreground underline">
-        ← Zurück
-      </button>
-    </div>
-  );
-}
