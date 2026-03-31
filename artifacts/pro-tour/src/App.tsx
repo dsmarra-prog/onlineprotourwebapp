@@ -1,10 +1,11 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Switch, Route, Router as WouterRouter, Link, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Trophy, Users, BarChart3, Settings, Home, Target, CalendarDays, LogOut, Swords, Menu, X, Star, TrendingUp, GitCompare, HelpCircle, ChevronRight, CheckCircle, Radio } from "lucide-react";
+import { Trophy, Users, BarChart3, Settings, Home, Target, CalendarDays, LogOut, Swords, Menu, X, Star, TrendingUp, GitCompare, HelpCircle, ChevronRight, CheckCircle, Radio, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import NotFound from "@/pages/not-found";
 import TourniereListe from "@/pages/turniere";
 import TurnierDetail from "@/pages/turnier-detail";
@@ -31,14 +32,20 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 10_000 } },
 });
 
-const NAV_ITEMS = [
+const NAV_DIRECT = [
   { href: "/", label: "Start", icon: Home },
   { href: "/spielplan", label: "Spielplan", icon: CalendarDays },
   { href: "/turniere", label: "Turniere", icon: Trophy },
   { href: "/live", label: "Live", icon: Radio, live: true },
-  { href: "/spieler", label: "Spieler", icon: Users },
+];
+
+const NAV_OOM = [
   { href: "/oom", label: "Pro OOM", icon: BarChart3 },
   { href: "/dev-oom", label: "Dev OOM", icon: Swords },
+];
+
+const NAV_MEHR = [
+  { href: "/spieler", label: "Spieler", icon: Users },
   { href: "/statistiken", label: "Statistiken", icon: TrendingUp },
   { href: "/hall-of-fame", label: "Hall of Fame", icon: Star },
   { href: "/saison", label: "Saison", icon: Trophy },
@@ -46,6 +53,8 @@ const NAV_ITEMS = [
   { href: "/hilfe", label: "Hilfe", icon: HelpCircle },
   { href: "/einstellungen", label: "Mein Account", icon: Settings },
 ];
+
+const ALL_NAV = [...NAV_DIRECT, ...NAV_OOM, ...NAV_MEHR];
 
 const BOTTOM_NAV = [
   { href: "/", label: "Start", icon: Home },
@@ -187,6 +196,67 @@ function useLiveCount() {
   ).length;
 }
 
+function NavLink({ href, label, icon: Icon, live, liveCount, onClick }: {
+  href: string; label: string; icon: React.ElementType; live?: boolean; liveCount?: number; onClick?: () => void;
+}) {
+  const [location] = useLocation();
+  const isActive = href === "/" ? location === "/" : location.startsWith(href);
+  const isLiveActive = live && (liveCount ?? 0) > 0;
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+        isActive
+          ? "bg-primary/15 text-primary border border-primary/30"
+          : isLiveActive
+          ? "text-primary border border-primary/20 bg-primary/5"
+          : "text-muted-foreground hover:text-foreground hover:bg-accent"
+      }`}
+    >
+      <Icon className={`w-3.5 h-3.5 ${isLiveActive && !isActive ? "animate-pulse" : ""}`} />
+      {label}
+      {isLiveActive && (
+        <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-primary rounded-full flex items-center justify-center text-[8px] font-black text-black">
+          {liveCount}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+function NavDropdown({ label, icon: Icon, items, activeCheck }: {
+  label: string; icon: React.ElementType;
+  items: { href: string; label: string; icon: React.ElementType }[];
+  activeCheck: boolean;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+          activeCheck
+            ? "bg-primary/15 text-primary border border-primary/30"
+            : "text-muted-foreground hover:text-foreground hover:bg-accent"
+        }`}>
+          <Icon className="w-3.5 h-3.5" />
+          {label}
+          <ChevronDown className="w-3 h-3 ml-0.5 opacity-60" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-44">
+        {items.map(({ href, label: itemLabel, icon: ItemIcon }) => (
+          <DropdownMenuItem key={href} asChild>
+            <Link href={href} className="flex items-center gap-2 cursor-pointer">
+              <ItemIcon className="w-3.5 h-3.5" />
+              {itemLabel}
+            </Link>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function NavBar() {
   const [location] = useLocation();
   const { currentPlayer, logout } = usePlayer();
@@ -195,49 +265,35 @@ function NavBar() {
 
   const handleNavClick = () => setMobileOpen(false);
 
+  const oomActive = NAV_OOM.some(({ href }) => location.startsWith(href));
+  const mehrActive = NAV_MEHR.some(({ href }) => href === "/" ? location === "/" : location.startsWith(href));
+
   return (
     <nav className="border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 flex items-center h-14 gap-1">
-        <Link href="/" className="flex items-center gap-2 mr-4 flex-shrink-0 hover:opacity-80 transition-opacity">
+        <Link href="/" className="flex items-center gap-2 mr-3 flex-shrink-0 hover:opacity-80 transition-opacity">
           <img src="/pro-tour/opt-logo.png" alt="OPT" className="w-8 h-8 object-contain" />
-          <span className="font-bold text-sm text-primary tracking-wide uppercase hidden sm:block">Online Pro Tour</span>
-          <span className="font-bold text-xs text-primary tracking-wide uppercase sm:hidden">OPT</span>
+          <span className="font-bold text-sm text-primary tracking-wide uppercase hidden lg:block">Online Pro Tour</span>
+          <span className="font-bold text-xs text-primary tracking-wide uppercase lg:hidden hidden sm:block">OPT</span>
         </Link>
 
-        <div className="hidden md:flex items-center gap-1 flex-1">
-          {NAV_ITEMS.map(({ href, label, icon: Icon, live }) => {
-            const isActive = href === "/" ? location === "/" : location.startsWith(href);
-            const isLiveActive = live && liveCount > 0;
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
-                  isActive
-                    ? "bg-primary/15 text-primary border border-primary/30"
-                    : isLiveActive
-                    ? "text-primary border border-primary/20 bg-primary/5"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                }`}
-              >
-                <Icon className={`w-3.5 h-3.5 ${isLiveActive && !isActive ? "animate-pulse" : ""}`} />
-                {label}
-                {isLiveActive && (
-                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-primary rounded-full flex items-center justify-center text-[8px] font-black text-black">
-                    {liveCount}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
+        {/* Desktop nav */}
+        <div className="hidden md:flex items-center gap-0.5 flex-1">
+          {NAV_DIRECT.map(({ href, label, icon, live }) => (
+            <NavLink key={href} href={href} label={label} icon={icon} live={live} liveCount={liveCount} />
+          ))}
+
+          <NavDropdown label="OOM" icon={BarChart3} items={NAV_OOM} activeCheck={oomActive} />
+
+          <NavDropdown label="Mehr" icon={ChevronDown} items={NAV_MEHR} activeCheck={mehrActive} />
         </div>
 
         {currentPlayer && (
           <div className="hidden md:flex items-center gap-2 ml-2 pl-3 border-l border-border shrink-0">
-            <div className="text-right">
+            <Link href="/einstellungen" className="text-right hover:opacity-80 transition-opacity">
               <div className="text-xs font-semibold text-foreground leading-none">{currentPlayer.name}</div>
               <div className="text-[10px] text-muted-foreground leading-none mt-0.5">@{currentPlayer.autodarts_username}</div>
-            </div>
+            </Link>
             <button
               onClick={logout}
               title="Ausloggen"
@@ -248,6 +304,7 @@ function NavBar() {
           </div>
         )}
 
+        {/* Mobile hamburger */}
         <div className="flex md:hidden items-center gap-2 flex-1 justify-end">
           {currentPlayer && (
             <span className="text-xs text-muted-foreground truncate max-w-[120px]">{currentPlayer.name}</span>
@@ -262,18 +319,19 @@ function NavBar() {
         </div>
       </div>
 
+      {/* Mobile dropdown */}
       {mobileOpen && (
         <div className="md:hidden border-t border-border bg-card/95 backdrop-blur-sm">
-          <div className="max-w-6xl mx-auto px-4 py-3 space-y-1">
-            {NAV_ITEMS.map(({ href, label, icon: Icon, live }) => {
+          <div className="max-w-6xl mx-auto px-4 py-3 grid grid-cols-2 gap-1">
+            {ALL_NAV.map(({ href, label, icon: Icon, live }) => {
               const isActive = href === "/" ? location === "/" : location.startsWith(href);
-              const isLiveActive = live && liveCount > 0;
+              const isLiveActive = (live as boolean | undefined) && liveCount > 0;
               return (
                 <Link
                   key={href}
                   href={href}
                   onClick={handleNavClick}
-                  className={`relative flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                  className={`relative flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                     isActive
                       ? "bg-primary/15 text-primary border border-primary/30"
                       : isLiveActive
@@ -281,26 +339,28 @@ function NavBar() {
                       : "text-muted-foreground hover:text-foreground hover:bg-accent"
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isLiveActive && !isActive ? "animate-pulse" : ""}`} />
-                  {label}
+                  <Icon className={`w-4 h-4 shrink-0 ${isLiveActive && !isActive ? "animate-pulse" : ""}`} />
+                  <span className="truncate">{label}</span>
                   {isLiveActive && (
-                    <span className="ml-auto text-[10px] font-bold bg-primary text-black px-1.5 py-0.5 rounded-full">
-                      {liveCount} LIVE
+                    <span className="ml-auto text-[10px] font-bold bg-primary text-black px-1 py-0.5 rounded-full shrink-0">
+                      {liveCount}
                     </span>
                   )}
                 </Link>
               );
             })}
-            {currentPlayer && (
+          </div>
+          {currentPlayer && (
+            <div className="px-4 pb-3 pt-1 border-t border-border/50">
               <button
                 onClick={() => { logout(); setMobileOpen(false); }}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
               >
                 <LogOut className="w-4 h-4" />
                 Ausloggen
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
     </nav>
