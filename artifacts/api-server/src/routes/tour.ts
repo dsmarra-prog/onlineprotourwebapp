@@ -4037,13 +4037,13 @@ router.post("/tour/matches/:matchId/create-lobby", async (req, res) => {
     // Validate the requesting player and check they are a match participant or admin
     if (requestingPlayerId && requestingPin) {
       const player = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, requestingPlayerId)).limit(1);
-      if (!player[0] || player[0].pin !== requestingPin) return res.status(403).json({ error: "Ungültige Anmeldedaten" });
+      if (!player[0] || !verifyPin(requestingPin, player[0].pin_hash)) return res.status(403).json({ error: "Ungültige Anmeldedaten" });
       const isParticipant = match[0].player1_id === requestingPlayerId || match[0].player2_id === requestingPlayerId;
       const isAdmin = player[0].is_admin;
       if (!isParticipant && !isAdmin) return res.status(403).json({ error: "Du bist nicht an diesem Match beteiligt" });
     } else if (adminPlayerId && adminPin) {
       const adminPlayer = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, adminPlayerId)).limit(1);
-      if (!adminPlayer[0] || !adminPlayer[0].is_admin || adminPlayer[0].pin !== adminPin) {
+      if (!adminPlayer[0] || !adminPlayer[0].is_admin || !verifyPin(adminPin, adminPlayer[0].pin_hash)) {
         return res.status(403).json({ error: "Keine Admin-Berechtigung" });
       }
     } else {

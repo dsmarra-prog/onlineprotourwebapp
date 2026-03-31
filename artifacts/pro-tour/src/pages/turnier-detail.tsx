@@ -661,6 +661,22 @@ export default function TurnierDetail() {
         </div>
       )}
 
+      {/* Autodarts token error warning */}
+      {isRunning && syncResult?.error && (
+        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl px-4 py-3 flex items-center gap-3">
+          <AlertTriangle className="w-4 h-4 text-yellow-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-yellow-400">Autodarts-Verbindung unterbrochen</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Live-Erkennung ist deaktiviert · {syncResult.error}</p>
+          </div>
+          {currentPlayer?.is_admin && (
+            <Link href="/einstellungen" className="text-xs text-yellow-400 hover:text-yellow-300 underline whitespace-nowrap shrink-0">
+              Neu verbinden →
+            </Link>
+          )}
+        </div>
+      )}
+
       {/* Admin delete button */}
       {currentPlayer?.is_admin && (
         <div className="flex justify-end">
