@@ -122,7 +122,7 @@ export default function SaisonPage() {
               const heights = ["h-32", "h-24", "h-20"];
               const height = heights[rank - 1];
               return (
-                <div key={idx} className="flex flex-col items-center gap-1 flex-1">
+                <div key={`podium-${idx}`} className="flex flex-col items-center gap-1 flex-1">
                   <div className={`text-xs font-bold ${MEDAL_COLORS[rank - 1]}`}>
                     {rank === 1 ? "🥇" : rank === 2 ? "🥈" : "🥉"}
                   </div>

@@ -2951,15 +2951,26 @@ async function getAutodartAccessToken(): Promise<string | null> {
           }),
         }
       );
-      if (!tokenRes.ok) return null;
+      if (!tokenRes.ok) {
+        // If the token is invalid/expired, auto-clear it so the next call doesn't keep retrying a dead token
+        const errBody = await tokenRes.json().catch(() => ({})) as any;
+        if (errBody.error === "invalid_grant" || errBody.error === "invalid_token") {
+          console.warn("[Autodarts] Global refresh token expired/invalid — clearing from DB. Admin must reconnect.");
+          activeRefreshToken = null;
+          cachedToken = null;
+          await db.delete(systemSettingsTable).where(eq(systemSettingsTable.key, "autodarts_refresh_token")).catch(() => {});
+        }
+        return null;
+      }
       const tokenData: any = await tokenRes.json();
       if (tokenData.refresh_token) {
         activeRefreshToken = tokenData.refresh_token;
         // Persist so the newest token survives server restarts
         await persistRefreshToken(tokenData.refresh_token);
       }
+      if (!tokenData.access_token) return null;
       cachedToken = { value: tokenData.access_token, expiresAt: Date.now() + 50_000 };
-      return tokenData.access_token;
+      return tokenData.access_token as string;
     } catch { return null; }
     finally { refreshPromise = null; }
   })();
@@ -3011,7 +3022,18 @@ async function getPlayerAccessToken(playerId: number): Promise<string | null> {
           }),
         }
       );
-      if (!r.ok) return null;
+      if (!r.ok) {
+        // Auto-clear invalid/expired player tokens so the UI shows "not connected"
+        const errBody = await r.json().catch(() => ({})) as any;
+        if (errBody.error === "invalid_grant" || errBody.error === "invalid_token") {
+          console.warn(`[Autodarts] Player ${playerId} refresh token expired — clearing from DB.`);
+          playerTokenCache.delete(playerId);
+          await db.update(tourPlayersTable)
+            .set({ autodarts_refresh_token: null })
+            .where(eq(tourPlayersTable.id, playerId)).catch(() => {});
+        }
+        return null;
+      }
       const d: any = await r.json();
       if (d.refresh_token) {
         await db.update(tourPlayersTable)
