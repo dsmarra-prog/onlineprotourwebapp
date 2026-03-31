@@ -550,7 +550,7 @@ async function autoCreateLobby(matchId: number): Promise<string | null> {
       bullOffMode: "Normal",
       legs: winLegs,
       hasReferee: false,
-      isPrivate: true,
+      isPrivate: false,
     };
 
     const lobbyRes = await fetch("https://api.autodarts.io/gs/v0/lobbies", {
@@ -3874,7 +3874,7 @@ router.post("/tour/matches/:matchId/create-lobby", async (req, res) => {
       bullOffMode: "Normal",
       legs: winLegs,
       hasReferee: false,
-      isPrivate: true,    // Private — result fetched directly via stored lobby ID
+      isPrivate: false,
     };
 
     const lobbyRes = await fetch("https://api.autodarts.io/gs/v0/lobbies", {
