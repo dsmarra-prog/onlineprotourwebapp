@@ -384,7 +384,10 @@ export default function TurnierDetail() {
   const isRunning = detail?.tournament.status === "laufend";
   const { data: syncResult } = useQuery<SyncResult>({
     queryKey: ["autodarts-sync", id],
-    queryFn: () => apiFetch(`/tour/tournaments/${id}/autodarts-sync`, { method: "POST" }),
+    queryFn: () => apiFetch(`/tour/tournaments/${id}/autodarts-sync`, {
+      method: "POST",
+      body: JSON.stringify({ player_id: currentPlayer?.id, player_pin: sessionPin }),
+    }),
     enabled: isRunning,
     refetchInterval: 15_000,
     staleTime: 0,

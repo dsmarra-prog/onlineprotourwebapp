@@ -3399,8 +3399,13 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
       return res.json({ synced: 0, matches: [] });
     }
 
-    // Fetch Autodarts token once
-    const accessToken = await getAutodartAccessToken();
+    // Fetch Autodarts token — prefer calling player's token, fall back to global
+    const body = req.body ?? {};
+    let accessToken: string | null = null;
+    if (body.player_id) {
+      accessToken = await getPlayerAccessToken(parseInt(body.player_id));
+    }
+    if (!accessToken) accessToken = await getAutodartAccessToken();
     if (!accessToken) {
       return res.json({ synced: 0, matches: [], error: "Kein Autodarts-Token" });
     }
@@ -3452,52 +3457,60 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
               { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" } }),
           ]);
 
-          // Completed match takes priority
+          // Completed match takes priority — also handles in-progress (no finishedAt yet)
+          console.log(`[sync] match ${match.id} (ad_id=${match.autodarts_match_id}): as/v0=${completedRes.status==="fulfilled"?completedRes.value.status:"ERR"} gs/v0/lobbies=${lobbyRes.status==="fulfilled"?lobbyRes.value.status:"ERR"}`);
           if (completedRes.status === "fulfilled" && completedRes.value.ok) {
             const directMatch = await completedRes.value.json();
-            if (directMatch?.id && directMatch.finishedAt && (directMatch.targetLegs ?? 0) >= winLegs) {
+            console.log(`[sync] match ${match.id} as/v0 data: id=${directMatch?.id} finishedAt=${directMatch?.finishedAt} targetLegs=${directMatch?.targetLegs} games=${directMatch?.games?.length}`);
+            if (directMatch?.id) {
+              const meetsLegTarget = (directMatch.targetLegs ?? 0) >= winLegs;
               const score = getMatchScore(directMatch, u1, u2);
-              const complete = isMatchComplete(directMatch, winLegs);
-              if (complete) {
-                const winnerId = score.legs1 >= winLegs ? match.player1_id! : match.player2_id!;
-                const a1 = Math.round(score.avg1 * 10) / 10;
-                const a2 = Math.round(score.avg2 * 10) / 10;
-                await db.update(tourMatchesTable)
-                  .set({
-                    winner_id: winnerId, score_p1: score.legs1, score_p2: score.legs2,
-                    avg_p1: a1, avg_p2: a2,
-                    first9_p1: score.first9_p1, first9_p2: score.first9_p2,
-                    doubles_hit_p1: score.doubles_hit_p1, doubles_att_p1: score.doubles_att_p1,
-                    doubles_hit_p2: score.doubles_hit_p2, doubles_att_p2: score.doubles_att_p2,
-                    count_180s_p1: score.count_180s_p1, count_180s_p2: score.count_180s_p2,
-                    high_checkout_p1: score.high_checkout_p1, high_checkout_p2: score.high_checkout_p2,
-                    status: "abgeschlossen", autodarts_match_id: directMatch.id,
-                  })
-                  .where(eq(tourMatchesTable.id, match.id));
-                await advanceWinner(tournamentId, match.runde, match.match_nr, winnerId);
-                await checkTournamentComplete(tournamentId);
-                await checkAndUnlockAchievements(match.id, tournamentId).catch(() => {});
-                results.push({ match_id: match.id, status: "auto_completed", winner_id: winnerId, legs1: score.legs1, legs2: score.legs2, avg1: a1, avg2: a2, autodarts_id: directMatch.id });
-                synced++;
-                // Discord: post match result to thread
-                if (match.discord_thread_id) {
-                  const p1n = displayNameMap[match.player1_id!] ?? u1;
-                  const p2n = displayNameMap[match.player2_id!] ?? u2;
-                  postMatchResultToThread(match.discord_thread_id, p1n, p2n, score.legs1, score.legs2, winnerId === match.player1_id ? p1n : p2n, a1, a2).catch(() => {});
+              const a1 = Math.round(score.avg1 * 10) / 10;
+              const a2 = Math.round(score.avg2 * 10) / 10;
+
+              // Fully completed match: has finishedAt + correct leg target
+              if (directMatch.finishedAt && meetsLegTarget) {
+                const complete = isMatchComplete(directMatch, winLegs);
+                if (complete) {
+                  const winnerId = score.legs1 >= winLegs ? match.player1_id! : match.player2_id!;
+                  await db.update(tourMatchesTable)
+                    .set({
+                      winner_id: winnerId, score_p1: score.legs1, score_p2: score.legs2,
+                      avg_p1: a1, avg_p2: a2,
+                      first9_p1: score.first9_p1, first9_p2: score.first9_p2,
+                      doubles_hit_p1: score.doubles_hit_p1, doubles_att_p1: score.doubles_att_p1,
+                      doubles_hit_p2: score.doubles_hit_p2, doubles_att_p2: score.doubles_att_p2,
+                      count_180s_p1: score.count_180s_p1, count_180s_p2: score.count_180s_p2,
+                      high_checkout_p1: score.high_checkout_p1, high_checkout_p2: score.high_checkout_p2,
+                      status: "abgeschlossen", autodarts_match_id: directMatch.id,
+                    })
+                    .where(eq(tourMatchesTable.id, match.id));
+                  await advanceWinner(tournamentId, match.runde, match.match_nr, winnerId);
+                  await checkTournamentComplete(tournamentId);
+                  await checkAndUnlockAchievements(match.id, tournamentId).catch(() => {});
+                  results.push({ match_id: match.id, status: "auto_completed", winner_id: winnerId, legs1: score.legs1, legs2: score.legs2, avg1: a1, avg2: a2, autodarts_id: directMatch.id });
+                  synced++;
+                  if (match.discord_thread_id) {
+                    const p1n = displayNameMap[match.player1_id!] ?? u1;
+                    const p2n = displayNameMap[match.player2_id!] ?? u2;
+                    postMatchResultToThread(match.discord_thread_id, p1n, p2n, score.legs1, score.legs2, winnerId === match.player1_id ? p1n : p2n, a1, a2).catch(() => {});
+                  }
+                  continue;
                 }
-                continue;
-              } else {
-                results.push({ match_id: match.id, status: "live", legs1: score.legs1, legs2: score.legs2, avg1: Math.round(score.avg1 * 10) / 10, avg2: Math.round(score.avg2 * 10) / 10, autodarts_id: directMatch.id });
-                // Discord: post/update live score in thread
+                // Finished but not yet complete (shouldn't normally happen) — fall through to live
+              }
+
+              // Match in progress (no finishedAt) OR finished-but-not-complete:
+              // as/v0/matches returns cumulative leg stats even mid-match — use for live display
+              if (!directMatch.finishedAt || (directMatch.finishedAt && !isMatchComplete(directMatch, winLegs))) {
+                results.push({ match_id: match.id, status: "live", legs1: score.legs1, legs2: score.legs2, avg1: a1, avg2: a2, autodarts_id: directMatch.id });
                 if (match.discord_thread_id && (score.legs1 > 0 || score.legs2 > 0)) {
                   const p1n = displayNameMap[match.player1_id!] ?? u1;
                   const p2n = displayNameMap[match.player2_id!] ?? u2;
-                  const a1r = Math.round(score.avg1 * 10) / 10;
-                  const a2r = Math.round(score.avg2 * 10) / 10;
                   if (match.discord_score_message_id) {
-                    updateLiveScoreMessage(match.discord_thread_id, match.discord_score_message_id, p1n, p2n, score.legs1, score.legs2, a1r, a2r, tournament[0].legs_format).catch(() => {});
+                    updateLiveScoreMessage(match.discord_thread_id, match.discord_score_message_id, p1n, p2n, score.legs1, score.legs2, a1, a2, tournament[0].legs_format).catch(() => {});
                   } else {
-                    postLiveScoreToThread(match.discord_thread_id, p1n, p2n, score.legs1, score.legs2, a1r, a2r, tournament[0].legs_format).then((msgId) => {
+                    postLiveScoreToThread(match.discord_thread_id, p1n, p2n, score.legs1, score.legs2, a1, a2, tournament[0].legs_format).then((msgId) => {
                       if (msgId) db.update(tourMatchesTable).set({ discord_score_message_id: msgId }).where(eq(tourMatchesTable.id, match.id)).catch(() => {});
                     }).catch(() => {});
                   }
@@ -3508,17 +3521,42 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
           }
 
           // Lobby exists → match is in lobby phase (players waiting, game not yet started)
-          // Show as "live" with 0:0 score; actual scores come once gs/v0/matches is available.
+          // If lobby has a matchId, the game has started — use that for gs/v0/matches.
           if (lobbyRes.status === "fulfilled" && lobbyRes.value.ok) {
             const lobby = await lobbyRes.value.json();
             if (lobby?.id) {
+              // Extract matchId if lobby transitioned to running (Autodarts puts matchId on lobby)
+              const gameMatchId: string | null = lobby.matchId ?? lobby.match_id ?? null;
+              if (gameMatchId) {
+                // Game started — fetch live scores from gs/v0/matches/{gameMatchId}
+                const liveRes = await fetch(
+                  `https://api.autodarts.io/gs/v0/matches/${gameMatchId}`,
+                  { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" } }
+                ).catch(() => null);
+                if (liveRes?.ok) {
+                  const liveMatch = await liveRes.json();
+                  if (liveMatch?.id && Array.isArray(liveMatch.players)) {
+                    const idx1 = liveMatch.players.findIndex((p: any) => p.name?.toLowerCase() === u1.toLowerCase());
+                    const idx2 = liveMatch.players.findIndex((p: any) => p.name?.toLowerCase() === u2.toLowerCase());
+                    const legs1 = idx1 >= 0 ? (liveMatch.scores?.[idx1]?.legs ?? 0) : 0;
+                    const legs2 = idx2 >= 0 ? (liveMatch.scores?.[idx2]?.legs ?? 0) : 0;
+                    const p1obj = idx1 >= 0 ? liveMatch.players[idx1] : null;
+                    const p2obj = idx2 >= 0 ? liveMatch.players[idx2] : null;
+                    const avg1 = Math.round((p1obj?.user?.average ?? p1obj?.average ?? 0) * 10) / 10;
+                    const avg2 = Math.round((p2obj?.user?.average ?? p2obj?.average ?? 0) * 10) / 10;
+                    results.push({ match_id: match.id, status: "live", legs1, legs2, avg1, avg2, autodarts_id: liveMatch.id });
+                    continue;
+                  }
+                }
+              }
+              // No matchId or live fetch failed → still in lobby waiting phase
               results.push({ match_id: match.id, status: "live", legs1: 0, legs2: 0, avg1: 0, avg2: 0, autodarts_id: lobby.id });
               continue;
             }
           }
 
-          // Game in progress — check gs/v0/matches/{id} (works for private matches, has live leg scores + averages)
-          // This is the game-server live match endpoint; populated once the match starts (lobby consumed → 404).
+          // Game in progress — lobby consumed (404), try gs/v0/matches with the stored ID.
+          // Autodarts often uses the same UUID for lobby and active game-server match.
           const liveMatchRes = await fetch(
             `https://api.autodarts.io/gs/v0/matches/${match.autodarts_match_id}`,
             { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" } }
@@ -3535,6 +3573,12 @@ router.post("/tour/tournaments/:id/autodarts-sync", async (req, res) => {
               const p2obj = idx2 >= 0 ? liveMatch.players[idx2] : null;
               const avg1 = Math.round((p1obj?.user?.average ?? p1obj?.average ?? 0) * 10) / 10;
               const avg2 = Math.round((p2obj?.user?.average ?? p2obj?.average ?? 0) * 10) / 10;
+              // Write live scores to DB so the live ticker picks them up
+              if (legs1 > 0 || legs2 > 0 || avg1 > 0 || avg2 > 0) {
+                await db.update(tourMatchesTable)
+                  .set({ score_p1: legs1, score_p2: legs2, avg_p1: avg1, avg_p2: avg2 })
+                  .where(eq(tourMatchesTable.id, match.id));
+              }
               results.push({ match_id: match.id, status: "live", legs1, legs2, avg1, avg2, autodarts_id: liveMatch.id });
               continue;
             }
@@ -4349,5 +4393,40 @@ router.post("/tour/support/tickets/:id/close", async (req, res) => {
     res.status(500).json({ error: String(e) });
   }
 });
+
+// GET /tour/debug/autodarts-match/:id — debug: raw Autodarts API responses for a match ID
+router.get("/tour/debug/autodarts-match/:matchId", async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    const playerId = req.query.player_id ? parseInt(String(req.query.player_id)) : null;
+    let token: string | null = null;
+    if (playerId) token = await getPlayerAccessToken(playerId);
+    if (!token) token = await getAutodartAccessToken();
+    if (!token) return res.status(503).json({ error: "Kein Autodarts-Token verfügbar" });
+
+    const [asRes, gsLobbyRes, gsMatchRes] = await Promise.all([
+      fetch(`https://api.autodarts.io/as/v0/matches/${matchId}`, { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`https://api.autodarts.io/gs/v0/lobbies/${matchId}`, { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`https://api.autodarts.io/gs/v0/matches/${matchId}`, { headers: { Authorization: `Bearer ${token}` } }),
+    ]);
+
+    const [asData, gsLobbyData, gsMatchData] = await Promise.all([
+      asRes.text(),
+      gsLobbyRes.text(),
+      gsMatchRes.text(),
+    ]);
+
+    res.json({
+      matchId,
+      as_v0_matches: { status: asRes.status, body: tryParse(asData) },
+      gs_v0_lobbies: { status: gsLobbyRes.status, body: tryParse(gsLobbyData) },
+      gs_v0_matches: { status: gsMatchRes.status, body: tryParse(gsMatchData) },
+    });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+function tryParse(s: string) { try { return JSON.parse(s); } catch { return s; } }
 
 export default router;
