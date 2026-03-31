@@ -214,14 +214,16 @@ export default function SpielplanPage() {
             <span className="hidden sm:inline">Kalender exportieren</span>
             <span className="sm:hidden">Export</span>
           </button>
-          <button
-            onClick={() => setShowSeedPanel((v) => !v)}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary border border-border hover:border-primary/30 px-2.5 py-1.5 rounded-lg transition-colors"
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Turniere anlegen</span>
-            <span className="sm:hidden">Anlegen</span>
-          </button>
+          {currentPlayer?.is_admin && (
+            <button
+              onClick={() => setShowSeedPanel((v) => !v)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary border border-border hover:border-primary/30 px-2.5 py-1.5 rounded-lg transition-colors"
+            >
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Turniere anlegen</span>
+              <span className="sm:hidden">Anlegen</span>
+            </button>
+          )}
         </div>
       </div>
 

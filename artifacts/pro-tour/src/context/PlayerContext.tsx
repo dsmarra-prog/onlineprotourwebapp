@@ -36,23 +36,35 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const [pinLoading, setPinLoading] = useState(false);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      const storedPin = localStorage.getItem(PIN_KEY);
-      if (stored) {
-        const player = JSON.parse(stored) as CurrentPlayer;
-        setCurrentPlayer(player);
-        if (storedPin) {
-          setSessionPin(storedPin);
-        } else {
-          setPinReentry(true);
+    (async () => {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        const storedPin = localStorage.getItem(PIN_KEY);
+        if (stored) {
+          const player = JSON.parse(stored) as CurrentPlayer;
+          setCurrentPlayer(player);
+          if (storedPin) {
+            setSessionPin(storedPin);
+            try {
+              const fresh = await apiFetch<CurrentPlayer>(`/tour/players/${player.id}`);
+              if (fresh) {
+                const updated = { ...player, is_admin: fresh.is_admin, avatar_url: fresh.avatar_url };
+                setCurrentPlayer(updated);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+              }
+            } catch {
+              // Ignore refresh errors — use cached data
+            }
+          } else {
+            setPinReentry(true);
+          }
         }
+      } catch {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(PIN_KEY);
       }
-    } catch {
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem(PIN_KEY);
-    }
-    setIsLoading(false);
+      setIsLoading(false);
+    })();
   }, []);
 
   const login = async (autodarts_username: string, pin: string) => {
