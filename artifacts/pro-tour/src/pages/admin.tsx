@@ -5,7 +5,7 @@ import {
   Shield, Trophy, BarChart3, Users, Settings, Radio, Zap, RefreshCw,
   CheckCircle2, AlertTriangle, Loader2, ChevronRight, Plus, Trash2,
   MessageCircle, ExternalLink, Bell, TrendingUp, Clock, Send, Target,
-  Link2Off, Wifi, WifiOff,
+  Link2Off, Wifi, WifiOff, FlaskConical, ChevronDown, MessageSquare,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -546,9 +546,27 @@ function AutodartsAdminSection({ adminAuth }: { adminAuth: () => { admin_player_
   const qc = useQueryClient();
   const [token, setToken] = useState("");
 
-  const { data: adStatus } = useQuery<{ configured: boolean }>({
+  type LastTest = { ok: boolean; username?: string; error?: string; testedAt: string } | null;
+  const { data: adStatus } = useQuery<{ configured: boolean; lastTest: LastTest }>({
     queryKey: ["autodarts-global-status"],
     queryFn: () => apiFetch("/tour/autodarts-global-status"),
+  });
+
+  const testMut = useMutation({
+    mutationFn: () =>
+      apiFetch<{ ok: boolean; username?: string; error?: string; testedAt: string }>(
+        "/tour/admin/autodarts-test",
+        { method: "POST", body: JSON.stringify(adminAuth()) }
+      ),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["autodarts-global-status"] });
+      if (data.ok) {
+        toast({ title: `Verbindung OK — @${data.username}` });
+      } else {
+        toast({ title: "Verbindung fehlgeschlagen", description: data.error, variant: "destructive" });
+      }
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
   const connectMut = useMutation({
@@ -603,9 +621,24 @@ function AutodartsAdminSection({ adminAuth }: { adminAuth: () => { admin_player_
       </p>
 
       {isConnected && (
-        <div className="flex items-center gap-2 text-xs text-green-400 bg-green-400/5 border border-green-400/20 rounded-lg px-3 py-2">
-          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-          <span>Score-Synchronisation ist aktiv. Match-Ergebnisse werden automatisch von Autodarts abgerufen.</span>
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-xs text-green-400 bg-green-400/5 border border-green-400/20 rounded-lg px-3 py-2">
+            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+            <span>Score-Synchronisation ist aktiv. Token wird automatisch alle 8h erneuert.</span>
+          </div>
+          {/* Last test result */}
+          {adStatus?.lastTest && (
+            <div className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 ${
+              adStatus.lastTest.ok
+                ? "bg-green-400/5 border border-green-400/20 text-green-400"
+                : "bg-red-400/5 border border-red-400/20 text-red-400"
+            }`}>
+              {adStatus.lastTest.ok
+                ? <><CheckCircle2 className="w-3.5 h-3.5 shrink-0" /><span>Letzter Test OK · @{adStatus.lastTest.username} · {new Date(adStatus.lastTest.testedAt).toLocaleString("de-DE")}</span></>
+                : <><AlertTriangle className="w-3.5 h-3.5 shrink-0" /><span>Letzter Test fehlgeschlagen · {adStatus.lastTest.error} · {new Date(adStatus.lastTest.testedAt).toLocaleString("de-DE")}</span></>
+              }
+            </div>
+          )}
         </div>
       )}
 
@@ -622,7 +655,7 @@ function AutodartsAdminSection({ adminAuth }: { adminAuth: () => { admin_player_
         </p>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <Button
           className="flex-1 gap-2"
           size="sm"
@@ -636,16 +669,28 @@ function AutodartsAdminSection({ adminAuth }: { adminAuth: () => { admin_player_
           )}
         </Button>
         {isConnected && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/10"
-            onClick={() => disconnectMut.mutate()}
-            disabled={disconnectMut.isPending}
-          >
-            {disconnectMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2Off className="w-3.5 h-3.5" />}
-            Trennen
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => testMut.mutate()}
+              disabled={testMut.isPending}
+            >
+              {testMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FlaskConical className="w-3.5 h-3.5" />}
+              Testen
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/10"
+              onClick={() => disconnectMut.mutate()}
+              disabled={disconnectMut.isPending}
+            >
+              {disconnectMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2Off className="w-3.5 h-3.5" />}
+              Trennen
+            </Button>
+          </>
         )}
       </div>
     </div>
@@ -700,7 +745,7 @@ function DisputesTab({ adminAuth }: { adminAuth: () => object }) {
                 <h2 className="font-semibold text-sm">Offen ({open.length})</h2>
               </div>
               {open.map((d) => (
-                <DisputeCard key={d.id} dispute={d} onResolve={(res) => resolveMut.mutate({ id: d.id, resolution: res })} isPending={resolveMut.isPending} />
+                <DisputeCard key={d.id} dispute={d} onResolve={(res) => resolveMut.mutate({ id: d.id, resolution: res })} isPending={resolveMut.isPending} adminAuth={{ player_id: currentPlayer?.id, pin: sessionPin }} />
               ))}
             </div>
           )}
@@ -711,7 +756,7 @@ function DisputesTab({ adminAuth }: { adminAuth: () => object }) {
                 <h2 className="font-semibold text-sm">Erledigt ({closed.length})</h2>
               </div>
               {closed.slice(0, 5).map((d) => (
-                <DisputeCard key={d.id} dispute={d} resolved />
+                <DisputeCard key={d.id} dispute={d} resolved adminAuth={{ player_id: currentPlayer?.id, pin: sessionPin }} />
               ))}
             </div>
           )}
@@ -721,18 +766,36 @@ function DisputesTab({ adminAuth }: { adminAuth: () => object }) {
   );
 }
 
+type MatchMessage = {
+  id: number;
+  player_id: number;
+  player_name: string;
+  message: string;
+  created_at: string;
+};
+
 function DisputeCard({
   dispute,
   onResolve,
   isPending,
   resolved,
+  adminAuth,
 }: {
   dispute: Dispute;
   onResolve?: (resolution: string) => void;
   isPending?: boolean;
   resolved?: boolean;
+  adminAuth: { player_id: number | undefined; pin: string | null };
 }) {
   const [resolution, setResolution] = useState("");
+  const [showChat, setShowChat] = useState(false);
+
+  const { data: messages = [], isLoading: messagesLoading } = useQuery<MatchMessage[]>({
+    queryKey: ["match-messages", dispute.match_id],
+    queryFn: () => apiFetch(`/tour/matches/${dispute.match_id}/messages?player_id=${adminAuth.player_id}&pin=${adminAuth.pin}`),
+    enabled: showChat && !!adminAuth.player_id && !!adminAuth.pin,
+    staleTime: 30_000,
+  });
 
   return (
     <div className={`bg-card border rounded-xl p-4 space-y-3 ${resolved ? "border-border/50 opacity-60" : "border-yellow-500/30"}`}>
@@ -747,6 +810,41 @@ function DisputeCard({
           {resolved ? "Erledigt" : "Offen"}
         </span>
       </div>
+
+      {/* Chat history toggle */}
+      <button
+        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        onClick={() => setShowChat(v => !v)}
+      >
+        <MessageSquare className="w-3 h-3" />
+        <span>Match-Chat</span>
+        <ChevronDown className={`w-3 h-3 transition-transform ${showChat ? "rotate-180" : ""}`} />
+      </button>
+
+      {showChat && (
+        <div className="border-t border-border pt-3 space-y-2">
+          {messagesLoading ? (
+            <div className="flex justify-center py-3"><Loader2 className="w-4 h-4 animate-spin text-primary" /></div>
+          ) : messages.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-2">Keine Nachrichten in diesem Match.</p>
+          ) : (
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {messages.map((msg) => (
+                <div key={msg.id} className="flex gap-2">
+                  <span className="text-xs font-semibold text-primary shrink-0 pt-0.5">{msg.player_name}:</span>
+                  <div className="flex-1">
+                    <p className="text-xs text-foreground">{msg.message}</p>
+                    <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                      {new Date(msg.created_at).toLocaleString("de-DE")}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {!resolved && onResolve && (
         <div className="flex gap-2">
           <input

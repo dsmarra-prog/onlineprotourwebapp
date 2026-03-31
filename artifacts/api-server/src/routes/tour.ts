@@ -2956,6 +2956,21 @@ async function getAutodartAccessToken(): Promise<string | null> {
   return refreshPromise;
 }
 
+// ─── Token Heartbeat ─────────────────────────────────────────────────────────
+// Refresh the global token every 8 hours so it never silently expires during
+// quiet periods (Keycloak offline_access tokens expire if unused for ~30 days,
+// but rotating every 8h keeps them perpetually alive).
+setInterval(async () => {
+  try {
+    const token = await getAutodartAccessToken();
+    if (token) {
+      console.log("[Autodarts] Token heartbeat: refresh OK");
+    }
+  } catch {
+    // Non-critical — next real call will trigger a fresh attempt
+  }
+}, 8 * 60 * 60 * 1000); // every 8 hours
+
 // ─── Per-player token cache ──────────────────────────────────────────────────
 // Each player can store their own Autodarts refresh token. We cache per-player
 // access tokens exactly like the global token, keyed by player DB id.
@@ -4072,9 +4087,55 @@ router.get("/tour/autodarts-global-status", async (_req, res) => {
   try {
     const dbToken = await loadRefreshTokenFromDb();
     const configured = !!(dbToken || process.env.AUTODARTS_REFRESH_TOKEN || activeRefreshToken);
-    res.json({ configured });
+    // Also return last test result if available
+    const testRow = await db.select().from(systemSettingsTable)
+      .where(eq(systemSettingsTable.key, "autodarts_last_test")).limit(1);
+    const lastTest = testRow[0]?.value ? JSON.parse(testRow[0].value) : null;
+    res.json({ configured, lastTest });
   } catch {
-    res.json({ configured: false });
+    res.json({ configured: false, lastTest: null });
+  }
+});
+
+// POST /tour/admin/autodarts-test — test the global Autodarts token with a live API call
+router.post("/tour/admin/autodarts-test", async (req, res) => {
+  try {
+    const { admin_player_id, admin_player_pin } = req.body;
+    if (!admin_player_id || !admin_player_pin) {
+      return res.status(400).json({ error: "Authentifizierung erforderlich" });
+    }
+    const ok = await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!ok) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
+    const token = await getAutodartAccessToken();
+    if (!token) {
+      const result = { ok: false, error: "Kein Token konfiguriert", testedAt: new Date().toISOString() };
+      await db.insert(systemSettingsTable)
+        .values({ key: "autodarts_last_test", value: JSON.stringify(result), updated_at: new Date() })
+        .onConflictDoUpdate({ target: systemSettingsTable.key, set: { value: JSON.stringify(result), updated_at: new Date() } });
+      return res.json(result);
+    }
+
+    const testRes = await fetch("https://api.autodarts.io/us/v0/users/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (testRes.ok) {
+      const user: any = await testRes.json();
+      const result = { ok: true, username: user?.name ?? user?.username ?? "Unbekannt", testedAt: new Date().toISOString() };
+      await db.insert(systemSettingsTable)
+        .values({ key: "autodarts_last_test", value: JSON.stringify(result), updated_at: new Date() })
+        .onConflictDoUpdate({ target: systemSettingsTable.key, set: { value: JSON.stringify(result), updated_at: new Date() } });
+      return res.json(result);
+    } else {
+      const result = { ok: false, error: `Autodarts API Fehler: ${testRes.status}`, testedAt: new Date().toISOString() };
+      await db.insert(systemSettingsTable)
+        .values({ key: "autodarts_last_test", value: JSON.stringify(result), updated_at: new Date() })
+        .onConflictDoUpdate({ target: systemSettingsTable.key, set: { value: JSON.stringify(result), updated_at: new Date() } });
+      return res.json(result);
+    }
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
   }
 });
 
