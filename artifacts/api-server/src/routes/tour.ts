@@ -17,8 +17,12 @@ import {
   tourMatchFairnessTable,
   tourSupportTicketsTable,
   tourAdminChatTable,
+  tourNotificationsTable,
+  tourGroupsTable,
+  tourGroupEntriesTable,
 } from "@workspace/db";
 import { eq, and, desc, or } from "drizzle-orm";
+import { ObjectStorageService } from "../lib/objectStorage";
 import crypto from "crypto";
 import webpush from "web-push";
 
@@ -472,11 +476,14 @@ async function buildTournamentDetail(tournamentId: number) {
       max_players: tournament[0].max_players,
       is_test: tournament[0].is_test,
       random_draw: tournament[0].random_draw,
+      checkin_open: tournament[0].checkin_open ?? false,
+      format: (tournament[0].format ?? "ko") as "ko" | "gruppe_ko",
     },
     players: entries.map((e) => ({
       player_id: e.player_id,
       seed: e.seed,
       confirmed: e.confirmed ?? false,
+      checked_in: e.checked_in ?? false,
       name: playerMap[e.player_id]?.name ?? "?",
       autodarts_username: playerMap[e.player_id]?.autodarts_username ?? "",
       avatar_url: playerMap[e.player_id]?.avatar_url ?? null,
@@ -620,9 +627,28 @@ async function notifyMatchReady(matchId: number, tournamentName: string, lobbyUr
         lobbyUrl,
       }).catch(() => {});
     }
+
+    // In-app notification for both players
+    const notifTitle = `🎯 Match bereit — ${round}`;
+    if (match[0].player1_id) {
+      createNotification(match[0].player1_id, "match_ready", notifTitle,
+        `${tournamentName}: ${p1Name} vs ${p2Name}${lobbyUrl ? " — Lobby bereit!" : ""}`,
+        `/pro-tour/turniere/${match[0].tournament_id}`).catch(() => {});
+    }
+    if (match[0].player2_id) {
+      createNotification(match[0].player2_id, "match_ready", notifTitle,
+        `${tournamentName}: ${p1Name} vs ${p2Name}${lobbyUrl ? " — Lobby bereit!" : ""}`,
+        `/pro-tour/turniere/${match[0].tournament_id}`).catch(() => {});
+    }
   } catch (e) {
     console.warn("notifyMatchReady error:", String(e));
   }
+}
+
+async function createNotification(playerId: number, type: string, title: string, body: string, link?: string) {
+  try {
+    await db.insert(tourNotificationsTable).values({ player_id: playerId, type, title, body, link: link ?? null });
+  } catch { /* ignore */ }
 }
 
 async function advanceWinner(tournamentId: number, currentRunde: string, matchNr: number, winnerId: number) {
@@ -4500,6 +4526,12 @@ router.get("/tour/matches/:matchId/overlay", async (req, res) => {
       score_p2: match.score_p2 ?? 0,
       avg_p1: match.avg_p1 ?? null,
       avg_p2: match.avg_p2 ?? null,
+      first9_p1: match.first9_p1 ?? null,
+      first9_p2: match.first9_p2 ?? null,
+      doubles_hit_p1: match.doubles_hit_p1 ?? null,
+      doubles_att_p1: match.doubles_att_p1 ?? null,
+      doubles_hit_p2: match.doubles_hit_p2 ?? null,
+      doubles_att_p2: match.doubles_att_p2 ?? null,
       count_180s_p1: match.count_180s_p1 ?? null,
       count_180s_p2: match.count_180s_p2 ?? null,
       high_checkout_p1: match.high_checkout_p1 ?? null,
@@ -4978,6 +5010,513 @@ router.post("/tour/admin/autodarts-disconnect-global", async (req, res) => {
     res.json({ ok: true, message: "Globale Autodarts-Verbindung getrennt." });
   } catch (e) {
     res.status(500).json({ error: "Interner Fehler" });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// T001: OOM-Verlauf-Chart — GET /tour/players/:id/oom-history
+// ══════════════════════════════════════════════════════════════════════════════
+router.get("/tour/players/:id/oom-history", async (req, res) => {
+  try {
+    const playerId = parseInt(req.params.id);
+    if (isNaN(playerId)) return res.status(400).json({ error: "Ungültige ID" });
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, playerId)).limit(1);
+    if (!player) return res.status(404).json({ error: "Spieler nicht gefunden" });
+
+    const appTournaments = await db.select().from(tourTournamentsTable).where(
+      and(eq(tourTournamentsTable.status, "abgeschlossen"), eq(tourTournamentsTable.is_test, false))
+    );
+    const allMatches = await db.select().from(tourMatchesTable);
+    const allBonus = await db.select().from(tourBonusPointsTable);
+    const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
+
+    const entries: { datum: string; tournament_name: string; typ: string; points: number; bonus: number; cumulative: number; round: string }[] = [];
+    let cumulative = 0;
+
+    const sorted = [...appTournaments].sort((a, b) => a.datum.localeCompare(b.datum));
+    for (const t of sorted) {
+      const tMatches = allMatches.filter((m) => m.tournament_id === t.id);
+      const playerMatches = tMatches.filter(
+        (m) => (m.player1_id === playerId || m.player2_id === playerId) && m.status === "abgeschlossen" && !m.is_bye
+      );
+      if (playerMatches.length === 0) continue;
+
+      const deepest = [...playerMatches].sort(
+        (a, b) => roundOrder.indexOf(b.runde) - roundOrder.indexOf(a.runde)
+      )[0];
+      const isWinner = deepest.runde === "F" && deepest.winner_id === playerId;
+      const roundKey = isWinner ? "Sieger" : roundToOomKey(deepest.runde);
+      const points = OOM_POINTS[t.typ]?.[roundKey] ?? 0;
+      const bonus = allBonus.filter((b) => b.player_id === playerId && b.tournament_id === t.id).reduce((s, b) => s + b.points, 0);
+      cumulative += points + bonus;
+      entries.push({ datum: t.datum, tournament_name: t.name, typ: t.typ, points, bonus, cumulative, round: roundKey });
+    }
+
+    res.json(entries);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// T002: Check-in System
+// ══════════════════════════════════════════════════════════════════════════════
+
+// POST /tour/tournaments/:id/open-checkin — Admin opens check-in window
+router.post("/tour/tournaments/:id/open-checkin", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const { admin_player_id, admin_player_pin } = req.body;
+    if (!admin_player_id || !admin_player_pin) return res.status(400).json({ error: "Admin-Auth erforderlich" });
+    if (!await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin))) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
+    await db.update(tourTournamentsTable).set({ checkin_open: true }).where(eq(tourTournamentsTable.id, tournamentId));
+    res.json({ ok: true, message: "Check-in geöffnet" });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/tournaments/:id/checkin — Player checks in (PIN required)
+router.post("/tour/tournaments/:id/checkin", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const { player_id, player_pin } = req.body;
+    if (!player_id || !player_pin) return res.status(400).json({ error: "Auth erforderlich" });
+
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, parseInt(player_id))).limit(1);
+    if (!player) return res.status(404).json({ error: "Spieler nicht gefunden" });
+    if (!await verifyPin(String(player_pin), player.pin_hash)) return res.status(403).json({ error: "Falscher PIN" });
+
+    const [tournament] = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
+    if (!tournament) return res.status(404).json({ error: "Turnier nicht gefunden" });
+    if (!tournament.checkin_open) return res.status(400).json({ error: "Check-in ist nicht geöffnet" });
+
+    const entries = await db.select().from(tourEntriesTable).where(
+      and(eq(tourEntriesTable.tournament_id, tournamentId), eq(tourEntriesTable.player_id, parseInt(player_id)), eq(tourEntriesTable.status, "approved"))
+    );
+    if (entries.length === 0) return res.status(400).json({ error: "Nicht angemeldet" });
+
+    await db.update(tourEntriesTable).set({ checked_in: true }).where(
+      and(eq(tourEntriesTable.tournament_id, tournamentId), eq(tourEntriesTable.player_id, parseInt(player_id)))
+    );
+    res.json({ ok: true, message: "Erfolgreich eingecheckt!" });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/tournaments/:id/close-checkin — Admin closes check-in, removes non-checked-in players
+router.post("/tour/tournaments/:id/close-checkin", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const { admin_player_id, admin_player_pin } = req.body;
+    if (!admin_player_id || !admin_player_pin) return res.status(400).json({ error: "Admin-Auth erforderlich" });
+    if (!await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin))) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
+    const allEntries = await db.select().from(tourEntriesTable).where(
+      and(eq(tourEntriesTable.tournament_id, tournamentId), eq(tourEntriesTable.status, "approved"))
+    );
+    const notCheckedIn = allEntries.filter((e) => !e.checked_in);
+
+    for (const entry of notCheckedIn) {
+      await db.delete(tourEntriesTable).where(eq(tourEntriesTable.id, entry.id));
+      createNotification(entry.player_id, "checkin_removed",
+        "Check-in verpasst",
+        "Du wurdest vom Turnier entfernt, da du nicht eingecheckt hast.",
+        `/pro-tour/turniere/${tournamentId}`).catch(() => {});
+    }
+
+    await db.update(tourTournamentsTable).set({ checkin_open: false }).where(eq(tourTournamentsTable.id, tournamentId));
+    res.json({ ok: true, removed: notCheckedIn.length, message: `Check-in geschlossen. ${notCheckedIn.length} Spieler entfernt.` });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /tour/tournaments/:id/checkin-status — Get check-in status list
+router.get("/tour/tournaments/:id/checkin-status", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const [tournament] = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
+    if (!tournament) return res.status(404).json({ error: "Turnier nicht gefunden" });
+
+    const entries = await db.select().from(tourEntriesTable).where(
+      and(eq(tourEntriesTable.tournament_id, tournamentId), eq(tourEntriesTable.status, "approved"))
+    );
+    const players = await db.select({ id: tourPlayersTable.id, name: tourPlayersTable.name })
+      .from(tourPlayersTable).where(or(...entries.map((e) => eq(tourPlayersTable.id, e.player_id))));
+    const playerMap = new Map(players.map((p) => [p.id, p.name]));
+
+    res.json({
+      checkin_open: tournament.checkin_open,
+      entries: entries.map((e) => ({
+        player_id: e.player_id,
+        player_name: playerMap.get(e.player_id) ?? "?",
+        checked_in: e.checked_in,
+      })),
+    });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// T003: Nachrichten-Center
+// ══════════════════════════════════════════════════════════════════════════════
+
+// GET /tour/players/:id/notifications
+router.get("/tour/players/:id/notifications", async (req, res) => {
+  try {
+    const playerId = parseInt(req.params.id);
+    const notifs = await db.select().from(tourNotificationsTable)
+      .where(eq(tourNotificationsTable.player_id, playerId))
+      .orderBy(desc(tourNotificationsTable.created_at))
+      .limit(50);
+    res.json(notifs);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// PATCH /tour/notifications/:id/read
+router.patch("/tour/notifications/:id/read", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    await db.update(tourNotificationsTable).set({ read: true }).where(eq(tourNotificationsTable.id, id));
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/players/:id/notifications/read-all
+router.post("/tour/players/:id/notifications/read-all", async (req, res) => {
+  try {
+    const playerId = parseInt(req.params.id);
+    await db.update(tourNotificationsTable).set({ read: true }).where(eq(tourNotificationsTable.player_id, playerId));
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// T004: Avatar Upload
+// ══════════════════════════════════════════════════════════════════════════════
+
+// POST /tour/players/:id/avatar/request-upload — returns presigned URL
+router.post("/tour/players/:id/avatar/request-upload", async (req, res) => {
+  try {
+    const playerId = parseInt(req.params.id);
+    const { player_pin, content_type } = req.body;
+    if (!player_pin) return res.status(400).json({ error: "PIN erforderlich" });
+
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, playerId)).limit(1);
+    if (!player) return res.status(404).json({ error: "Spieler nicht gefunden" });
+    if (!await verifyPin(String(player_pin), player.pin_hash)) return res.status(403).json({ error: "Falscher PIN" });
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    const ct = String(content_type || "image/jpeg");
+    if (!allowedTypes.includes(ct)) return res.status(400).json({ error: "Nur JPEG, PNG, WebP, GIF erlaubt" });
+
+    const storage = new ObjectStorageService();
+    const uploadURL = await storage.getObjectEntityUploadURL();
+    const objectPath = storage.normalizeObjectEntityPath(uploadURL);
+
+    res.json({ uploadURL, objectPath });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// PATCH /tour/players/:id/avatar — store objectPath as avatar_url after upload
+router.patch("/tour/players/:id/avatar", async (req, res) => {
+  try {
+    const playerId = parseInt(req.params.id);
+    const { player_pin, object_path } = req.body;
+    if (!player_pin || !object_path) return res.status(400).json({ error: "PIN und object_path erforderlich" });
+
+    const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, playerId)).limit(1);
+    if (!player) return res.status(404).json({ error: "Spieler nicht gefunden" });
+    if (!await verifyPin(String(player_pin), player.pin_hash)) return res.status(403).json({ error: "Falscher PIN" });
+
+    await db.update(tourPlayersTable).set({ avatar_url: String(object_path) }).where(eq(tourPlayersTable.id, playerId));
+    res.json({ ok: true, message: "Avatar gespeichert!", avatar_url: object_path });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /tour/storage/objects/:objectId — serve private objects (avatars)
+router.get("/tour/storage/objects/:objectId", async (req, res) => {
+  try {
+    const storage = new ObjectStorageService();
+    const objectPath = "/objects/" + req.params.objectId;
+    const file = await storage.getObjectEntityFile(objectPath);
+    const response = await storage.downloadObject(file, 86400);
+    res.setHeader("Content-Type", response.headers.get("Content-Type") || "application/octet-stream");
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    if (response.body) {
+      const { Readable } = await import("stream");
+      Readable.fromWeb(response.body as any).pipe(res);
+    } else {
+      res.status(404).end();
+    }
+  } catch {
+    res.status(404).json({ error: "Datei nicht gefunden" });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// T006: Gruppenphase + K.O.
+// ══════════════════════════════════════════════════════════════════════════════
+
+// GET /tour/tournaments/:id/groups — get groups with standings
+router.get("/tour/tournaments/:id/groups", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const groups = await db.select().from(tourGroupsTable)
+      .where(eq(tourGroupsTable.tournament_id, tournamentId))
+      .orderBy(tourGroupsTable.order);
+
+    const result = await Promise.all(groups.map(async (g) => {
+      const entries = await db.select().from(tourGroupEntriesTable).where(eq(tourGroupEntriesTable.group_id, g.id));
+      const players = entries.length > 0
+        ? await db.select({ id: tourPlayersTable.id, name: tourPlayersTable.name, avatar_url: tourPlayersTable.avatar_url })
+            .from(tourPlayersTable).where(or(...entries.map((e) => eq(tourPlayersTable.id, e.player_id))))
+        : [];
+
+      // Recompute standings from matches
+      const allGroupMatches = await db.select().from(tourMatchesTable)
+        .where(and(eq(tourMatchesTable.tournament_id, tournamentId)));
+      const groupPlayerIds = new Set(entries.map((e) => e.player_id));
+      const groupMatches = allGroupMatches.filter(
+        (m) => m.runde.startsWith(g.name) && m.status === "abgeschlossen" && !m.is_bye
+          && m.player1_id && groupPlayerIds.has(m.player1_id)
+          && m.player2_id && groupPlayerIds.has(m.player2_id)
+      );
+
+      const standing = entries.map((e) => {
+        const player = players.find((p) => p.id === e.player_id);
+        let wins = 0, losses = 0, legsWon = 0, legsLost = 0;
+        for (const m of groupMatches) {
+          const isP1 = m.player1_id === e.player_id;
+          const isP2 = m.player2_id === e.player_id;
+          if (!isP1 && !isP2) continue;
+          const won = m.winner_id === e.player_id;
+          if (won) wins++; else losses++;
+          legsWon += isP1 ? (m.score_p1 ?? 0) : (m.score_p2 ?? 0);
+          legsLost += isP1 ? (m.score_p2 ?? 0) : (m.score_p1 ?? 0);
+        }
+        return {
+          player_id: e.player_id,
+          player_name: player?.name ?? "?",
+          avatar_url: player?.avatar_url ?? null,
+          wins, losses,
+          legs_won: legsWon, legs_lost: legsLost,
+          points: wins * 3,
+          leg_diff: legsWon - legsLost,
+        };
+      }).sort((a, b) => b.points - a.points || b.leg_diff - a.leg_diff);
+
+      // Group matches for display
+      const matchList = groupMatches.map((m) => {
+        const p1 = players.find((p) => p.id === m.player1_id);
+        const p2 = players.find((p) => p.id === m.player2_id);
+        return {
+          id: m.id, match_nr: m.match_nr,
+          player1: p1?.name ?? "?", player2: p2?.name ?? "?",
+          score_p1: m.score_p1, score_p2: m.score_p2,
+          avg_p1: m.avg_p1, avg_p2: m.avg_p2,
+          winner_id: m.winner_id, status: m.status,
+          autodarts_match_id: m.autodarts_match_id,
+        };
+      });
+
+      return { ...g, standing, matches: matchList };
+    }));
+
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/tournaments/:id/groups — create a group (Admin)
+router.post("/tour/tournaments/:id/groups", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const { admin_player_id, admin_player_pin, name, order } = req.body;
+    if (!admin_player_id || !admin_player_pin) return res.status(400).json({ error: "Admin-Auth erforderlich" });
+    if (!await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin))) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
+    const [group] = await db.insert(tourGroupsTable).values({
+      tournament_id: tournamentId,
+      name: String(name),
+      order: parseInt(order ?? 0),
+    }).returning();
+
+    res.json({ ok: true, group });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// DELETE /tour/groups/:id — delete a group (Admin)
+router.delete("/tour/groups/:id", async (req, res) => {
+  try {
+    const groupId = parseInt(req.params.id);
+    const { admin_player_id, admin_player_pin } = req.body;
+    if (!admin_player_id || !admin_player_pin) return res.status(400).json({ error: "Admin-Auth erforderlich" });
+    if (!await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin))) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
+    await db.delete(tourGroupEntriesTable).where(eq(tourGroupEntriesTable.group_id, groupId));
+    await db.delete(tourGroupsTable).where(eq(tourGroupsTable.id, groupId));
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/groups/:id/entries — add player to group (Admin)
+router.post("/tour/groups/:id/entries", async (req, res) => {
+  try {
+    const groupId = parseInt(req.params.id);
+    const { admin_player_id, admin_player_pin, player_id } = req.body;
+    if (!admin_player_id || !admin_player_pin) return res.status(400).json({ error: "Admin-Auth erforderlich" });
+    if (!await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin))) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
+    const existing = await db.select().from(tourGroupEntriesTable)
+      .where(and(eq(tourGroupEntriesTable.group_id, groupId), eq(tourGroupEntriesTable.player_id, parseInt(player_id)))).limit(1);
+    if (existing.length > 0) return res.status(400).json({ error: "Spieler bereits in dieser Gruppe" });
+
+    const [entry] = await db.insert(tourGroupEntriesTable).values({ group_id: groupId, player_id: parseInt(player_id) }).returning();
+    res.json({ ok: true, entry });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// DELETE /tour/groups/:id/entries/:playerId — remove player from group (Admin)
+router.delete("/tour/groups/:id/entries/:playerId", async (req, res) => {
+  try {
+    const groupId = parseInt(req.params.id);
+    const playerId = parseInt(req.params.playerId);
+    const { admin_player_id, admin_player_pin } = req.body;
+    if (!admin_player_id || !admin_player_pin) return res.status(400).json({ error: "Admin-Auth erforderlich" });
+    if (!await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin))) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
+    await db.delete(tourGroupEntriesTable).where(
+      and(eq(tourGroupEntriesTable.group_id, groupId), eq(tourGroupEntriesTable.player_id, playerId))
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/tournaments/:id/generate-group-matches — round-robin within groups
+router.post("/tour/tournaments/:id/generate-group-matches", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const { admin_player_id, admin_player_pin } = req.body;
+    if (!admin_player_id || !admin_player_pin) return res.status(400).json({ error: "Admin-Auth erforderlich" });
+    if (!await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin))) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
+    const groups = await db.select().from(tourGroupsTable).where(eq(tourGroupsTable.tournament_id, tournamentId));
+    let totalCreated = 0;
+    let matchNrCounter = 1;
+
+    for (const group of groups) {
+      const entries = await db.select().from(tourGroupEntriesTable).where(eq(tourGroupEntriesTable.group_id, group.id));
+      const playerIds = entries.map((e) => e.player_id);
+
+      // Round-robin: all vs all
+      for (let i = 0; i < playerIds.length; i++) {
+        for (let j = i + 1; j < playerIds.length; j++) {
+          await db.insert(tourMatchesTable).values({
+            tournament_id: tournamentId,
+            runde: group.name,
+            match_nr: matchNrCounter++,
+            player1_id: playerIds[i],
+            player2_id: playerIds[j],
+            status: "ausstehend",
+          });
+          totalCreated++;
+        }
+      }
+    }
+
+    await db.update(tourTournamentsTable).set({ status: "laufend" }).where(eq(tourTournamentsTable.id, tournamentId));
+    res.json({ ok: true, matches_created: totalCreated });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/tournaments/:id/advance-group-phase — top N per group → K.O. bracket
+router.post("/tour/tournaments/:id/advance-group-phase", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const { admin_player_id, admin_player_pin, advance_count = 2 } = req.body;
+    if (!admin_player_id || !admin_player_pin) return res.status(400).json({ error: "Admin-Auth erforderlich" });
+    if (!await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin))) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
+    const groups = await db.select().from(tourGroupsTable).where(eq(tourGroupsTable.tournament_id, tournamentId)).orderBy(tourGroupsTable.order);
+    const allMatches = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.tournament_id, tournamentId));
+    const allPlayers = await db.select().from(tourPlayersTable);
+
+    const qualified: number[] = [];
+    for (const group of groups) {
+      const entries = await db.select().from(tourGroupEntriesTable).where(eq(tourGroupEntriesTable.group_id, group.id));
+      const groupMatches = allMatches.filter(
+        (m) => m.runde === group.name && m.status === "abgeschlossen" && !m.is_bye
+      );
+
+      const stats = entries.map((e) => {
+        let wins = 0, legsWon = 0, legsLost = 0;
+        for (const m of groupMatches) {
+          const isP1 = m.player1_id === e.player_id, isP2 = m.player2_id === e.player_id;
+          if (!isP1 && !isP2) continue;
+          if (m.winner_id === e.player_id) wins++;
+          legsWon += isP1 ? (m.score_p1 ?? 0) : (m.score_p2 ?? 0);
+          legsLost += isP1 ? (m.score_p2 ?? 0) : (m.score_p1 ?? 0);
+        }
+        return { player_id: e.player_id, points: wins * 3, leg_diff: legsWon - legsLost };
+      }).sort((a, b) => b.points - a.points || b.leg_diff - a.leg_diff);
+
+      qualified.push(...stats.slice(0, parseInt(String(advance_count))).map((s) => s.player_id));
+    }
+
+    // Generate K.O. bracket from qualified players
+    const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
+    let n = qualified.length;
+    let roundIdx = 0;
+    while (1 << (roundIdx + 1) < n) roundIdx++;
+    const koRound = roundOrder[Math.min(roundIdx, roundOrder.length - 1)];
+
+    let matchNrStart = (allMatches.filter((m) => !groups.some((g) => g.name === m.runde)).length ?? 0) + 1;
+    for (let i = 0; i < qualified.length; i += 2) {
+      const p1 = qualified[i];
+      const p2 = qualified[i + 1] ?? null;
+      if (p2 === null) {
+        // Bye
+        await db.insert(tourMatchesTable).values({
+          tournament_id: tournamentId, runde: koRound, match_nr: matchNrStart++,
+          player1_id: p1, player2_id: null, winner_id: p1, status: "abgeschlossen", is_bye: true,
+        });
+      } else {
+        await db.insert(tourMatchesTable).values({
+          tournament_id: tournamentId, runde: koRound, match_nr: matchNrStart++,
+          player1_id: p1, player2_id: p2, status: "ausstehend",
+        });
+      }
+    }
+
+    res.json({ ok: true, qualified: qualified.length, ko_round: koRound, message: `${qualified.length} Spieler ins K.O. überführt (${koRound})` });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
   }
 });
 

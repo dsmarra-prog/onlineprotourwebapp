@@ -59,6 +59,8 @@ export const tourTournamentsTable = pgTable("tour_tournaments", {
   created_at: timestamp("created_at").defaultNow().notNull(),
   is_test: boolean("is_test").notNull().default(false),
   random_draw: boolean("random_draw").notNull().default(false),
+  checkin_open: boolean("checkin_open").notNull().default(false),
+  format: text("format").notNull().default("ko"),
 });
 
 export const tourMatchesTable = pgTable("tour_matches", {
@@ -108,6 +110,7 @@ export const tourEntriesTable = pgTable("tour_entries", {
   seed: integer("seed"),
   confirmed: boolean("confirmed").default(false),
   status: text("status").notNull().default("approved"),
+  checked_in: boolean("checked_in").notNull().default(false),
 });
 
 export const tourBonusPointsTable = pgTable("tour_bonus_points", {
@@ -179,8 +182,40 @@ export const tourSupportTicketsTable = pgTable("tour_support_tickets", {
   replied_at: timestamp("replied_at"),
 });
 
+export const tourNotificationsTable = pgTable("tour_notifications", {
+  id: serial("id").primaryKey(),
+  player_id: integer("player_id").notNull(),
+  type: text("type").notNull(), // match_ready | match_result | tournament_confirmed | admin_message
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  link: text("link"),
+  read: boolean("read").notNull().default(false),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const tourGroupsTable = pgTable("tour_groups", {
+  id: serial("id").primaryKey(),
+  tournament_id: integer("tournament_id").notNull(),
+  name: text("name").notNull(), // "Gruppe A", "Gruppe B" etc.
+  order: integer("order").notNull().default(0),
+});
+
+export const tourGroupEntriesTable = pgTable("tour_group_entries", {
+  id: serial("id").primaryKey(),
+  group_id: integer("group_id").notNull(),
+  player_id: integer("player_id").notNull(),
+  wins: integer("wins").notNull().default(0),
+  losses: integer("losses").notNull().default(0),
+  legs_won: integer("legs_won").notNull().default(0),
+  legs_lost: integer("legs_lost").notNull().default(0),
+  points: integer("points").notNull().default(0),
+});
+
 export type TourPlayer = typeof tourPlayersTable.$inferSelect;
 export type TourPushSubscription = typeof tourPushSubscriptionsTable.$inferSelect;
+export type TourNotification = typeof tourNotificationsTable.$inferSelect;
+export type TourGroup = typeof tourGroupsTable.$inferSelect;
+export type TourGroupEntry = typeof tourGroupEntriesTable.$inferSelect;
 export const systemSettingsTable = pgTable("system_settings", {
   key: text("key").primaryKey(),
   value: text("value").notNull(),

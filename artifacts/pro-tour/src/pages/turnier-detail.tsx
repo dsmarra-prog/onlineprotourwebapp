@@ -5,7 +5,7 @@ import {
   ArrowLeft, Play, UserPlus, UserMinus, Check, Loader2, Target,
   Zap, Radio, CheckCircle2, Search, MonitorPlay, ExternalLink, Activity,
   TrendingUp, X, Trash2, Clock, ThumbsUp, ThumbsDown, Bell, MessageCircle, Send, AlertTriangle, Shuffle,
-  BarChart2,
+  BarChart2, Trophy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -355,6 +355,9 @@ export default function TurnierDetail() {
   // Random draw
   const [drawOverlayPairings, setDrawOverlayPairings] = useState<DrawPairing[] | null>(null);
   const [drawOverlayRound, setDrawOverlayRound] = useState<string>("");
+  // Check-in
+  const [checkinModalOpen, setCheckinModalOpen] = useState(false);
+  const [checkinPin, setCheckinPin] = useState("");
 
   const { data: detail, isLoading } = useQuery<TourTournamentDetail>({
     queryKey: ["tournament", id],
@@ -378,6 +381,15 @@ export default function TurnierDetail() {
     queryFn: () => apiFetch(`/tour/tournaments/${id}/pending-registrations`),
     enabled: !!currentPlayer?.is_admin,
     refetchInterval: 30_000,
+  });
+
+  type GroupStanding = { player_id: number; player_name: string; wins: number; losses: number; points: number; legs_won: number; legs_lost: number; leg_diff: number };
+  type TourGroup = { id: number; name: string; standing: GroupStanding[]; matches: any[] };
+  const { data: groups = [] } = useQuery<TourGroup[]>({
+    queryKey: ["tournament-groups", id],
+    queryFn: () => apiFetch(`/tour/tournaments/${id}/groups`),
+    enabled: !!id && detail?.tournament.format === "gruppe_ko",
+    refetchInterval: detail?.tournament.status === "laufend" ? 15_000 : false,
   });
 
   // ── Auto-sync: poll Autodarts every 15 s when tournament is live ──
@@ -533,6 +545,44 @@ export default function TurnierDetail() {
       qc.invalidateQueries({ queryKey: ["oom"] });
       setResultOpen(null);
       toast({ title: "Ergebnis eingetragen" });
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const openCheckinMut = useMutation({
+    mutationFn: () => apiFetch(`/tour/tournaments/${id}/open-checkin`, { method: "POST", body: JSON.stringify(adminAuth()) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tournament", id] }); toast({ title: "Check-in geöffnet ✓" }); },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const closeCheckinMut = useMutation({
+    mutationFn: () => apiFetch(`/tour/tournaments/${id}/close-checkin`, { method: "POST", body: JSON.stringify(adminAuth()) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tournament", id] }); toast({ title: "Check-in geschlossen, nicht eingecheckte entfernt" }); },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const checkinMut = useMutation({
+    mutationFn: () => apiFetch(`/tour/tournaments/${id}/checkin`, {
+      method: "POST",
+      body: JSON.stringify({ player_id: currentPlayer?.id, pin: checkinPin }),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tournament", id] });
+      setCheckinModalOpen(false);
+      setCheckinPin("");
+      toast({ title: "Erfolgreich eingecheckt ✓" });
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const advanceGroupMut = useMutation({
+    mutationFn: (qualify_per_group: number) => apiFetch(`/tour/tournaments/${id}/advance-group-phase`, {
+      method: "POST",
+      body: JSON.stringify({ qualify_per_group, ...adminAuth() }),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tournament", id] });
+      toast({ title: "Gruppenphase abgeschlossen, K.O.-Bracket erstellt ✓" });
     },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
@@ -875,51 +925,110 @@ export default function TurnierDetail() {
         );
       })()}
 
+      {/* Player check-in button when checkin is open */}
+      {isCurrentPlayerRegistered && tournament.status === "offen" && tournament.checkin_open && (() => {
+        const myEntry = players.find((p) => p.player_id === currentPlayer?.id);
+        const alreadyCheckedIn = myEntry?.checked_in ?? false;
+        return (
+          <div className={`border rounded-xl px-4 py-3 flex items-center justify-between gap-4 ${alreadyCheckedIn ? "bg-green-500/5 border-green-500/20" : "bg-yellow-400/5 border-yellow-400/30"}`}>
+            <div className="flex items-center gap-2 text-sm">
+              <CheckCircle2 className={`w-4 h-4 shrink-0 ${alreadyCheckedIn ? "text-green-400" : "text-yellow-400"}`} />
+              <span className={alreadyCheckedIn ? "text-green-400" : "text-yellow-400"}>
+                {alreadyCheckedIn ? "Du bist eingecheckt ✓" : "Check-in ist geöffnet — bitte jetzt einchecken!"}
+              </span>
+            </div>
+            {!alreadyCheckedIn && (
+              <Dialog open={checkinModalOpen} onOpenChange={(o) => { setCheckinModalOpen(o); if (!o) setCheckinPin(""); }}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="shrink-0 bg-yellow-500/80 hover:bg-yellow-500 text-black font-semibold">Jetzt einchecken</Button>
+                </DialogTrigger>
+                <DialogContent className="bg-card border-border">
+                  <DialogHeader><DialogTitle>Check-in bestätigen</DialogTitle></DialogHeader>
+                  <div className="space-y-4 mt-2">
+                    <p className="text-sm text-muted-foreground">Bestätige deinen Check-in für <span className="text-foreground font-medium">{tournament.name}</span> mit deinem PIN.</p>
+                    <div className="space-y-1.5">
+                      <Label>Dein PIN</Label>
+                      <Input type="password" value={checkinPin} onChange={(e) => setCheckinPin(e.target.value)} placeholder="••••" autoFocus />
+                    </div>
+                    <Button className="w-full" disabled={checkinPin.length < 4 || checkinMut.isPending} onClick={() => checkinMut.mutate()}>
+                      {checkinMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+                      Einchecken
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Admin check-in overview */}
       {currentPlayer?.is_admin && tournament.status === "offen" && players.length > 0 && (() => {
-        const confirmed = players.filter((p) => (p as any).confirmed).length;
+        const checkedInCount = players.filter((p) => p.checked_in).length;
+        const confirmedCount = players.filter((p) => p.confirmed).length;
         const total = players.length;
-        const pct = total > 0 ? Math.round((confirmed / total) * 100) : 0;
+        const pct = total > 0 ? Math.round((checkedInCount / total) * 100) : 0;
         return (
           <div className="bg-card border border-border rounded-xl p-4 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-primary" />
                 <span className="text-sm font-semibold">Check-in Übersicht</span>
               </div>
-              <span className="text-sm font-bold">
-                <span className="text-primary">{confirmed}</span>
-                <span className="text-muted-foreground">/{total} bestätigt</span>
-              </span>
+              <div className="flex items-center gap-2">
+                {!tournament.checkin_open ? (
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 border-primary/40 text-primary" onClick={() => openCheckinMut.mutate()} disabled={openCheckinMut.isPending}>
+                    <Loader2 className={`w-3 h-3 ${openCheckinMut.isPending ? "animate-spin" : "hidden"}`} />
+                    Check-in öffnen
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5 border-red-500/40 text-red-400" onClick={() => closeCheckinMut.mutate()} disabled={closeCheckinMut.isPending}>
+                    <Loader2 className={`w-3 h-3 ${closeCheckinMut.isPending ? "animate-spin" : "hidden"}`} />
+                    Check-in schließen
+                  </Button>
+                )}
+                <span className="text-xs font-semibold">
+                  <span className="text-primary">{checkedInCount}</span>
+                  <span className="text-muted-foreground">/{total} eingecheckt</span>
+                </span>
+              </div>
             </div>
+            {tournament.checkin_open && (
+              <div className="flex items-center gap-2 text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 rounded-lg px-3 py-2">
+                <Clock className="w-3 h-3 shrink-0" />
+                Check-in ist geöffnet — Spieler können sich jetzt einchecken
+              </div>
+            )}
             <div className="w-full bg-muted rounded-full h-1.5">
-              <div
-                className="bg-primary h-1.5 rounded-full transition-all duration-500"
-                style={{ width: `${pct}%` }}
-              />
+              <div className="bg-primary h-1.5 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
             </div>
             <div className="space-y-1">
               {players.map((p) => (
                 <div key={p.player_id} className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-muted/30 text-xs">
                   <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
-                      {p.name.charAt(0).toUpperCase()}
-                    </div>
+                    <PlayerAvatar name={p.name} avatarUrl={p.avatar_url} size="xs" />
                     <span className="font-medium">{p.name}</span>
                     <span className="text-muted-foreground hidden sm:inline">@{p.autodarts_username}</span>
                   </div>
-                  {(p as any).confirmed ? (
-                    <span className="flex items-center gap-1 text-green-400 font-medium">
-                      <CheckCircle2 className="w-3 h-3" /> Bestätigt
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 text-muted-foreground/60">
-                      <Clock className="w-3 h-3" /> Ausstehend
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {p.checked_in ? (
+                      <span className="flex items-center gap-1 text-green-400 font-medium">
+                        <CheckCircle2 className="w-3 h-3" /> Eingecheckt
+                      </span>
+                    ) : p.confirmed ? (
+                      <span className="flex items-center gap-1 text-yellow-400/80">
+                        <Clock className="w-3 h-3" /> Bestätigt
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-muted-foreground/60">
+                        <Clock className="w-3 h-3" /> Ausstehend
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
+            <p className="text-[10px] text-muted-foreground/50">RSVP bestätigt: {confirmedCount}/{total}</p>
           </div>
         );
       })()}
@@ -998,8 +1107,78 @@ export default function TurnierDetail() {
         </div>
       )}
 
+      {/* Group Phase View */}
+      {tournament.format === "gruppe_ko" && (tournament.status === "laufend" || tournament.status === "abgeschlossen") && groups.length > 0 && (() => {
+        const koRounds = sortedRounds.filter((r) => !r.startsWith("Gruppe"));
+        const groupRoundsExist = matches.some((m) => m.runde.startsWith("Gruppe"));
+        const koRoundsExist = koRounds.length > 0;
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <h2 className="font-semibold">Gruppenphase</h2>
+              {currentPlayer?.is_admin && groupRoundsExist && !koRoundsExist && (
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button size="sm" className="gap-1.5 bg-primary text-black hover:bg-primary/80">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Zur K.O.-Phase
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-card border-border">
+                    <DialogHeader><DialogTitle>Gruppenphase abschließen</DialogTitle></DialogHeader>
+                    <div className="space-y-4 mt-2">
+                      <p className="text-sm text-muted-foreground">Wie viele Spieler pro Gruppe qualifizieren sich für die K.O.-Phase?</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {[1, 2, 3].map((n) => (
+                          <Button key={n} variant="outline" className="h-12 text-lg font-bold" onClick={() => advanceGroupMut.mutate(n)} disabled={advanceGroupMut.isPending}>
+                            {n}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {groups.map((group) => (
+                <div key={group.id} className="bg-card border border-border rounded-xl overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-border bg-muted/30 flex items-center gap-2">
+                    <Trophy className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-sm font-bold">{group.name}</span>
+                  </div>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border/50 text-muted-foreground">
+                        <th className="px-3 py-2 text-left w-6">#</th>
+                        <th className="px-3 py-2 text-left">Spieler</th>
+                        <th className="px-3 py-2 text-center">S</th>
+                        <th className="px-3 py-2 text-center">N</th>
+                        <th className="px-3 py-2 text-center">Legs</th>
+                        <th className="px-3 py-2 text-center font-bold text-foreground">Pkt</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.standing.map((s, i) => (
+                        <tr key={s.player_id} className={`border-b border-border/30 last:border-0 ${i === 0 ? "bg-primary/5" : ""}`}>
+                          <td className="px-3 py-2 text-muted-foreground">{i + 1}</td>
+                          <td className="px-3 py-2 font-medium">{s.player_name}</td>
+                          <td className="px-3 py-2 text-center text-green-400">{s.wins}</td>
+                          <td className="px-3 py-2 text-center text-red-400">{s.losses}</td>
+                          <td className="px-3 py-2 text-center text-muted-foreground">{s.legs_won}:{s.legs_lost}</td>
+                          <td className="px-3 py-2 text-center font-bold text-primary">{s.points}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Bracket */}
-      {(tournament.status === "laufend" || tournament.status === "abgeschlossen") && sortedRounds.length > 0 && (
+      {(tournament.status === "laufend" || tournament.status === "abgeschlossen") && sortedRounds.filter((r) => !r.startsWith("Gruppe")).length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2">
@@ -1026,7 +1205,7 @@ export default function TurnierDetail() {
           </div>
           <div className="overflow-x-auto pb-6">
             <BracketView
-              sortedRounds={sortedRounds}
+              sortedRounds={sortedRounds.filter((r) => !r.startsWith("Gruppe"))}
               matches={matches}
               tournament={tournament}
               liveStatus={liveStatus}

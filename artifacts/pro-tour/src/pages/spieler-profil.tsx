@@ -4,7 +4,7 @@ import { useParams, Link } from "wouter";
 import { ArrowLeft, Trophy, Star, Loader2, Target, TrendingUp, Swords, ChevronDown, ChevronUp, Medal, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LineChart, Line, CartesianGrid } from "recharts";
 import { toPng } from "html-to-image";
 import { apiFetch, TourPlayerProfile, TourH2H, Achievement, TYP_LABELS, RUNDE_LABELS } from "@/lib/api";
 
@@ -57,6 +57,14 @@ export default function SpielerProfil() {
     queryFn: () => apiFetch(`/tour/players/${id}/form`),
     enabled: !!id,
     staleTime: 60_000,
+  });
+
+  type OomHistoryEntry = { datum: string; tournament_name: string; typ: string; points: number; bonus: number; cumulative: number; round: string };
+  const { data: oomHistory } = useQuery<OomHistoryEntry[]>({
+    queryKey: ["oom-history", id],
+    queryFn: () => apiFetch(`/tour/players/${id}/oom-history`),
+    enabled: !!id,
+    staleTime: 120_000,
   });
 
   if (isLoading) return <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>;
@@ -300,6 +308,31 @@ export default function SpielerProfil() {
       {/* Points chart */}
       {profile.tournament_results && profile.tournament_results.length > 0 && (
         <PointsChart results={profile.tournament_results} />
+      )}
+
+      {/* OOM-Verlauf-Chart */}
+      {oomHistory && oomHistory.length >= 2 && (
+        <div className="bg-card border border-border rounded-xl p-4">
+          <h2 className="font-semibold text-sm mb-4 flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-primary" /> OOM-Punkteverlauf
+          </h2>
+          <ResponsiveContainer width="100%" height={160}>
+            <LineChart data={oomHistory} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+              <XAxis dataKey="datum" tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 10 }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fill: "rgba(255,255,255,0.35)", fontSize: 10 }} tickLine={false} axisLine={false} />
+              <Tooltip
+                contentStyle={{ background: "#0d0d0d", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, fontSize: 12 }}
+                labelStyle={{ color: "rgba(255,255,255,0.6)", marginBottom: 4 }}
+                formatter={(v: number, _: string, entry: any) => [
+                  `${v.toLocaleString("de-DE")} Pkt (${entry.payload.tournament_name} — ${entry.payload.round})`,
+                  "Kumuliert",
+                ]}
+              />
+              <Line type="monotone" dataKey="cumulative" stroke="#06b6d4" strokeWidth={2} dot={{ fill: "#06b6d4", r: 3 }} activeDot={{ r: 5 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
       )}
 
       {/* Pro Tour results */}

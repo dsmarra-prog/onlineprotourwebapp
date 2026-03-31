@@ -58,6 +58,8 @@ export type TourTournament = {
   is_test: boolean;
   random_draw: boolean;
   schedule_id: number | null;
+  checkin_open?: boolean;
+  format?: "ko" | "gruppe_ko";
 };
 
 export type TourMatch = {
@@ -107,6 +109,7 @@ export type TourTournamentDetail = {
     player_id: number;
     seed: number | null;
     confirmed: boolean;
+    checked_in?: boolean;
     name: string;
     autodarts_username: string;
     avatar_url: string | null;

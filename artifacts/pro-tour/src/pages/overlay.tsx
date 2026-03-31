@@ -15,6 +15,12 @@ type OverlayData = {
   score_p2: number;
   avg_p1: number | null;
   avg_p2: number | null;
+  first9_p1: number | null;
+  first9_p2: number | null;
+  doubles_hit_p1: number | null;
+  doubles_att_p1: number | null;
+  doubles_hit_p2: number | null;
+  doubles_att_p2: number | null;
   count_180s_p1: number | null;
   count_180s_p2: number | null;
   high_checkout_p1: number | null;
@@ -23,27 +29,47 @@ type OverlayData = {
   winner_id: number | null;
 };
 
+function StatBadge({ label, value, color = "text-cyan-300" }: { label: string; value: string; color?: string }) {
+  return (
+    <div className="flex flex-col items-center bg-black/50 rounded-lg px-3 py-1.5 border border-white/10">
+      <span className="text-[10px] text-white/50 uppercase tracking-widest">{label}</span>
+      <span className={`text-sm font-bold ${color}`}>{value}</span>
+    </div>
+  );
+}
+
 function PlayerPanel({
   name,
   avatar,
   score,
   avg,
+  first9,
+  doublesHit,
+  doublesAtt,
   count180s,
   highCheckout,
   isWinner,
   isLeading,
-  side,
 }: {
   name: string;
   avatar: string | null;
   score: number;
   avg: number | null;
+  first9: number | null;
+  doublesHit: number | null;
+  doublesAtt: number | null;
   count180s: number | null;
   highCheckout: number | null;
   isWinner: boolean;
   isLeading: boolean;
   side: "left" | "right";
 }) {
+  const doubleRate = doublesHit !== null && doublesAtt !== null && doublesAtt > 0
+    ? Math.round((doublesHit / doublesAtt) * 100)
+    : null;
+
+  const hasStats = avg !== null || first9 !== null || doubleRate !== null || count180s !== null || highCheckout !== null;
+
   return (
     <div
       className={`flex flex-col items-center gap-3 flex-1 transition-all duration-700 ${
@@ -94,25 +120,18 @@ function PlayerPanel({
       </div>
 
       {/* Stats row */}
-      {(avg !== null || count180s !== null || highCheckout !== null) && (
-        <div className="flex items-center gap-3 mt-1">
-          {avg !== null && (
-            <div className="flex flex-col items-center bg-black/50 rounded-lg px-3 py-1.5 border border-white/10">
-              <span className="text-[10px] text-white/50 uppercase tracking-widest">Avg</span>
-              <span className="text-sm font-bold text-cyan-300">{avg.toFixed(1)}</span>
-            </div>
+      {hasStats && (
+        <div className="flex items-center gap-2 mt-1 flex-wrap justify-center">
+          {avg !== null && <StatBadge label="Avg" value={avg.toFixed(1)} />}
+          {first9 !== null && <StatBadge label="1st 9" value={first9.toFixed(1)} color="text-blue-300" />}
+          {doubleRate !== null && (
+            <StatBadge label="Dbl%" value={`${doubleRate}%`} color="text-amber-300" />
           )}
           {count180s !== null && count180s > 0 && (
-            <div className="flex flex-col items-center bg-black/50 rounded-lg px-3 py-1.5 border border-white/10">
-              <span className="text-[10px] text-white/50 uppercase tracking-widest">180s</span>
-              <span className="text-sm font-bold text-pink-400">{count180s}</span>
-            </div>
+            <StatBadge label="180s" value={String(count180s)} color="text-pink-400" />
           )}
           {highCheckout !== null && highCheckout > 0 && (
-            <div className="flex flex-col items-center bg-black/50 rounded-lg px-3 py-1.5 border border-white/10">
-              <span className="text-[10px] text-white/50 uppercase tracking-widest">HiCo</span>
-              <span className="text-sm font-bold text-green-400">{highCheckout}</span>
-            </div>
+            <StatBadge label="HiCo" value={String(highCheckout)} color="text-green-400" />
           )}
         </div>
       )}
@@ -204,7 +223,7 @@ export default function OverlayPage() {
           <span className="text-white/30">·</span>
           <span>{data.runde}</span>
           <span className="text-white/30">·</span>
-          <span>{data.legs_format}</span>
+          <span>Best of {data.legs_format}</span>
         </div>
       </div>
 
@@ -218,6 +237,9 @@ export default function OverlayPage() {
               avatar={data.player1_avatar}
               score={data.score_p1}
               avg={data.avg_p1}
+              first9={data.first9_p1}
+              doublesHit={data.doubles_hit_p1}
+              doublesAtt={data.doubles_att_p1}
               count180s={data.count_180s_p1}
               highCheckout={data.high_checkout_p1}
               isWinner={isFinished && data.winner_id !== null && data.player1_name !== "TBD" && data.score_p1 > data.score_p2}
@@ -258,6 +280,9 @@ export default function OverlayPage() {
               avatar={data.player2_avatar}
               score={data.score_p2}
               avg={data.avg_p2}
+              first9={data.first9_p2}
+              doublesHit={data.doubles_hit_p2}
+              doublesAtt={data.doubles_att_p2}
               count180s={data.count_180s_p2}
               highCheckout={data.high_checkout_p2}
               isWinner={isFinished && data.winner_id !== null && data.score_p2 > data.score_p1}

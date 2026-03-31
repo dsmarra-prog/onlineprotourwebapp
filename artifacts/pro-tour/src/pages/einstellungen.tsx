@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Settings, CheckCircle, Loader2, Target, RefreshCw, ShieldCheck, LogOut, Check,
   User, ChevronDown, Wifi, WifiOff, Link2, Link2Off,
   MessageSquare, Bell, GitBranch, Send,
-  AlertTriangle, ThumbsUp, ThumbsDown, Flag,
+  AlertTriangle, ThumbsUp, ThumbsDown, Flag, Camera, Upload, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -614,6 +614,43 @@ export default function EinstellungenPage() {
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
+  // ── Avatar Upload ─────────────────────────────────────────────────────────
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarPin, setAvatarPin] = useState("");
+
+  const avatarUploadMut = useMutation({
+    mutationFn: async () => {
+      if (!avatarFile || !currentPlayer) throw new Error("Keine Datei ausgewählt");
+      const { uploadURL, objectPath } = await apiFetch<{ uploadURL: string; objectPath: string }>(
+        `/tour/players/${currentPlayer.id}/avatar/request-upload`,
+        { method: "POST", body: JSON.stringify({ player_pin: avatarPin, content_type: avatarFile.type }) }
+      );
+      await fetch(uploadURL, { method: "PUT", body: avatarFile, headers: { "Content-Type": avatarFile.type } });
+      await apiFetch(`/tour/players/${currentPlayer.id}/avatar`, {
+        method: "PATCH",
+        body: JSON.stringify({ player_pin: avatarPin, object_path: objectPath }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["player"] });
+      queryClient.invalidateQueries({ queryKey: ["players"] });
+      setAvatarFile(null);
+      setAvatarPreview(null);
+      setAvatarPin("");
+      toast({ title: "Avatar aktualisiert ✓" });
+    },
+    onError: (e: Error) => toast({ title: "Fehler beim Upload", description: e.message, variant: "destructive" }),
+  });
+
+  const handleAvatarFile = (file: File) => {
+    setAvatarFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setAvatarPreview(e.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
   // ── Push Notifications ───────────────────────────────────────────────────
   const [pushPin, setPushPin] = useState("");
   const [pushLoading, setPushLoading] = useState(false);
@@ -778,6 +815,71 @@ export default function EinstellungenPage() {
           <LogOut className="w-4 h-4" /> Ausloggen
         </Button>
       </div>
+
+      {/* Avatar Upload */}
+      {currentPlayer && (
+        <div className="bg-card border border-border rounded-xl p-4 space-y-4">
+          <div className="flex items-center gap-2">
+            <Camera className="w-4 h-4 text-primary" />
+            <span className="font-semibold text-sm">Profilbild</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="relative shrink-0">
+              {avatarPreview ? (
+                <img src={avatarPreview} alt="Preview" className="w-16 h-16 rounded-full object-cover border-2 border-primary" />
+              ) : (
+                <PlayerAvatar name={currentPlayer.name} avatarUrl={currentPlayer.avatar_url} size="xl" />
+              )}
+              {avatarPreview && (
+                <button
+                  onClick={() => { setAvatarFile(null); setAvatarPreview(null); }}
+                  className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-white rounded-full flex items-center justify-center hover:bg-destructive/80"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+            <div className="flex-1 space-y-2">
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAvatarFile(f); }}
+              />
+              <div
+                onClick={() => avatarInputRef.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files?.[0]; if (f) handleAvatarFile(f); }}
+                className="border-2 border-dashed border-border hover:border-primary/50 rounded-lg px-4 py-3 cursor-pointer text-center text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Upload className="w-4 h-4 mx-auto mb-1" />
+                {avatarFile ? avatarFile.name : "JPG, PNG oder WebP wählen"}
+              </div>
+              {avatarFile && (
+                <div className="space-y-1.5">
+                  <Input
+                    type="password"
+                    placeholder="PIN zur Bestätigung"
+                    value={avatarPin}
+                    onChange={(e) => setAvatarPin(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                  <Button
+                    size="sm"
+                    className="w-full gap-2"
+                    disabled={avatarPin.length < 4 || avatarUploadMut.isPending}
+                    onClick={() => avatarUploadMut.mutate()}
+                  >
+                    {avatarUploadMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                    Bild hochladen
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Push Benachrichtigungen */}
       {currentPlayer && (

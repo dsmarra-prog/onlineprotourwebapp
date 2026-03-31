@@ -97,6 +97,15 @@ React + Vite frontend for the **Online Pro Tour Manager** — multi-player tourn
   - Admin endpoints: GET/POST `/api/tour/admin/discord-settings`, POST `/api/tour/admin/discord-test`
   - Events hooked: self-register → registration notif, tournament start → start notif + R1 match threads, match result → result notif, tournament complete → winner notif, oom/dev-oom update → OOM notif
   - Frontend: "Admin: Discord Integration" collapsible panel in Einstellungen page (`einstellungen.tsx`)
+- **OOM Verlauf Chart**: GET `/tour/players/:id/oom-history` — LineChart (Recharts) auf Spielerprofil, kumulierte OOM-Punkte nach jedem Turnier
+- **Check-in System**: `checkin_open` (tournament) + `checked_in` (entry) — Admin: Check-in öffnen/schließen; nicht eingecheckte werden beim Schließen entfernt; Spieler sehen "Jetzt einchecken" Button mit PIN
+- **Nachrichten-Center**: `tourNotificationsTable` — Bell-Icon in NavBar mit Unread-Badge, `/nachrichten` Seite, mark-read per Notification und mark-all-read. Typen: match_ready, match_result, tournament_confirmed, checkin_removed
+- **Spieler-Avatar-Upload**: POST `/tour/players/:id/avatar/request-upload` (Replit Object Storage Presigned URL) → PUT direkt zu GCS → PATCH avatar_url. Frontend: Upload-Karte in Einstellungen mit Drag&Drop, File-Preview, PIN
+- **Overlay-Verbesserungen**: StatBadge-Component, first9, doubles%, 180s, HiCo per Player-Panel
+- **Gruppenphase + K.O.**: `tourGroupsTable` + `tourGroupEntriesTable` + `format` auf Tournaments ("ko"|"gruppe_ko")
+  - Backend: Gruppen erstellen/löschen, Spieler zuweisen/entfernen, Round-Robin generieren, Gruppenphase abschließen → K.O.-Bracket
+  - Frontend: Gruppen-Tabellen-Ansicht in turnier-detail.tsx (Standings mit Pkt/S/N/Legs), Admin: "Zur K.O.-Phase" Dialog
+  - Admin-Panel: GruppenManager-Dialog pro Turnier (Gruppen anlegen, Spieler zuweisen, Round-Robin generieren)
 
 ### `artifacts/darts-career` (`@workspace/darts-career`)
 

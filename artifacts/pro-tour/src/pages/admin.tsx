@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
-  Shield, Trophy, BarChart3, Users, Settings, Radio, Zap, RefreshCw,
+  Shield, Trophy, BarChart3, Users, Settings, Radio, Zap, RefreshCw, UserPlus,
   CheckCircle2, AlertTriangle, Loader2, ChevronRight, Plus, Trash2,
   MessageCircle, ExternalLink, Bell, TrendingUp, Clock, Send, Target,
   Link2Off, Wifi, WifiOff, FlaskConical, ChevronDown, MessageSquare,
@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch, TourTournament, TourPlayer, TYP_LABELS } from "@/lib/api";
 import { usePlayer } from "@/context/PlayerContext";
@@ -107,7 +109,156 @@ export default function AdminPanel() {
   );
 }
 
-// ─── Turniere Tab ─────────────────────────────────────────────────────────────
+// ─── Gruppen Manager ──────────────────────────────────────────────────────────
+
+function GruppenManager({ tournament, adminAuth }: { tournament: TourTournament; adminAuth: () => object }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const [newGroupName, setNewGroupName] = useState("");
+  const [selectedPlayer, setSelectedPlayer] = useState<string>("");
+
+  type GroupEntry = { player_id: number; player_name: string };
+  type TourGroup = { id: number; name: string; entries: GroupEntry[]; standing: any[] };
+
+  const { data: groups = [], isLoading } = useQuery<TourGroup[]>({
+    queryKey: ["admin-groups", tournament.id],
+    queryFn: () => apiFetch(`/tour/tournaments/${tournament.id}/groups`),
+  });
+
+  type EntryPlayer = { player_id: number; name: string; autodarts_username: string };
+  const { data: entries = [] } = useQuery<EntryPlayer[]>({
+    queryKey: ["tournament-entries-admin", tournament.id],
+    queryFn: async () => {
+      const detail = await apiFetch<{ players: EntryPlayer[] }>(`/tour/tournaments/${tournament.id}`);
+      return detail.players;
+    },
+  });
+
+  const createGroupMut = useMutation({
+    mutationFn: () => apiFetch(`/tour/tournaments/${tournament.id}/groups`, {
+      method: "POST",
+      body: JSON.stringify({ ...adminAuth(), name: newGroupName, order: groups.length }),
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-groups", tournament.id] }); setNewGroupName(""); toast({ title: `Gruppe ${newGroupName} erstellt` }); },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteGroupMut = useMutation({
+    mutationFn: (groupId: number) => apiFetch(`/tour/tournaments/${tournament.id}/groups/${groupId}`, {
+      method: "DELETE", body: JSON.stringify(adminAuth()),
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-groups", tournament.id] }); toast({ title: "Gruppe gelöscht" }); },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const addEntryMut = useMutation({
+    mutationFn: ({ groupId, playerId }: { groupId: number; playerId: number }) =>
+      apiFetch(`/tour/tournaments/${tournament.id}/groups/${groupId}/entries`, {
+        method: "POST",
+        body: JSON.stringify({ ...adminAuth(), player_id: playerId }),
+      }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-groups", tournament.id] }); setSelectedPlayer(""); toast({ title: "Spieler hinzugefügt" }); },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const removeEntryMut = useMutation({
+    mutationFn: ({ groupId, playerId }: { groupId: number; playerId: number }) =>
+      apiFetch(`/tour/tournaments/${tournament.id}/groups/${groupId}/entries/${playerId}`, {
+        method: "DELETE", body: JSON.stringify(adminAuth()),
+      }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-groups", tournament.id] }); toast({ title: "Spieler entfernt" }); },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const generateMatchesMut = useMutation({
+    mutationFn: () => apiFetch(`/tour/tournaments/${tournament.id}/generate-group-matches`, {
+      method: "POST", body: JSON.stringify(adminAuth()),
+    }),
+    onSuccess: (d: any) => { qc.invalidateQueries({ queryKey: ["tournament", String(tournament.id)] }); toast({ title: `${d.matches_created ?? 0} Gruppenmatches erstellt` }); },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const assignedPlayerIds = new Set(groups.flatMap((g) => (g.entries ?? g.standing ?? []).map((e: any) => e.player_id)));
+  const unassignedPlayers = entries.filter((p) => !assignedPlayerIds.has(p.player_id));
+
+  return (
+    <div className="space-y-4">
+      {isLoading && <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-primary" /></div>}
+
+      {/* Create group */}
+      <div className="flex gap-2">
+        <Input
+          placeholder="Gruppenname (z.B. Gruppe A)"
+          value={newGroupName}
+          onChange={(e) => setNewGroupName(e.target.value)}
+          className="h-8 text-sm"
+        />
+        <Button size="sm" className="h-8 gap-1.5 shrink-0" onClick={() => createGroupMut.mutate()} disabled={!newGroupName.trim() || createGroupMut.isPending}>
+          <Plus className="w-3.5 h-3.5" /> Gruppe
+        </Button>
+      </div>
+
+      {/* Groups list */}
+      {groups.map((group) => {
+        const groupEntries: any[] = group.entries ?? group.standing ?? [];
+        return (
+          <div key={group.id} className="bg-card border border-border rounded-xl overflow-hidden">
+            <div className="px-3 py-2 border-b border-border bg-muted/30 flex items-center justify-between">
+              <span className="text-sm font-bold text-primary">{group.name}</span>
+              <div className="flex gap-1 items-center">
+                {/* Add player to group */}
+                <Select value={selectedPlayer} onValueChange={setSelectedPlayer}>
+                  <SelectTrigger className="h-6 text-[10px] w-32 border-border">
+                    <SelectValue placeholder="+ Spieler" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {unassignedPlayers.map((p) => (
+                      <SelectItem key={p.player_id} value={String(p.player_id)}>{p.name}</SelectItem>
+                    ))}
+                    {unassignedPlayers.length === 0 && (
+                      <SelectItem value="__none__" disabled>Alle zugewiesen</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" className="h-6 w-6 p-0" onClick={() => {
+                  if (!selectedPlayer || selectedPlayer === "__none__") return;
+                  addEntryMut.mutate({ groupId: group.id, playerId: parseInt(selectedPlayer) });
+                }} disabled={!selectedPlayer || selectedPlayer === "__none__" || addEntryMut.isPending}>
+                  <Plus className="w-3 h-3" />
+                </Button>
+                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-400 hover:bg-red-400/10" onClick={() => {
+                  if (confirm(`Gruppe "${group.name}" löschen?`)) deleteGroupMut.mutate(group.id);
+                }}>
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </div>
+            </div>
+            <div className="divide-y divide-border/30">
+              {groupEntries.length === 0 && (
+                <p className="px-3 py-2 text-xs text-muted-foreground">Noch keine Spieler</p>
+              )}
+              {groupEntries.map((e: any) => (
+                <div key={e.player_id} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                  <span>{e.player_name ?? e.name}</span>
+                  <button className="text-muted-foreground/50 hover:text-red-400 transition-colors" onClick={() => removeEntryMut.mutate({ groupId: group.id, playerId: e.player_id })}>
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+
+      {groups.length > 0 && (
+        <Button className="w-full gap-2" onClick={() => generateMatchesMut.mutate()} disabled={generateMatchesMut.isPending}>
+          {generateMatchesMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+          Round-Robin Matches generieren
+        </Button>
+      )}
+    </div>
+  );
+}
 
 function TourniereTab({ adminAuth }: { adminAuth: () => object }) {
   const { toast } = useToast();
@@ -195,6 +346,19 @@ function TourniereTab({ adminAuth }: { adminAuth: () => object }) {
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                {(t as any).format === "gruppe_ko" && (
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button size="sm" variant="outline" className="h-7 px-2 gap-1 text-xs border-primary/40 text-primary">
+                        <Users className="w-3 h-3" /> Gruppen
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="bg-card border-border max-w-lg max-h-[80vh] overflow-y-auto">
+                      <DialogHeader><DialogTitle>{t.name} — Gruppenphase</DialogTitle></DialogHeader>
+                      <GruppenManager tournament={t} adminAuth={adminAuth} />
+                    </DialogContent>
+                  </Dialog>
+                )}
                 <Link href={`/turniere/${t.id}`}>
                   <Button size="sm" variant="ghost" className="h-7 px-2 gap-1 text-xs">
                     <ChevronRight className="w-3.5 h-3.5" />
