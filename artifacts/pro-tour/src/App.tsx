@@ -19,7 +19,6 @@ import HomeDashboard from "@/pages/home";
 import SpielplanPage from "@/pages/spielplan";
 import StatistikenPage from "@/pages/statistiken";
 import Portal from "@/pages/portal";
-import AutodartsCallback from "@/pages/autodarts-callback";
 import SaisonPage from "@/pages/saison";
 import VergleichPage from "@/pages/vergleich";
 import HilfePage from "@/pages/hilfe";
@@ -420,10 +419,6 @@ function BottomNav() {
 function Router() {
   const [location] = useLocation();
   const { currentPlayer, isLoading } = usePlayer();
-
-  if (location === "/autodarts-callback") {
-    return <AutodartsCallback />;
-  }
 
   if (isLoading) {
     return (

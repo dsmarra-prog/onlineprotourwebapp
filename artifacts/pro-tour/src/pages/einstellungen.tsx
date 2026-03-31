@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Settings, CheckCircle, Loader2, Target, RefreshCw, ShieldCheck, LogOut, Check,
-  User, ChevronDown, Wifi, WifiOff, ExternalLink, Copy, Link2, Link2Off,
+  User, ChevronDown, Wifi, WifiOff, Link2, Link2Off,
   MessageSquare, Bell, GitBranch, Send,
   AlertTriangle, ThumbsUp, ThumbsDown, Flag,
 } from "lucide-react";
@@ -677,37 +677,9 @@ export default function EinstellungenPage() {
   const [connectPin, setConnectPin] = useState("");
   const [manualToken, setManualToken] = useState("");
   const [disconnectPin, setDisconnectPin] = useState("");
-  const [copied, setCopied] = useState(false);
-  const [connectStep, setConnectStep] = useState<"form" | "script">("form");
 
   const playerConnected = adStatus?.connected ?? false;
 
-  const base = import.meta.env.BASE_URL.endsWith("/")
-    ? import.meta.env.BASE_URL
-    : import.meta.env.BASE_URL + "/";
-  const callbackUrl = `${window.location.origin}${base}autodarts-callback`;
-
-  const connectScript = currentPlayer && connectPin.length >= 4
-    ? `(()=>{const CB='${callbackUrl}';let ok=false;function relay(t){if(ok)return;ok=true;window.location.href=CB+'?t='+encodeURIComponent(t);}function findKC(){for(const k of Object.keys(window)){try{const w=window[k];if(w&&typeof w.updateToken==='function'&&w.refreshToken)return w;}catch{}}const root=document.getElementById('root')||document.body;const fk=Object.keys(root).find(k=>k.startsWith('__reactFiber')||k.startsWith('__reactInternalInstance'));if(!fk)return null;const q=[root[fk]];for(let i=0;i<8000&&q.length;i++){const f=q.shift();if(!f)continue;if(f.type&&f.type._context){const v=f.type._context._currentValue||{};for(const c of[v,v.keycloak,v.authClient]){if(c&&typeof c.updateToken==='function'&&c.refreshToken)return c;}}if(f.memoizedProps){for(const c of[f.memoizedProps.keycloak,f.memoizedProps.authClient]){if(c&&typeof c.updateToken==='function'&&c.refreshToken)return c;}}let h=f.memoizedState;while(h){const s=h.memoizedState||{};for(const c of[s,s.keycloak,s.authClient]){if(c&&typeof c.updateToken==='function'&&c.refreshToken)return c;}h=h.next;}if(f.child)q.push(f.child);if(f.sibling)q.push(f.sibling);}return null;}const kc=findKC();if(kc&&kc.refreshToken){relay(kc.refreshToken);}else{const oF=window.fetch;window.fetch=async function(u,v){const r=await oF.apply(this,arguments);if(typeof u==='string'&&u.includes('openid-connect/token')){try{const d=await r.clone().json();if(d.refresh_token)relay(d.refresh_token);}catch{}}return r;};const oO=XMLHttpRequest.prototype.open,oS=XMLHttpRequest.prototype.send;XMLHttpRequest.prototype.open=function(m,u){this._u=String(u||'');return oO.apply(this,arguments);};XMLHttpRequest.prototype.send=function(){this.addEventListener('load',()=>{if(this._u.includes('openid-connect/token')){try{const d=JSON.parse(this.responseText);if(d.refresh_token)relay(d.refresh_token);}catch{}}});return oS.apply(this,arguments);};}})();`
-    : "";
-
-  const handleStartConnect = () => {
-    if (!currentPlayer || connectPin.length < 4) return;
-    localStorage.setItem("autodarts_connect", JSON.stringify({
-      player_id: currentPlayer.id,
-      pin: connectPin,
-    }));
-    window.open("https://play.autodarts.io", "_blank");
-    setConnectStep("script");
-  };
-
-  const handleCopyScript = () => {
-    if (!connectScript) return;
-    navigator.clipboard.writeText(connectScript).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  };
 
   const manualConnectMut = useMutation({
     mutationFn: () =>
@@ -718,8 +690,9 @@ export default function EinstellungenPage() {
     onSuccess: (data) => {
       if (data.ok) {
         toast({ title: "Verbunden!", description: data.message });
-        setConnectStep("form");
         setManualToken("");
+        setConnectPin("");
+        setShowOwnConnect(false);
         queryClient.invalidateQueries({ queryKey: ["autodarts-status", currentPlayer?.id] });
       } else {
         toast({ title: "Fehler", description: (data as any).error, variant: "destructive" });
@@ -906,91 +879,39 @@ export default function EinstellungenPage() {
                     <span className="text-primary font-semibold">Warum?</span> Wenn du dein eigenes Konto verbindest, kannst du Lobbys selbst erstellen und starten — ohne auf den Admin warten zu müssen.
                   </div>
 
-                  {connectStep === "form" ? (
-                    <div className="space-y-3">
-                      <div className="space-y-1.5">
-                        <Label className="text-xs">Dein Pro Tour PIN</Label>
-                        <Input
-                          type="password"
-                          placeholder="PIN eingeben"
-                          value={connectPin}
-                          onChange={(e) => setConnectPin(e.target.value)}
-                          className="max-w-[160px] h-8 text-sm"
-                        />
-                      </div>
-                      <Button
-                        className="w-full gap-2"
-                        size="sm"
-                        disabled={connectPin.length < 4}
-                        onClick={handleStartConnect}
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" /> Mit Autodarts verbinden
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 p-3 rounded-lg bg-green-500/5 border border-green-500/20">
-                        <CheckCircle className="w-4 h-4 text-green-400 shrink-0" />
-                        <p className="text-xs text-muted-foreground">
-                          <span className="text-green-400 font-semibold">play.autodarts.io wurde geöffnet.</span> Logge dich ein und folge den Schritten:
-                        </p>
-                      </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Dein Pro Tour PIN</Label>
+                    <Input
+                      type="password"
+                      placeholder="PIN eingeben"
+                      value={connectPin}
+                      onChange={(e) => setConnectPin(e.target.value)}
+                      className="max-w-[160px] h-8 text-sm"
+                    />
+                  </div>
 
-                      <div className="rounded-xl border border-primary/20 bg-primary/5 p-4 space-y-3">
-                        <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                          <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-black flex items-center justify-center shrink-0">1</span>
-                          Lesezeichen speichern
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Lesezeichen-Leiste anzeigen (<span className="font-mono bg-muted px-1 rounded text-foreground">Strg+Shift+B</span>), dann diesen Knopf dorthin ziehen:
-                        </p>
-                        <div className="flex justify-center">
-                          <a
-                            href={connectScript ? `javascript:${connectScript}` : "#"}
-                            onClick={(e) => e.preventDefault()}
-                            draggable
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl font-bold text-sm cursor-grab active:cursor-grabbing select-none shadow-lg"
-                          >
-                            🎯 Autodarts Connector
-                          </a>
-                        </div>
-                      </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Autodarts Refresh-Token</Label>
+                    <Textarea
+                      value={manualToken}
+                      onChange={(e) => setManualToken(e.target.value)}
+                      placeholder="eyJhbGciO..."
+                      className="font-mono text-xs h-16 resize-none"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Logge dich auf <span className="font-mono text-foreground">play.autodarts.io</span> ein und finde den Refresh-Token im Local Storage oder Network-Tab (<span className="font-mono bg-muted px-1 rounded text-foreground">F12</span>).
+                    </p>
+                  </div>
 
-                      <div className="space-y-2">
-                        <div className="flex items-start gap-3 p-2.5 rounded-lg bg-card border border-border">
-                          <span className="w-5 h-5 rounded-full bg-muted text-foreground text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">2</span>
-                          <p className="text-xs text-muted-foreground">Auf play.autodarts.io einloggen</p>
-                        </div>
-                        <div className="flex items-start gap-3 p-2.5 rounded-lg bg-card border border-border">
-                          <span className="w-5 h-5 rounded-full bg-muted text-foreground text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">3</span>
-                          <p className="text-xs text-muted-foreground">Lesezeichen <span className="font-semibold text-foreground">🎯 Autodarts Connector</span> anklicken</p>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2 border-t border-border pt-3">
-                        <p className="text-xs font-semibold text-muted-foreground">Alternative: Token manuell einfügen</p>
-                        <Textarea
-                          value={manualToken}
-                          onChange={(e) => setManualToken(e.target.value)}
-                          placeholder="eyJhbGciO..."
-                          className="font-mono text-xs h-16 resize-none"
-                        />
-                        <Button
-                          size="sm"
-                          className="w-full"
-                          disabled={manualToken.trim().length < 20 || manualConnectMut.isPending}
-                          onClick={() => manualConnectMut.mutate()}
-                        >
-                          {manualConnectMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> : <Link2 className="w-3.5 h-3.5 mr-2" />}
-                          Manuell verbinden
-                        </Button>
-                      </div>
-
-                      <button onClick={() => { setConnectStep("form"); setManualToken(""); }} className="text-xs text-muted-foreground underline">
-                        ← Zurück
-                      </button>
-                    </div>
-                  )}
+                  <Button
+                    className="w-full gap-2"
+                    size="sm"
+                    disabled={connectPin.length < 4 || manualToken.trim().length < 20 || manualConnectMut.isPending}
+                    onClick={() => manualConnectMut.mutate()}
+                  >
+                    {manualConnectMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Link2 className="w-3.5 h-3.5 mr-1" />}
+                    Verbinden
+                  </Button>
                 </div>
               )}
             </>
