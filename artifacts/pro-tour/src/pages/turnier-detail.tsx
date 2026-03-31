@@ -1469,11 +1469,16 @@ function MatchCard({
 
   const createLobby = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!currentPlayer?.is_admin || !sessionPin) return;
     setCreatingLobby(true);
     try {
       const data = await apiFetch(`/tour/matches/${match.id}/create-lobby`, {
         method: "POST",
-        body: JSON.stringify({ player_id: currentPlayer?.id }),
+        headers: {
+          "x-admin-player-id": String(currentPlayer.id),
+          "x-admin-pin": sessionPin,
+        },
+        body: JSON.stringify({}),
       });
       if (data.joinUrl) setLocalLobbyUrl(data.joinUrl);
     } catch {
@@ -1658,7 +1663,7 @@ function MatchCard({
               Spiel in Autodarts öffnen
             </a>
           ) : lobbyUrl ? (
-            // In lobby phase → join link
+            // Lobby exists → show join link for everyone
             <a
               href={lobbyUrl}
               target="_blank"
@@ -1668,8 +1673,8 @@ function MatchCard({
               <ExternalLink className="w-3 h-3" />
               Lobby beitreten
             </a>
-          ) : (
-            // No lobby yet → create one
+          ) : currentPlayer?.is_admin ? (
+            // No lobby yet → admin can create one
             <button
               onClick={createLobby}
               disabled={creatingLobby}
@@ -1682,6 +1687,12 @@ function MatchCard({
               )}
               {creatingLobby ? "Erstelle Lobby…" : "Autodarts Lobby erstellen"}
             </button>
+          ) : (
+            // No lobby yet, player is not admin → waiting message
+            <div className="flex items-center justify-center gap-1.5 w-full text-xs text-muted-foreground/60 rounded-md py-1.5 px-2 border border-border/20">
+              <MonitorPlay className="w-3 h-3" />
+              Lobby wird vom Admin erstellt
+            </div>
           )}
         </div>
       )}

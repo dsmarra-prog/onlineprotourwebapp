@@ -4016,14 +4016,28 @@ router.get("/tour/players/:id/autodarts-status", async (req, res) => {
 });
 
 // POST /tour/matches/:matchId/create-lobby — create an Autodarts lobby for a tournament match.
-// Pass optional { player_id } in the body to prefer that player's own Autodarts token;
-// falls back through match players, then the global admin token.
+// Requires admin auth. If a lobby already exists for this match, returns the existing URL.
 router.post("/tour/matches/:matchId/create-lobby", async (req, res) => {
   try {
+    // Admin auth required
+    const adminPlayerId = req.headers["x-admin-player-id"] ? parseInt(req.headers["x-admin-player-id"] as string) : req.body?.admin_player_id ? parseInt(req.body.admin_player_id) : null;
+    const adminPin = req.headers["x-admin-pin"] as string | undefined ?? req.body?.admin_pin;
+    if (!adminPlayerId || !adminPin) return res.status(401).json({ error: "Admin-Authentifizierung erforderlich" });
+    const adminPlayer = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, adminPlayerId)).limit(1);
+    if (!adminPlayer[0] || !adminPlayer[0].is_admin || adminPlayer[0].pin !== adminPin) {
+      return res.status(403).json({ error: "Keine Admin-Berechtigung" });
+    }
+
     const matchId = parseInt(req.params.matchId);
     const match = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.id, matchId)).limit(1);
     if (!match[0]) return res.status(404).json({ error: "Match nicht gefunden" });
-    if (match[0].status !== "ausstehend") return res.status(400).json({ error: "Match bereits abgeschlossen" });
+    if (match[0].status === "abgeschlossen") return res.status(400).json({ error: "Match bereits abgeschlossen" });
+
+    // If lobby already exists, return the existing URL instead of creating a new one
+    if (match[0].autodarts_match_id) {
+      const existingUrl = `https://play.autodarts.io/lobbies/${match[0].autodarts_match_id}`;
+      return res.json({ lobbyId: match[0].autodarts_match_id, joinUrl: existingUrl, existing: true });
+    }
 
     const tournament = await db.select().from(tourTournamentsTable)
       .where(eq(tourTournamentsTable.id, match[0].tournament_id)).limit(1);
@@ -4031,10 +4045,8 @@ router.post("/tour/matches/:matchId/create-lobby", async (req, res) => {
 
     const winLegs = Math.ceil(tournament[0].legs_format / 2);
 
-    // Token priority: requesting player → player1 → player2 → global admin
-    const requestingPlayerId: number | undefined = req.body?.player_id ? parseInt(req.body.player_id) : undefined;
+    // Token priority: player1 → player2 → global admin
     const candidateIds = [
-      requestingPlayerId,
       match[0].player1_id ?? undefined,
       match[0].player2_id ?? undefined,
     ].filter((id): id is number => typeof id === "number");
