@@ -60,6 +60,7 @@ export type TourTournament = {
   schedule_id: number | null;
   checkin_open?: boolean;
   format?: "ko" | "gruppe_ko";
+  notes?: string | null;
 };
 
 export type TourMatch = {

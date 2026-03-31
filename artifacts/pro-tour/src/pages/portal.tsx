@@ -244,11 +244,56 @@ export default function Portal() {
             <p className="text-muted-foreground text-sm">Echtzeit-Dart-Turnierplattform</p>
           </div>
 
-          {/* Success hint after registration */}
+          {/* Success guide after registration */}
           {registered && (
-            <div className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-lg px-4 py-2.5 text-sm text-primary">
-              <CheckCircle className="w-4 h-4 shrink-0" />
-              <span>Willkommen, <strong>{registered.name}</strong>! Jetzt einloggen.</span>
+            <div className="bg-card border border-primary/30 rounded-2xl p-5 space-y-4 shadow-lg">
+              <div className="flex items-center gap-2 text-primary">
+                <CheckCircle className="w-5 h-5 shrink-0" />
+                <span className="font-semibold">Willkommen, {registered.name}! 🎯</span>
+              </div>
+              <p className="text-xs text-muted-foreground">Registrierung erfolgreich. Bitte logge dich ein und verbinde dann dein Autodarts-Konto — so wird dein Spielername automatisch erkannt.</p>
+
+              <div className="space-y-2.5">
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Autodarts verbinden — Schritt für Schritt</p>
+                {[
+                  {
+                    step: 1,
+                    title: "Einloggen & Einstellungen öffnen",
+                    desc: "Nach dem Login oben rechts auf dein Profilbild oder \"Einstellungen\" klicken.",
+                  },
+                  {
+                    step: 2,
+                    title: "Autodarts-Seite öffnen",
+                    desc: "Öffne play.autodarts.io in einem neuen Tab und logge dich dort mit deinem Autodarts-Konto ein.",
+                  },
+                  {
+                    step: 3,
+                    title: "Entwicklerkonsole öffnen",
+                    desc: "Drücke F12 (oder Rechtsklick → Untersuchen). Gehe auf den Tab \"Application\" (Chrome) oder \"Speicher\" (Firefox).",
+                  },
+                  {
+                    step: 4,
+                    title: "Refresh-Token kopieren",
+                    desc: "Klicke links auf \"Local Storage\" → \"https://play.autodarts.io\" → suche den Eintrag \"kc-token\" oder \"refresh_token\". Kopiere den langen Wert.",
+                  },
+                  {
+                    step: 5,
+                    title: "In Einstellungen einfügen",
+                    desc: "Füge den kopierten Token in das Feld \"Eigenes Autodarts-Konto verbinden\" ein und bestätige mit deinem PIN.",
+                  },
+                ].map(({ step, title, desc }) => (
+                  <div key={step} className="flex gap-3 items-start">
+                    <div className="w-6 h-6 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[11px] font-bold shrink-0 mt-0.5">
+                      {step}
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-foreground">{title}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">{desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground/60 italic">Diese Verbindung ist optional, aber empfohlen — sie ermöglicht das automatische Erkennen deiner Matches.</p>
             </div>
           )}
 

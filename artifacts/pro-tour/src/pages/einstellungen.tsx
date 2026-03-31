@@ -1063,9 +1063,51 @@ export default function EinstellungenPage() {
               </button>
 
               {showOwnConnect && (
-                <div className="space-y-3 border-t border-border pt-3">
+                <div className="space-y-4 border-t border-border pt-3">
                   <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 text-xs text-muted-foreground">
                     <span className="text-primary font-semibold">Warum?</span> Wenn du dein eigenes Konto verbindest, kannst du Lobbys selbst erstellen und starten — ohne auf den Admin warten zu müssen.
+                  </div>
+
+                  {/* Step-by-step guide */}
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">So findest du deinen Refresh-Token</p>
+                    {[
+                      {
+                        step: 1,
+                        title: "play.autodarts.io öffnen",
+                        desc: "Öffne play.autodarts.io in einem neuen Browser-Tab und logge dich mit deinem Autodarts-Konto ein.",
+                      },
+                      {
+                        step: 2,
+                        title: "Entwicklerkonsole öffnen",
+                        desc: "Drücke F12 auf der Tastatur (Windows/Linux) oder Cmd+Opt+I (Mac). Alternativ: Rechtsklick auf die Seite → \"Untersuchen\".",
+                      },
+                      {
+                        step: 3,
+                        title: "Application / Speicher",
+                        desc: "Klicke auf den Tab \"Application\" (Chrome/Edge) oder \"Speicher\" (Firefox). Dann links auf \"Local Storage\" → \"https://play.autodarts.io\".",
+                      },
+                      {
+                        step: 4,
+                        title: "Token kopieren",
+                        desc: "Suche in der Liste den Eintrag mit dem Schlüssel \"kc-token\" oder \"refresh_token\". Klicke auf den langen Wert und kopiere ihn vollständig (Strg+A, Strg+C).",
+                      },
+                      {
+                        step: 5,
+                        title: "Hier einfügen & verbinden",
+                        desc: "Füge den kopierten Token unten in das Token-Feld ein, gib deinen PIN ein und klicke auf \"Verbinden\".",
+                      },
+                    ].map(({ step, title, desc }) => (
+                      <div key={step} className="flex gap-2.5 items-start">
+                        <div className="w-5 h-5 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">
+                          {step}
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-foreground">{title}</p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">{desc}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
 
                   <div className="space-y-1.5">
@@ -1080,16 +1122,13 @@ export default function EinstellungenPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Autodarts Refresh-Token</Label>
+                    <Label className="text-xs">Autodarts Refresh-Token (aus Schritt 4)</Label>
                     <Textarea
                       value={manualToken}
                       onChange={(e) => setManualToken(e.target.value)}
-                      placeholder="eyJhbGciO..."
+                      placeholder="eyJhbGciO... (langer Token aus dem Local Storage)"
                       className="font-mono text-xs h-16 resize-none"
                     />
-                    <p className="text-[11px] text-muted-foreground">
-                      Logge dich auf <span className="font-mono text-foreground">play.autodarts.io</span> ein und finde den Refresh-Token im Local Storage oder Network-Tab (<span className="font-mono bg-muted px-1 rounded text-foreground">F12</span>).
-                    </p>
                   </div>
 
                   <Button

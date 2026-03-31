@@ -478,6 +478,7 @@ async function buildTournamentDetail(tournamentId: number) {
       random_draw: tournament[0].random_draw,
       checkin_open: tournament[0].checkin_open ?? false,
       format: (tournament[0].format ?? "ko") as "ko" | "gruppe_ko",
+      notes: tournament[0].notes ?? null,
     },
     players: entries.map((e) => ({
       player_id: e.player_id,
@@ -2369,7 +2370,7 @@ router.get("/tour/tournaments", async (_req, res) => {
 // POST /tour/tournaments
 router.post("/tour/tournaments", async (req, res) => {
   try {
-    const { name, typ, tour_type, datum, uhrzeit, legs_format, max_players, admin_pin, admin_player_id, admin_player_pin, schedule_id, phase, is_test, random_draw } = req.body;
+    const { name, typ, tour_type, datum, uhrzeit, legs_format, max_players, admin_pin, admin_player_id, admin_player_pin, schedule_id, phase, is_test, random_draw, format } = req.body;
 
     let resolvedAdminPinHash: string;
     if (admin_player_id && admin_player_pin) {
@@ -2402,6 +2403,7 @@ router.post("/tour/tournaments", async (req, res) => {
         schedule_id: schedule_id || null,
         is_test: is_test === true || is_test === "true" ? true : false,
         random_draw: random_draw === true || random_draw === "true" ? true : false,
+        format: (format === "gruppe_ko" ? "gruppe_ko" : "ko"),
       })
       .returning();
 
@@ -2430,6 +2432,65 @@ router.delete("/tour/tournaments/:id", async (req, res) => {
     await db.delete(tourTournamentsTable).where(eq(tourTournamentsTable.id, id));
 
     res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// PATCH /tour/tournaments/:id/notes — admin only
+router.patch("/tour/tournaments/:id/notes", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { notes, admin_player_id, admin_player_pin } = req.body;
+
+    const [t] = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, id)).limit(1);
+    if (!t) return res.status(404).json({ error: "Turnier nicht gefunden" });
+
+    const ok = await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!ok) return res.status(403).json({ error: "Keine Admin-Berechtigung" });
+
+    await db.update(tourTournamentsTable)
+      .set({ notes: notes !== undefined ? (notes === "" ? null : String(notes)) : t.notes })
+      .where(eq(tourTournamentsTable.id, id));
+
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/tournaments/:id/clone — admin only, clones a tournament as a template
+router.post("/tour/tournaments/:id/clone", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { admin_player_id, admin_player_pin, name, datum, uhrzeit } = req.body;
+
+    const ok = await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!ok) return res.status(403).json({ error: "Keine Admin-Berechtigung" });
+
+    const [src] = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, id)).limit(1);
+    if (!src) return res.status(404).json({ error: "Turnier nicht gefunden" });
+
+    const [cloned] = await db.insert(tourTournamentsTable)
+      .values({
+        name: name || `${src.name} (Kopie)`,
+        typ: src.typ,
+        tour_type: src.tour_type,
+        phase: src.phase,
+        datum: datum || src.datum,
+        uhrzeit: uhrzeit ?? src.uhrzeit,
+        legs_format: src.legs_format,
+        max_players: src.max_players,
+        admin_pin: src.admin_pin,
+        is_test: src.is_test,
+        random_draw: src.random_draw,
+        format: src.format,
+        notes: src.notes,
+        status: "offen",
+      })
+      .returning();
+
+    res.json(cloned);
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }

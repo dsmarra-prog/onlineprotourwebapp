@@ -106,6 +106,9 @@ React + Vite frontend for the **Online Pro Tour Manager** — multi-player tourn
   - Backend: Gruppen erstellen/löschen, Spieler zuweisen/entfernen, Round-Robin generieren, Gruppenphase abschließen → K.O.-Bracket
   - Frontend: Gruppen-Tabellen-Ansicht in turnier-detail.tsx (Standings mit Pkt/S/N/Legs), Admin: "Zur K.O.-Phase" Dialog
   - Admin-Panel: GruppenManager-Dialog pro Turnier (Gruppen anlegen, Spieler zuweisen, Round-Robin generieren)
+- **Turnier-Notizen (Admin)**: `notes` Spalte auf `tourTournamentsTable`; PATCH `/tour/tournaments/:id/notes` (Admin-Auth); "Turnier-Hinweise"-Karte auf Turnier-Detail-Seite (Anzeige für alle, Bearbeiten nur Admin); Clone übernimmt Notizen
+- **Turnier erstellen + Klonen**: Admin-Panel: "Neues Turnier"-Dialog mit Format-Auswahl (K.O. vs Gruppen+KO), Typ, Datum, Legs, Max. Spieler; Klonen-Button pro Turnier übernimmt alle Einstellungen; POST `/tour/tournaments/:id/clone`; POST `/tour/tournaments` jetzt mit `format`-Parameter
+- **Autodarts-Verbindungsanleitung**: Schritt-für-Schritt-Guide (5 Schritte) nach der Registrierung direkt im Portal sichtbar; in Einstellungen ersetzte technische Token-Anweisung durch dieselbe Schritt-für-Schritt-Anleitung mit visual steps
 
 ### `artifacts/darts-career` (`@workspace/darts-career`)
 

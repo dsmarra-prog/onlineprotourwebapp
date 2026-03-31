@@ -61,6 +61,7 @@ export const tourTournamentsTable = pgTable("tour_tournaments", {
   random_draw: boolean("random_draw").notNull().default(false),
   checkin_open: boolean("checkin_open").notNull().default(false),
   format: text("format").notNull().default("ko"),
+  notes: text("notes"),
 });
 
 export const tourMatchesTable = pgTable("tour_matches", {

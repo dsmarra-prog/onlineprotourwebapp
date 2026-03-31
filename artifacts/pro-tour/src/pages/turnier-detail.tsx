@@ -5,7 +5,7 @@ import {
   ArrowLeft, Play, UserPlus, UserMinus, Check, Loader2, Target,
   Zap, Radio, CheckCircle2, Search, MonitorPlay, ExternalLink, Activity,
   TrendingUp, X, Trash2, Clock, ThumbsUp, ThumbsDown, Bell, MessageCircle, Send, AlertTriangle, Shuffle,
-  BarChart2, Trophy,
+  BarChart2, Trophy, FileText, Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -358,6 +358,9 @@ export default function TurnierDetail() {
   // Check-in
   const [checkinModalOpen, setCheckinModalOpen] = useState(false);
   const [checkinPin, setCheckinPin] = useState("");
+  // Notes
+  const [notesEditOpen, setNotesEditOpen] = useState(false);
+  const [notesText, setNotesText] = useState("");
 
   const { data: detail, isLoading } = useQuery<TourTournamentDetail>({
     queryKey: ["tournament", id],
@@ -575,6 +578,19 @@ export default function TurnierDetail() {
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
 
+  const notesMut = useMutation({
+    mutationFn: (notes: string) => apiFetch(`/tour/tournaments/${id}/notes`, {
+      method: "PATCH",
+      body: JSON.stringify({ notes, ...adminAuth() }),
+    }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tournament", id] });
+      setNotesEditOpen(false);
+      toast({ title: "Notizen gespeichert ✓" });
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
   const advanceGroupMut = useMutation({
     mutationFn: (qualify_per_group: number) => apiFetch(`/tour/tournaments/${id}/advance-group-phase`, {
       method: "POST",
@@ -762,6 +778,59 @@ export default function TurnierDetail() {
                 onClick={() => deleteMut.mutate()}
               >
                 {deleteMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Trash2 className="w-4 h-4 mr-1.5" />Endgültig löschen</>}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Admin Notes / Turnier-Hinweise */}
+      {(tournament.notes || currentPlayer?.is_admin) && (
+        <div className="bg-card border border-border rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-primary" />
+              <span className="text-sm font-semibold">Turnier-Hinweise</span>
+            </div>
+            {currentPlayer?.is_admin && (
+              <Button
+                size="sm" variant="ghost"
+                className="h-7 px-2 gap-1 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => { setNotesText(tournament.notes ?? ""); setNotesEditOpen(true); }}
+              >
+                <Pencil className="w-3 h-3" /> Bearbeiten
+              </Button>
+            )}
+          </div>
+          {tournament.notes ? (
+            <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">{tournament.notes}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground/50 italic">Noch keine Hinweise hinterlegt. Klicke auf "Bearbeiten" um Regeln oder Infos hinzuzufügen.</p>
+          )}
+        </div>
+      )}
+
+      {/* Admin Notes Edit Dialog */}
+      <Dialog open={notesEditOpen} onOpenChange={setNotesEditOpen}>
+        <DialogContent className="bg-card border-border max-w-md">
+          <DialogHeader><DialogTitle>Turnier-Hinweise bearbeiten</DialogTitle></DialogHeader>
+          <div className="space-y-3 pt-1">
+            <p className="text-xs text-muted-foreground">Hier können Regeln, besondere Hinweise oder Infos für die Spieler hinterlegt werden.</p>
+            <textarea
+              value={notesText}
+              onChange={(e) => setNotesText(e.target.value)}
+              placeholder="z.B. Bitte 10 Min. vor Start bereit sein. Alle Matches Best-of-5 Legs..."
+              className="w-full min-h-[120px] rounded-lg border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setNotesEditOpen(false)}>Abbrechen</Button>
+              <Button
+                className="flex-1 gap-2"
+                disabled={notesMut.isPending}
+                onClick={() => notesMut.mutate(notesText)}
+              >
+                {notesMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                Speichern
               </Button>
             </div>
           </div>

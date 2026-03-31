@@ -5,7 +5,7 @@ import {
   Shield, Trophy, BarChart3, Users, Settings, Radio, Zap, RefreshCw, UserPlus,
   CheckCircle2, AlertTriangle, Loader2, ChevronRight, Plus, Trash2,
   MessageCircle, ExternalLink, Bell, TrendingUp, Clock, Send, Target,
-  Link2Off, Wifi, WifiOff, FlaskConical, ChevronDown, MessageSquare,
+  Link2Off, Wifi, WifiOff, FlaskConical, ChevronDown, MessageSquare, Copy,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -260,10 +260,29 @@ function GruppenManager({ tournament, adminAuth }: { tournament: TourTournament;
   );
 }
 
+const TYP_OPTIONS = [
+  { value: "pc", label: "Players Championship" },
+  { value: "m1", label: "Major" },
+  { value: "m2", label: "Major Final" },
+  { value: "dev_cup", label: "Dev Cup" },
+  { value: "dev_major", label: "Dev Major" },
+];
+
 function TourniereTab({ adminAuth }: { adminAuth: () => object }) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { currentPlayer, sessionPin } = usePlayer();
+
+  // Create dialog state
+  const [createOpen, setCreateOpen] = useState(false);
+  const [form, setForm] = useState({
+    name: "", typ: "pc", datum: "", uhrzeit: "", legs_format: "5",
+    max_players: "32", format: "ko", is_test: false,
+  });
+
+  // Clone dialog state
+  const [cloneTarget, setCloneTarget] = useState<TourTournament | null>(null);
+  const [cloneForm, setCloneForm] = useState({ name: "", datum: "", uhrzeit: "" });
 
   const { data: tournaments = [], isLoading } = useQuery<TourTournament[]>({
     queryKey: ["tournaments"],
@@ -281,6 +300,48 @@ function TourniereTab({ adminAuth }: { adminAuth: () => object }) {
       const created = data.created?.length ?? 0;
       const skipped = data.skipped?.length ?? 0;
       toast({ title: `${created} Turnier(e) angelegt, ${skipped} bereits vorhanden` });
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const createMut = useMutation({
+    mutationFn: () =>
+      apiFetch("/tour/tournaments", {
+        method: "POST",
+        body: JSON.stringify({
+          ...form,
+          legs_format: parseInt(form.legs_format),
+          max_players: parseInt(form.max_players),
+          admin_player_id: currentPlayer?.id,
+          admin_player_pin: sessionPin,
+          tour_type: "pro",
+        }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tournaments"] });
+      toast({ title: "Turnier erstellt" });
+      setCreateOpen(false);
+      setForm({ name: "", typ: "pc", datum: "", uhrzeit: "", legs_format: "5", max_players: "32", format: "ko", is_test: false });
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const cloneMut = useMutation({
+    mutationFn: (id: number) =>
+      apiFetch(`/tour/tournaments/${id}/clone`, {
+        method: "POST",
+        body: JSON.stringify({
+          admin_player_id: currentPlayer?.id,
+          admin_player_pin: sessionPin,
+          name: cloneForm.name || undefined,
+          datum: cloneForm.datum || undefined,
+          uhrzeit: cloneForm.uhrzeit || undefined,
+        }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tournaments"] });
+      toast({ title: "Turnier geklont" });
+      setCloneTarget(null);
     },
     onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
   });
@@ -305,25 +366,131 @@ function TourniereTab({ adminAuth }: { adminAuth: () => object }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <h2 className="font-semibold text-sm">Alle Turniere ({tournaments.length})</h2>
-        <Button
-          size="sm"
-          className="gap-1.5"
-          onClick={() => seedMut.mutate()}
-          disabled={seedMut.isPending}
-        >
-          {seedMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-          Aus Spielplan anlegen
-        </Button>
+        <div className="flex gap-2">
+          {/* Neues Turnier erstellen */}
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline" className="gap-1.5 border-primary/40 text-primary">
+                <Plus className="w-3.5 h-3.5" /> Neues Turnier
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-card border-border max-w-sm">
+              <DialogHeader><DialogTitle>Neues Turnier erstellen</DialogTitle></DialogHeader>
+              <div className="space-y-3 pt-1">
+                <div className="space-y-1">
+                  <Label className="text-xs">Name</Label>
+                  <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="OPT #1" className="h-8 text-sm" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Typ</Label>
+                    <Select value={form.typ} onValueChange={v => setForm(f => ({ ...f, typ: v }))}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>{TYP_OPTIONS.map(o => <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Format</Label>
+                    <Select value={form.format} onValueChange={v => setForm(f => ({ ...f, format: v }))}>
+                      <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ko" className="text-xs">K.O.-System</SelectItem>
+                        <SelectItem value="gruppe_ko" className="text-xs">Gruppenphase + K.O.</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Datum</Label>
+                    <Input type="date" value={form.datum} onChange={e => setForm(f => ({ ...f, datum: e.target.value }))} className="h-8 text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Uhrzeit</Label>
+                    <Input type="time" value={form.uhrzeit} onChange={e => setForm(f => ({ ...f, uhrzeit: e.target.value }))} className="h-8 text-xs" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Legs</Label>
+                    <Input type="number" min={1} value={form.legs_format} onChange={e => setForm(f => ({ ...f, legs_format: e.target.value }))} className="h-8 text-xs" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Max. Spieler</Label>
+                    <Input type="number" min={2} value={form.max_players} onChange={e => setForm(f => ({ ...f, max_players: e.target.value }))} className="h-8 text-xs" />
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input type="checkbox" checked={form.is_test} onChange={e => setForm(f => ({ ...f, is_test: e.target.checked }))} />
+                  Testturnier (keine OOM-Punkte)
+                </label>
+                <Button
+                  className="w-full gap-2" size="sm"
+                  disabled={!form.name || !form.datum || createMut.isPending}
+                  onClick={() => createMut.mutate()}
+                >
+                  {createMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                  Erstellen
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Button
+            size="sm"
+            className="gap-1.5"
+            onClick={() => seedMut.mutate()}
+            disabled={seedMut.isPending}
+          >
+            {seedMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            Aus Spielplan
+          </Button>
+        </div>
       </div>
+
+      {/* Clone dialog */}
+      <Dialog open={!!cloneTarget} onOpenChange={open => { if (!open) setCloneTarget(null); }}>
+        <DialogContent className="bg-card border-border max-w-sm">
+          <DialogHeader><DialogTitle>Turnier klonen</DialogTitle></DialogHeader>
+          {cloneTarget && (
+            <div className="space-y-3 pt-1">
+              <p className="text-xs text-muted-foreground">Vorlage: <span className="text-foreground font-medium">{cloneTarget.name}</span></p>
+              <div className="space-y-1">
+                <Label className="text-xs">Neuer Name (leer = Original + " (Kopie)")</Label>
+                <Input value={cloneForm.name} onChange={e => setCloneForm(f => ({ ...f, name: e.target.value }))} placeholder={`${cloneTarget.name} (Kopie)`} className="h-8 text-sm" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Datum</Label>
+                  <Input type="date" value={cloneForm.datum} onChange={e => setCloneForm(f => ({ ...f, datum: e.target.value }))} className="h-8 text-xs" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Uhrzeit</Label>
+                  <Input type="time" value={cloneForm.uhrzeit} onChange={e => setCloneForm(f => ({ ...f, uhrzeit: e.target.value }))} className="h-8 text-xs" />
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Format, Legs, Max. Spieler und Notizen werden übernommen.</p>
+              <Button
+                className="w-full gap-2" size="sm"
+                disabled={cloneMut.isPending}
+                onClick={() => cloneMut.mutate(cloneTarget.id)}
+              >
+                {cloneMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Copy className="w-3.5 h-3.5" />}
+                Klonen
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {isLoading ? (
         <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
       ) : tournaments.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Trophy className="w-10 h-10 mx-auto mb-3 opacity-20" />
-          <p className="text-sm">Noch keine Turniere. Klicke "Aus Spielplan anlegen".</p>
+          <p className="text-sm">Noch keine Turniere.</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -338,6 +505,9 @@ function TourniereTab({ adminAuth }: { adminAuth: () => object }) {
                   {(t as any).is_test && (
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full border text-orange-400 bg-orange-400/10 border-orange-400/30">Test</span>
                   )}
+                  {t.format === "gruppe_ko" && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full border text-blue-400 bg-blue-400/10 border-blue-400/30">Gruppen+KO</span>
+                  )}
                 </div>
                 <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
                   <span>{TYP_LABELS[t.typ] ?? t.typ}</span>
@@ -345,8 +515,8 @@ function TourniereTab({ adminAuth }: { adminAuth: () => object }) {
                   <span>{t.player_count}/{t.max_players} Spieler</span>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {(t as any).format === "gruppe_ko" && (
+              <div className="flex items-center gap-1.5 shrink-0">
+                {t.format === "gruppe_ko" && (
                   <Dialog>
                     <DialogTrigger asChild>
                       <Button size="sm" variant="outline" className="h-7 px-2 gap-1 text-xs border-primary/40 text-primary">
@@ -359,6 +529,13 @@ function TourniereTab({ adminAuth }: { adminAuth: () => object }) {
                     </DialogContent>
                   </Dialog>
                 )}
+                <Button
+                  size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:bg-muted"
+                  title="Klonen"
+                  onClick={() => { setCloneTarget(t); setCloneForm({ name: "", datum: "", uhrzeit: "" }); }}
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </Button>
                 <Link href={`/turniere/${t.id}`}>
                   <Button size="sm" variant="ghost" className="h-7 px-2 gap-1 text-xs">
                     <ChevronRight className="w-3.5 h-3.5" />
