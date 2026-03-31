@@ -241,7 +241,13 @@ export default function TourniereListe() {
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1"><Trophy className="w-3 h-3" />{TYP_LABELS[t.typ]}</span>
                       <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{t.datum}{t.uhrzeit ? ` · ${t.uhrzeit} Uhr` : ""}</span>
-                      <span className="flex items-center gap-1"><Users className="w-3 h-3" />{t.player_count}/{t.max_players}</span>
+                      <span className="flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        {t.player_count}/{t.max_players}
+                        {(t.pending_count ?? 0) > 0 && (
+                          <span className="text-yellow-400">+{t.pending_count}</span>
+                        )}
+                      </span>
                     </div>
                   </div>
                   {t.status === "abgeschlossen" && (

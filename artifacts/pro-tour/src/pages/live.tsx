@@ -2,9 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
   Radio, ExternalLink, TrendingUp, Target, Clock, Trophy,
-  RefreshCw, Wifi, WifiOff,
+  RefreshCw, Wifi, WifiOff, AlertTriangle, CalendarDays,
 } from "lucide-react";
-import { apiFetch, RUNDE_LABELS } from "@/lib/api";
+import { apiFetch, RUNDE_LABELS, TourTournament, TYP_LABELS } from "@/lib/api";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
 
 type TickerEntry = {
@@ -150,6 +150,23 @@ export default function LivePage() {
     staleTime: 0,
   });
 
+  const { data: adStatus } = useQuery<{ configured: boolean }>({
+    queryKey: ["autodarts-global-status"],
+    queryFn: () => apiFetch("/tour/autodarts-global-status"),
+    staleTime: 60_000,
+  });
+
+  const { data: tournaments = [] } = useQuery<TourTournament[]>({
+    queryKey: ["tournaments"],
+    queryFn: () => apiFetch("/tour/tournaments"),
+    staleTime: 30_000,
+    enabled: ticker.length === 0,
+  });
+
+  const nextTournament = ticker.length === 0
+    ? tournaments.filter((t) => t.status === "offen").sort((a, b) => a.datum.localeCompare(b.datum))[0]
+    : null;
+
   const liveMatches = ticker.filter(
     (e) => (e.score_p1 ?? 0) > 0 || (e.score_p2 ?? 0) > 0 || (e.avg_p1 ?? 0) > 0
   );
@@ -186,9 +203,17 @@ export default function LivePage() {
         </div>
       </div>
 
+      {/* Autodarts sync warning */}
+      {adStatus?.configured === false && (
+        <div className="flex items-start gap-2.5 bg-yellow-400/10 border border-yellow-400/30 rounded-xl px-3 py-2.5 text-xs text-yellow-400">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <span>Kein Autodarts-Token konfiguriert — automatische Score-Synchronisation ist deaktiviert. Admins können ihn unter Einstellungen hinterlegen.</span>
+        </div>
+      )}
+
       {/* No active tournaments */}
       {ticker.length === 0 && !isFetching && (
-        <div className="text-center py-16 space-y-3">
+        <div className="text-center py-10 space-y-3">
           <Trophy className="w-12 h-12 mx-auto text-muted-foreground/20" />
           <div className="text-muted-foreground font-medium">Gerade kein Turnier aktiv</div>
           <p className="text-sm text-muted-foreground/60">
@@ -202,6 +227,28 @@ export default function LivePage() {
             Alle Turniere anzeigen
           </Link>
         </div>
+      )}
+
+      {/* Next upcoming tournament */}
+      {nextTournament && (
+        <Link href={`/turniere/${nextTournament.id}`}>
+          <div className="bg-card border border-border/60 hover:border-primary/30 rounded-xl px-4 py-3 flex items-center gap-3 transition-colors">
+            <div className="p-2 rounded-lg bg-primary/10 shrink-0">
+              <CalendarDays className="w-4 h-4 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-muted-foreground font-medium">Nächstes Turnier</p>
+              <p className="text-sm font-semibold truncate">{nextTournament.name}</p>
+              <p className="text-xs text-muted-foreground">{TYP_LABELS[nextTournament.typ]} · {nextTournament.datum}{nextTournament.uhrzeit ? ` · ${nextTournament.uhrzeit} Uhr` : ""}</p>
+            </div>
+            <div className="text-right shrink-0">
+              <span className="text-xs font-medium text-primary">
+                {nextTournament.player_count}/{nextTournament.max_players}
+              </span>
+              <p className="text-[10px] text-muted-foreground">Spieler</p>
+            </div>
+          </div>
+        </Link>
       )}
 
       {/* Live matches */}

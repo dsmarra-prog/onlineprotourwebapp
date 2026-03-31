@@ -22,6 +22,7 @@ export type TourPlayer = {
   oom_rank: number;
   oom_tour_type: "pro" | "development" | null;
   avatar_url?: string | null;
+  is_admin?: boolean;
 };
 
 export type TourScheduleEntry = {
@@ -53,6 +54,7 @@ export type TourTournament = {
   legs_format: number;
   max_players: number;
   player_count: number;
+  pending_count?: number;
   is_test: boolean;
   random_draw: boolean;
   schedule_id: number | null;

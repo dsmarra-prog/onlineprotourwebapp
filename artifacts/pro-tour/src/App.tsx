@@ -3,7 +3,7 @@ import { Switch, Route, Router as WouterRouter, Link, useLocation } from "wouter
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { Trophy, Users, BarChart3, Settings, Home, Target, CalendarDays, LogOut, Swords, Menu, X, Star, TrendingUp, GitCompare, HelpCircle, ChevronRight, CheckCircle, Radio, ChevronDown } from "lucide-react";
+import { Trophy, Users, BarChart3, Settings, Home, Target, CalendarDays, LogOut, Swords, Menu, X, Star, TrendingUp, GitCompare, HelpCircle, ChevronRight, CheckCircle, Radio, ChevronDown, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import NotFound from "@/pages/not-found";
@@ -24,6 +24,7 @@ import SaisonPage from "@/pages/saison";
 import VergleichPage from "@/pages/vergleich";
 import HilfePage from "@/pages/hilfe";
 import LivePage from "@/pages/live";
+import AdminPanel from "@/pages/admin";
 import { PlayerProvider, usePlayer } from "@/context/PlayerContext";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
@@ -286,6 +287,10 @@ function NavBar() {
           <NavDropdown label="OOM" icon={BarChart3} items={NAV_OOM} activeCheck={oomActive} />
 
           <NavDropdown label="Mehr" icon={ChevronDown} items={NAV_MEHR} activeCheck={mehrActive} />
+
+          {currentPlayer?.is_admin && (
+            <NavLink href="/admin" label="Admin" icon={Shield} />
+          )}
         </div>
 
         {currentPlayer && (
@@ -351,7 +356,21 @@ function NavBar() {
             })}
           </div>
           {currentPlayer && (
-            <div className="px-4 pb-3 pt-1 border-t border-border/50">
+            <div className="px-4 pb-3 pt-1 border-t border-border/50 space-y-1">
+              {currentPlayer.is_admin && (
+                <Link
+                  href="/admin"
+                  onClick={handleNavClick}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    location.startsWith("/admin")
+                      ? "bg-primary/15 text-primary border border-primary/30"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                  }`}
+                >
+                  <Shield className="w-4 h-4" />
+                  Admin
+                </Link>
+              )}
               <button
                 onClick={() => { logout(); setMobileOpen(false); }}
                 className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
@@ -462,6 +481,7 @@ function Router() {
           <Route path="/saison" component={SaisonPage} />
           <Route path="/vergleich" component={VergleichPage} />
           <Route path="/hilfe" component={HilfePage} />
+          <Route path="/admin" component={AdminPanel} />
           <Route component={NotFound} />
         </Switch>
       </main>

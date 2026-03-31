@@ -1255,6 +1255,162 @@ router.post("/tour/oom/seed", async (_req, res) => {
   }
 });
 
+// POST /tour/oom/update - replace all Pro OOM standings (analog to dev-oom/update)
+router.post("/tour/oom/update", async (req, res) => {
+  try {
+    const { standings, admin_player_id, admin_player_pin } = req.body;
+    if (admin_player_id && admin_player_pin) {
+      const ok = await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+      if (!ok) return res.status(403).json({ error: "Keine Admin-Berechtigung" });
+    } else {
+      return res.status(403).json({ error: "Admin-Authentifizierung erforderlich" });
+    }
+    if (!Array.isArray(standings) || standings.length === 0) {
+      return res.status(400).json({ error: "standings array erforderlich" });
+    }
+    await db.delete(tourOomStandingsTable);
+    const rows = standings.map((s: any, i: number) => ({
+      season: 1,
+      rank: i + 1,
+      autodarts_username: s.autodarts_username,
+      total_points: s.total_points,
+      bonus_points: s.bonus_points ?? 0,
+      tournaments_played: s.tournaments_played ?? 1,
+      tournament_breakdown: JSON.stringify(s.tournament_breakdown ?? {}),
+      last_updated: s.last_updated ?? new Date().toLocaleDateString("de-DE"),
+    }));
+    await db.insert(tourOomStandingsTable).values(rows);
+    notifyOomUpdate("pro").catch(() => {});
+    res.json({ ok: true, inserted: rows.length });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/tournaments/:id/compute-oom - compute OOM points from tournament results and update OOM
+router.post("/tour/tournaments/:id/compute-oom", async (req, res) => {
+  try {
+    const tournamentId = parseInt(req.params.id);
+    const { admin_player_id, admin_player_pin } = req.body;
+    if (!admin_player_id || !admin_player_pin) return res.status(400).json({ error: "Admin-Auth erforderlich" });
+    const ok = await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!ok) return res.status(403).json({ error: "Keine Admin-Berechtigung" });
+
+    const [tournament] = await db.select().from(tourTournamentsTable).where(eq(tourTournamentsTable.id, tournamentId)).limit(1);
+    if (!tournament) return res.status(404).json({ error: "Turnier nicht gefunden" });
+    if (tournament.is_test) return res.status(400).json({ error: "Testturniere geben keine OOM-Punkte" });
+
+    const matches = await db.select().from(tourMatchesTable).where(eq(tourMatchesTable.tournament_id, tournamentId));
+    const allPlayers = await db.select().from(tourPlayersTable);
+    const playerMap = new Map(allPlayers.map((p) => [p.id, p]));
+
+    const pointsTable = OOM_POINTS[tournament.typ] ?? OOM_POINTS["pc"];
+    const roundOrder = ["R64", "R32", "R16", "QF", "SF", "F"];
+
+    // Map player_id → deepest match reached (same logic as OOM GET endpoint)
+    const participantIds = new Set<number>();
+    for (const m of matches) {
+      if (m.player1_id) participantIds.add(m.player1_id);
+      if (m.player2_id) participantIds.add(m.player2_id);
+    }
+
+    const playerMaxRound = new Map<number, string>();
+    for (const playerId of participantIds) {
+      const playerMatches = matches.filter(
+        (m) => (m.player1_id === playerId || m.player2_id === playerId) && m.status === "abgeschlossen" && !m.is_bye
+      );
+      if (playerMatches.length === 0) {
+        playerMaxRound.set(playerId, "Teilnahme");
+      } else {
+        const deepest = playerMatches.sort((a, b) => roundOrder.indexOf(b.runde) - roundOrder.indexOf(a.runde))[0];
+        const isWinner = deepest.runde === "F" && deepest.winner_id === playerId;
+        playerMaxRound.set(playerId, isWinner ? "Sieger" : roundToOomKey(deepest.runde));
+      }
+    }
+
+    // Participants with no round: Teilnahme
+    const entries = await db.select().from(tourEntriesTable).where(eq(tourEntriesTable.tournament_id, tournamentId));
+    for (const e of entries) {
+      if (!playerMaxRound.has(e.player_id)) playerMaxRound.set(e.player_id, "Teilnahme");
+    }
+
+    const isDevTour = tournament.tour_type === "development";
+    const tournamentShortName = tournament.name.replace("Players Championship", "PC").replace("Development Cup", "DC").replace("Grand Final", "GF").replace("Spring Open", "SO");
+
+    // Load existing OOM standings
+    const oomTable = isDevTour ? tourDevOomStandingsTable : tourOomStandingsTable;
+    const existingStandings = await db.select().from(oomTable as any).orderBy((oomTable as any).rank);
+
+    // Compute new points
+    const updates: { username: string; added: number; label: string }[] = [];
+    for (const [playerId, roundLabel] of playerMaxRound.entries()) {
+      const player = playerMap.get(playerId);
+      if (!player) continue;
+      const username = player.autodarts_username;
+      const pts = pointsTable[roundLabel] ?? 0;
+      if (pts <= 0) continue;
+      updates.push({ username, added: pts, label: roundLabel });
+    }
+
+    // Merge into existing standings
+    const mergedMap = new Map<string, any>();
+    for (const s of existingStandings) {
+      const raw = JSON.parse(s.tournament_breakdown || "{}");
+      const breakdown: Record<string, number> = Array.isArray(raw)
+        ? Object.fromEntries(raw.map((x: any) => [x.t, x.p]))
+        : raw;
+      mergedMap.set(s.autodarts_username, {
+        autodarts_username: s.autodarts_username,
+        total_points: s.total_points,
+        bonus_points: s.bonus_points ?? 0,
+        tournaments_played: s.tournaments_played ?? 0,
+        breakdown,
+        last_updated: new Date().toLocaleDateString("de-DE"),
+      });
+    }
+
+    for (const u of updates) {
+      if (mergedMap.has(u.username)) {
+        const existing = mergedMap.get(u.username)!;
+        existing.total_points += u.added;
+        existing.tournaments_played += 1;
+        existing.breakdown[tournamentShortName] = u.added;
+        existing.last_updated = new Date().toLocaleDateString("de-DE");
+      } else {
+        mergedMap.set(u.username, {
+          autodarts_username: u.username,
+          total_points: u.added,
+          bonus_points: 0,
+          tournaments_played: 1,
+          breakdown: { [tournamentShortName]: u.added },
+          last_updated: new Date().toLocaleDateString("de-DE"),
+        });
+      }
+    }
+
+    // Re-rank by total_points desc
+    const sorted = [...mergedMap.values()].sort((a, b) => b.total_points - a.total_points);
+    const rows = sorted.map((s, i) => ({
+      season: 1,
+      rank: i + 1,
+      autodarts_username: s.autodarts_username,
+      total_points: s.total_points,
+      bonus_points: s.bonus_points,
+      tournaments_played: s.tournaments_played,
+      tournament_breakdown: JSON.stringify(s.breakdown),
+      last_updated: s.last_updated,
+    }));
+
+    await db.delete(oomTable as any);
+    if (rows.length > 0) await db.insert(oomTable as any).values(rows);
+    notifyOomUpdate(isDevTour ? "dev" : "pro").catch(() => {});
+
+    res.json({ ok: true, tournament_name: tournament.name, updates: updates.length, standings_count: rows.length });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // GET /tour/dev-oom - Development Tour OOM standings (imported)
 router.get("/tour/dev-oom", async (_req, res) => {
   try {
@@ -1787,13 +1943,13 @@ router.post("/tour/admin/sync-avatars", async (req, res) => {
   }
 });
 
-// POST /tour/admin/grant-admin — ADMIN_SECRET required
+// POST /tour/admin/grant-admin — ADMIN_SECRET or admin player required
 router.post("/tour/admin/grant-admin", async (req, res) => {
   try {
-    const { admin_secret, player_id } = req.body;
-    if (!admin_secret || admin_secret !== process.env.ADMIN_SECRET) {
-      return res.status(403).json({ error: "Ungültiges Admin-Secret" });
-    }
+    const { admin_secret, admin_player_id, admin_player_pin, player_id } = req.body;
+    const bySecret = admin_secret && admin_secret === process.env.ADMIN_SECRET;
+    const byAdmin = admin_player_id && admin_player_pin && await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!bySecret && !byAdmin) return res.status(403).json({ error: "Keine Berechtigung" });
     const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, parseInt(player_id))).limit(1);
     if (!player) return res.status(404).json({ error: "Spieler nicht gefunden" });
     await db.update(tourPlayersTable).set({ is_admin: true }).where(eq(tourPlayersTable.id, parseInt(player_id)));
@@ -1803,13 +1959,13 @@ router.post("/tour/admin/grant-admin", async (req, res) => {
   }
 });
 
-// POST /tour/admin/revoke-admin — ADMIN_SECRET required
+// POST /tour/admin/revoke-admin — ADMIN_SECRET or admin player required
 router.post("/tour/admin/revoke-admin", async (req, res) => {
   try {
-    const { admin_secret, player_id } = req.body;
-    if (!admin_secret || admin_secret !== process.env.ADMIN_SECRET) {
-      return res.status(403).json({ error: "Ungültiges Admin-Secret" });
-    }
+    const { admin_secret, admin_player_id, admin_player_pin, player_id } = req.body;
+    const bySecret = admin_secret && admin_secret === process.env.ADMIN_SECRET;
+    const byAdmin = admin_player_id && admin_player_pin && await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!bySecret && !byAdmin) return res.status(403).json({ error: "Keine Berechtigung" });
     const [player] = await db.select().from(tourPlayersTable).where(eq(tourPlayersTable.id, parseInt(player_id))).limit(1);
     if (!player) return res.status(404).json({ error: "Spieler nicht gefunden" });
     await db.update(tourPlayersTable).set({ is_admin: false }).where(eq(tourPlayersTable.id, parseInt(player_id)));
@@ -2078,7 +2234,9 @@ router.get("/tour/tournaments", async (_req, res) => {
     const tournaments = await db.select().from(tourTournamentsTable);
     const enriched = await Promise.all(tournaments.map(async (t) => {
       const entries = await db.select().from(tourEntriesTable).where(eq(tourEntriesTable.tournament_id, t.id));
-      return { ...t, player_count: entries.length };
+      const confirmedEntries = entries.filter((e) => e.status !== "pending");
+      const pendingCount = entries.filter((e) => e.status === "pending").length;
+      return { ...t, player_count: confirmedEntries.length, pending_count: pendingCount };
     }));
     // Sort: upcoming/open first (by date ascending), then closed (by date descending), then test last
     enriched.sort((a, b) => {
