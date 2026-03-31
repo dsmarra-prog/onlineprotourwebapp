@@ -187,6 +187,16 @@ export const systemSettingsTable = pgTable("system_settings", {
   updated_at: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const tourAdminChatTable = pgTable("tour_admin_chat", {
+  id: serial("id").primaryKey(),
+  player_id: integer("player_id").notNull(),
+  player_name: text("player_name").notNull(),
+  message: text("message").notNull(),
+  created_at: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type TourAdminChat = typeof tourAdminChatTable.$inferSelect;
+
 export type TourSchedule = typeof tourScheduleTable.$inferSelect;
 export type TourOomStanding = typeof tourOomStandingsTable.$inferSelect;
 export type TourTournament = typeof tourTournamentsTable.$inferSelect;

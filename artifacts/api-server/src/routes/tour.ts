@@ -16,6 +16,7 @@ import {
   tourMatchDisputesTable,
   tourMatchFairnessTable,
   tourSupportTicketsTable,
+  tourAdminChatTable,
 } from "@workspace/db";
 import { eq, and, desc, or } from "drizzle-orm";
 import crypto from "crypto";
@@ -4589,5 +4590,75 @@ router.get("/tour/debug/autodarts-match/:matchId", async (req, res) => {
 });
 
 function tryParse(s: string) { try { return JSON.parse(s); } catch { return s; } }
+
+// ─── Admin Chat ───────────────────────────────────────────────────────────────
+
+router.post("/tour/admin/chat/list", async (req, res) => {
+  try {
+    const { admin_player_id, admin_player_pin } = req.body;
+    if (!admin_player_id || !admin_player_pin) return res.status(400).json({ error: "Authentifizierung erforderlich" });
+    const ok = await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!ok) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
+    const messages = await db.select().from(tourAdminChatTable)
+      .orderBy(desc(tourAdminChatTable.created_at))
+      .limit(100);
+    res.json(messages.reverse());
+  } catch (e) {
+    res.status(500).json({ error: "Interner Fehler" });
+  }
+});
+
+router.post("/tour/admin/chat", async (req, res) => {
+  try {
+    const { admin_player_id, admin_player_pin, message } = req.body;
+    if (!admin_player_id || !admin_player_pin || !message?.trim()) {
+      return res.status(400).json({ error: "admin_player_id, admin_player_pin und message erforderlich" });
+    }
+    const ok = await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!ok) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
+    const [player] = await db.select().from(tourPlayersTable)
+      .where(eq(tourPlayersTable.id, parseInt(admin_player_id))).limit(1);
+    if (!player) return res.status(404).json({ error: "Spieler nicht gefunden" });
+
+    const [msg] = await db.insert(tourAdminChatTable).values({
+      player_id: player.id,
+      player_name: player.name,
+      message: message.trim(),
+    }).returning();
+
+    res.json(msg);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /tour/admin/use-my-autodarts-token — admin uses their own Autodarts token as global
+router.post("/tour/admin/use-my-autodarts-token", async (req, res) => {
+  try {
+    const { admin_player_id, admin_player_pin } = req.body;
+    if (!admin_player_id || !admin_player_pin) {
+      return res.status(400).json({ error: "admin_player_id und admin_player_pin erforderlich" });
+    }
+    const ok = await isAdminPlayer(parseInt(admin_player_id), String(admin_player_pin));
+    if (!ok) return res.status(403).json({ error: "Kein Admin-Zugriff" });
+
+    const [player] = await db.select().from(tourPlayersTable)
+      .where(eq(tourPlayersTable.id, parseInt(admin_player_id))).limit(1);
+    if (!player) return res.status(404).json({ error: "Spieler nicht gefunden" });
+
+    if (!player.autodarts_refresh_token) {
+      return res.status(400).json({ error: "Du hast noch keinen Autodarts-Account verknüpft. Verbinde zuerst deinen Account unter Einstellungen." });
+    }
+
+    await persistRefreshToken(player.autodarts_refresh_token);
+    activeRefreshToken = player.autodarts_refresh_token;
+
+    res.json({ ok: true, message: `Autodarts-Token von ${player.name} wird jetzt für die automatische Score-Synchronisation verwendet.` });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
 
 export default router;

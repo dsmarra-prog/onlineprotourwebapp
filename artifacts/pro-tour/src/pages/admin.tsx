@@ -1,17 +1,17 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
   Shield, Trophy, BarChart3, Users, Settings, Radio, Zap, RefreshCw,
   CheckCircle2, AlertTriangle, Loader2, ChevronRight, Plus, Trash2,
-  MessageCircle, ExternalLink, Bell, TrendingUp, Clock,
+  MessageCircle, ExternalLink, Bell, TrendingUp, Clock, Send, Target,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { apiFetch, TourTournament, TourPlayer, TYP_LABELS } from "@/lib/api";
 import { usePlayer } from "@/context/PlayerContext";
 
-type Tab = "turniere" | "oom" | "spieler" | "discord" | "disputes";
+type Tab = "turniere" | "oom" | "spieler" | "discord" | "disputes" | "chat";
 
 type DiscordSettings = {
   webhook_url: string | null;
@@ -70,6 +70,7 @@ export default function AdminPanel() {
           { id: "spieler", label: "Spieler", icon: Users },
           { id: "discord", label: "Discord", icon: Radio },
           { id: "disputes", label: "Disputes", icon: MessageCircle },
+          { id: "chat", label: "Chat", icon: Send },
         ] as { id: Tab; label: string; icon: React.ElementType }[]).map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -97,6 +98,7 @@ export default function AdminPanel() {
         />
       )}
       {tab === "disputes" && <DisputesTab adminAuth={adminAuth} />}
+      {tab === "chat" && <ChatTab adminAuth={adminAuth} />}
     </div>
   );
 }
@@ -445,10 +447,12 @@ function DiscordTab({
     queryFn: () => apiFetch("/tour/admin/discord-settings"),
   });
 
-  if (settings && !loaded) {
-    setForm({ webhook_url: settings.webhook_url ?? "", bot_token: settings.bot_token ?? "", channel_id: settings.channel_id ?? "" });
-    setLoaded(true);
-  }
+  useEffect(() => {
+    if (settings && !loaded) {
+      setForm({ webhook_url: settings.webhook_url ?? "", bot_token: settings.bot_token ?? "", channel_id: settings.channel_id ?? "" });
+      setLoaded(true);
+    }
+  }, [settings, loaded, setForm, setLoaded]);
 
   const saveMut = useMutation({
     mutationFn: () =>
@@ -527,6 +531,89 @@ function DiscordTab({
         <p>· Match-Benachrichtigungen wenn ein Spiel zugewiesen wird</p>
         <p>· OOM-Update-Ankündigungen nach Turnieren</p>
       </div>
+
+      <AutodartsAdminSection adminAuth={adminAuth} />
+    </div>
+  );
+}
+
+function AutodartsAdminSection({ adminAuth }: { adminAuth: () => object }) {
+  const { toast } = useToast();
+  const { currentPlayer } = usePlayer();
+
+  const { data: adStatus } = useQuery<{ configured: boolean }>({
+    queryKey: ["autodarts-global-status"],
+    queryFn: () => apiFetch("/tour/autodarts-global-status"),
+  });
+
+  const { data: playerProfile } = useQuery<{ connected: boolean }>({
+    queryKey: ["player-ad-status", currentPlayer?.id],
+    queryFn: () => apiFetch(`/tour/players/${currentPlayer?.id}/autodarts-status`),
+    enabled: !!currentPlayer?.id,
+  });
+
+  const qc = useQueryClient();
+
+  const useMyTokenMut = useMutation({
+    mutationFn: () =>
+      apiFetch("/tour/admin/use-my-autodarts-token", { method: "POST", body: JSON.stringify(adminAuth()) }),
+    onSuccess: (data: any) => {
+      qc.invalidateQueries({ queryKey: ["autodarts-global-status"] });
+      toast({ title: data.message });
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const isConnected = adStatus?.configured === true;
+  const playerConnected = playerProfile?.connected === true;
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-4 space-y-4">
+      <div className="flex items-center gap-2">
+        <Target className="w-4 h-4 text-primary" />
+        <h2 className="font-semibold text-sm">Autodarts-Synchronisation</h2>
+        {isConnected ? (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-400/10 border border-green-400/30 text-green-400 font-medium ml-auto">Aktiv</span>
+        ) : (
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 font-medium ml-auto">Nicht verbunden</span>
+        )}
+      </div>
+
+      <p className="text-xs text-muted-foreground leading-relaxed">
+        Die automatische Score-Synchronisation braucht einen verknüpften Autodarts-Account.
+        Wenn du deinen Account bereits unter <strong>Mein Account → Autodarts verbinden</strong> verknüpft hast,
+        klicke einfach auf den Button unten — dein Token wird dann für die globale Score-Synchronisation verwendet.
+      </p>
+
+      {!playerConnected && (
+        <div className="flex items-start gap-2.5 bg-yellow-400/10 border border-yellow-400/30 rounded-lg px-3 py-2 text-xs text-yellow-400">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <span>
+            Dein Autodarts-Account ist noch nicht verknüpft.
+            Gehe zuerst zu <Link href="/einstellungen" className="underline font-semibold">Mein Account</Link> und verbinde deinen Autodarts-Account.
+          </span>
+        </div>
+      )}
+
+      <Button
+        className="w-full gap-2"
+        onClick={() => useMyTokenMut.mutate()}
+        disabled={useMyTokenMut.isPending || !playerConnected}
+      >
+        {useMyTokenMut.isPending ? (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        ) : (
+          <Target className="w-4 h-4" />
+        )}
+        {isConnected ? "Meinen Token erneut setzen" : "Meinen Token als globalen Admin-Token verwenden"}
+      </Button>
+
+      {isConnected && (
+        <div className="flex items-center gap-2 text-xs text-green-400 bg-green-400/5 border border-green-400/20 rounded-lg px-3 py-2">
+          <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+          <span>Score-Synchronisation ist aktiv. Match-Ergebnisse werden automatisch von Autodarts abgerufen.</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -645,6 +732,130 @@ function DisputeCard({
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Chat Tab ─────────────────────────────────────────────────────────────────
+
+type ChatMessage = {
+  id: number;
+  player_id: number;
+  player_name: string;
+  message: string;
+  created_at: string;
+};
+
+function ChatTab({ adminAuth }: { adminAuth: () => object }) {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+  const { currentPlayer, sessionPin } = usePlayer();
+  const [input, setInput] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const prevCountRef = useRef(0);
+
+  const { data: messages = [], isLoading } = useQuery<ChatMessage[]>({
+    queryKey: ["admin-chat"],
+    queryFn: () => apiFetch("/tour/admin/chat/list", {
+      method: "POST",
+      body: JSON.stringify(adminAuth()),
+    }),
+    refetchInterval: 5000,
+    enabled: !!currentPlayer?.id && !!sessionPin,
+  });
+
+  useEffect(() => {
+    if (messages.length > prevCountRef.current && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+    prevCountRef.current = messages.length;
+  }, [messages.length]);
+
+  const sendMut = useMutation({
+    mutationFn: (message: string) =>
+      apiFetch("/tour/admin/chat", {
+        method: "POST",
+        body: JSON.stringify({ message, ...adminAuth() }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin-chat"] });
+      setInput("");
+    },
+    onError: (e: Error) => toast({ title: "Fehler", description: e.message, variant: "destructive" }),
+  });
+
+  const handleSend = () => {
+    if (!input.trim()) return;
+    sendMut.mutate(input.trim());
+  };
+
+  const formatTime = (iso: string) => {
+    const d = new Date(iso);
+    const now = new Date();
+    const isToday = d.toDateString() === now.toDateString();
+    const time = d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+    return isToday ? time : `${d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })} ${time}`;
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Send className="w-4 h-4 text-primary" />
+        <h2 className="font-semibold text-sm">Admin-Chat</h2>
+        <span className="text-xs text-muted-foreground">Nur für Admins sichtbar</span>
+      </div>
+
+      <div
+        ref={scrollRef}
+        className="bg-card border border-border rounded-xl p-3 space-y-2 h-[400px] overflow-y-auto"
+      >
+        {isLoading ? (
+          <div className="flex justify-center py-12"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
+        ) : messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground/40">
+            <MessageCircle className="w-10 h-10 mb-2" />
+            <p className="text-sm">Noch keine Nachrichten</p>
+            <p className="text-xs">Schreib die erste Nachricht!</p>
+          </div>
+        ) : (
+          messages.map((msg) => {
+            const isMe = msg.player_id === currentPlayer?.id;
+            return (
+              <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                <div className={`max-w-[80%] rounded-xl px-3 py-2 ${
+                  isMe
+                    ? "bg-primary/15 border border-primary/30"
+                    : "bg-accent/40 border border-border/50"
+                }`}>
+                  {!isMe && (
+                    <p className="text-[10px] font-semibold text-primary mb-0.5">{msg.player_name}</p>
+                  )}
+                  <p className="text-sm break-words">{msg.message}</p>
+                  <p className="text-[9px] text-muted-foreground/50 text-right mt-0.5">{formatTime(msg.created_at)}</p>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+          placeholder="Nachricht schreiben..."
+          className="flex-1 px-3 py-2.5 text-sm bg-card border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-primary/40"
+        />
+        <Button
+          onClick={handleSend}
+          disabled={sendMut.isPending || !input.trim()}
+          className="px-4"
+        >
+          {sendMut.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+        </Button>
+      </div>
     </div>
   );
 }
