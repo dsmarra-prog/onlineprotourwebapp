@@ -1472,6 +1472,14 @@ function MatchCard({
   );
   const canCreateLobby = isParticipant || currentPlayer?.is_admin;
 
+  const { data: adStatus } = useQuery({
+    queryKey: ["autodarts-status", currentPlayer?.id],
+    queryFn: () => apiFetch<{ connected: boolean }>(`/tour/players/${currentPlayer!.id}/autodarts-status`),
+    enabled: !!isParticipant && !!currentPlayer && !lobbyUrl,
+    staleTime: 60_000,
+  });
+  const playerAdConnected = adStatus?.connected ?? null;
+
   const createLobby = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!currentPlayer || !sessionPin || !canCreateLobby) return;
@@ -1676,18 +1684,32 @@ function MatchCard({
             </a>
           ) : canCreateLobby ? (
             // No lobby yet → participant or admin can create one
-            <button
-              onClick={createLobby}
-              disabled={creatingLobby}
-              className="flex items-center justify-center gap-1.5 w-full text-xs text-primary/80 hover:text-primary rounded-md py-1.5 px-2 border border-primary/20 hover:border-primary/50 transition-colors disabled:opacity-50"
-            >
-              {creatingLobby ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <MonitorPlay className="w-3 h-3" />
+            <div className="space-y-1.5">
+              <button
+                onClick={createLobby}
+                disabled={creatingLobby}
+                className="flex items-center justify-center gap-1.5 w-full text-xs text-primary/80 hover:text-primary rounded-md py-1.5 px-2 border border-primary/20 hover:border-primary/50 transition-colors disabled:opacity-50"
+              >
+                {creatingLobby ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <MonitorPlay className="w-3 h-3" />
+                )}
+                {creatingLobby ? "Erstelle Lobby…" : "Autodarts Lobby erstellen"}
+              </button>
+              {/* Warn participant if Autodarts not connected — they won't be host */}
+              {isParticipant && playerAdConnected === false && (
+                <Link
+                  href="/einstellungen"
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-1 text-[10px] text-yellow-400/80 hover:text-yellow-400 transition-colors"
+                >
+                  <span className="w-2.5 h-2.5 text-yellow-400">⚠</span>
+                  Autodarts nicht verbunden — du wirst nicht Host sein.{" "}
+                  <span className="underline">Jetzt verbinden →</span>
+                </Link>
               )}
-              {creatingLobby ? "Erstelle Lobby…" : "Autodarts Lobby erstellen"}
-            </button>
+            </div>
           ) : (
             // Not a participant and no lobby exists → just show nothing
             null
